@@ -12,7 +12,9 @@ The inspector now offers **six color looks with adjustable strength** and **five
 
 **Alpha 7 adds masks and image cleanup.** Select one visual layer and use **Design** for a rectangle, rounded, ellipse, or diamond mask, an adjustable inset, and horizontal/vertical flips. For a still image, **Color** adds local solid-background removal and targeted color replacement. Choose the background automatically from the image border, refine tolerance and edge softness, or restore it at any time. The source image stays intact. Text, shapes, and drawings also have quick palette swatches, and the canvas toolbar uses compact line icons. See the [visual tools guide](docs/visual-tools.md) for controls and limits.
 
-Switch to **3D layers** to inspect the composition's stacking order from the front, back, top, or an orbiting perspective. Select a layer and move it forward or backward to change its actual order in the composition. This is a CSS 3D inspection view of editable 2D layers; camera angle, spacing, and zoom are workspace controls and do not change exported geometry. It does not import 3D models or render a 3D scene into video.
+**Alpha 9 adds compact tool menus.** Choose seven shapes, draw with Pencil or Brush, or build curved SVG paths with the Pen. Masks, color/background tools, Templates, and Components are accessible from the side toolbar. Close menus and the library, or hide both panels for a larger dotted canvas workspace. See the [visual tools guide](docs/visual-tools.md) for controls.
+
+Switch to **3D layers** to arrange the composition from the front, back, top, or an orbiting perspective. Drag a layer to move its actual X/Y position, use precise position fields, and adjust **Layer depth** to place it behind or in front of other layers. Position and order changes save, export, and undo together with the rest of the project. Drag empty space or Alt-drag to orbit; Shift-drag pans. This is a CSS 3D workspace for editable 2D layers: camera angle, spacing, and zoom are view controls. It does not import 3D models or render perspective geometry into video.
 
 ![Frame Studio editor](docs/images/editor.png)
 

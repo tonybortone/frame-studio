@@ -16,13 +16,37 @@
 .fs-library button {
   font: inherit;
 }
+.fs-library-header {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 8px 0;
+  flex-shrink: 0;
+}
+.fs-library .fs-library-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: #8d99ae;
+  background: transparent;
+}
+.fs-library .fs-library-close:hover {
+  background: #8d99ae18;
+  color: #edf2f4;
+}
 .fs-library-tabs {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin: 9px 9px 0;
+  margin: 0;
   padding: 3px;
-  flex: 0 0 34px;
+  flex: 1;
+  min-width: 0;
   border-radius: 8px;
   background: #8d99ae10;
 }
@@ -30,12 +54,12 @@
   flex: 1;
   min-width: 0;
   height: 27px;
-  padding: 0 5px;
+  padding: 0 3px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: #8d99ae;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: -0.15px;
 }

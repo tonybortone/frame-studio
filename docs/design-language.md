@@ -59,7 +59,9 @@ Playback controls and exact time readouts are fixed at the left of the timeline 
 
 The 3D layers view separates the current frame's visible visual layers into CSS 3D planes. Orbit or pan the view, change layer spacing and zoom, or use front, back, top, and perspective presets to inspect overlap. Audio has no visual plane. Hidden layers and clips outside the current time are omitted. These camera controls affect inspection only; the composition and exports remain 2D.
 
-Selecting a plane or its layer-list row shares selection with the editor. Moving a selected layer forward or backward changes its saved stacking order and the 2D result, with Undo available. Ordering controls ignore locked selections and disable when nothing can move. The workspace distinguishes camera navigation from these actual content edits.
+Selecting a plane or its layer-list row shares selection with the editor. Dragging an unlocked plane moves its actual X/Y position using perspective-correct pointer mapping; selected unlocked visuals move together. Precise X/Y fields also work in edge-on views, where direct plane dragging is unavailable. Empty-space drag or Alt-drag orbits, while Shift-drag or middle-drag pans. Camera navigation stays separate from content edits.
+
+The selected layer's depth slider and forward/back buttons change its saved stacking order and the 2D result. Depth represents layer order rather than an independent 3D coordinate. Position and depth gestures each create one Undo step. Locked selections cannot be moved; audio keeps its own array slots during depth changes. Visible Back/Front endpoints and the numbered layer list make the order clear.
 
 ## Timeline, motion, and sound
 

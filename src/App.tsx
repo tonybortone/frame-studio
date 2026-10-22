@@ -6,7 +6,6 @@ import {
   Check,
   Undo2,
   Redo2,
-  Group,
   Component,
   Copy,
   Trash2,
@@ -23,11 +22,14 @@ import {
   CheckCheck,
   SlidersHorizontal,
   Layers3,
+  Eye,
+  EyeOff,
 } from './icons';
 import Sidebar from './components/Sidebar';
 import Inspector from './components/Inspector';
 import Timeline from './components/Timeline';
-import ToolGlyph from './components/ToolGlyph';
+import CanvasToolbar from './components/CanvasToolbar';
+import { createShapePreset, DEFAULT_DRAWING_STYLE, type CanvasTool } from './core/creation';
 import CanvasStage from './components/CanvasStage';
 import LayerDepthStage from './components/LayerDepthStage';
 import ExportDialog from './components/ExportDialog';
@@ -55,7 +57,14 @@ export default function App() {
   const [selected, setSelected] = useState<string[]>([]);
   const [time, setTime] = useState(1.2);
   const [playing, setPlaying] = useState(false);
-  const [tool, setTool] = useState<'select' | 'draw' | 'hand'>('select');
+  const [tool, setTool] = useState<CanvasTool>('select');
+  const [drawingStyle, setDrawingStyle] = useState(DEFAULT_DRAWING_STYLE);
+  const [panelsHidden, setPanelsHidden] = useState(false);
+  const panelsBeforeFocus = useRef({ library: true, inspector: false });
+  const [inspectorRequest, setInspectorRequest] = useState<{
+    tab: 'design' | 'color';
+    nonce: number;
+  } | null>(null);
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [viewMode, setViewMode] = useState<'canvas' | 'depth'>('canvas');
   const [resetViewKey, setResetViewKey] = useState(0);
@@ -84,9 +93,9 @@ export default function App() {
   const selectLayers = useCallback(
     (ids: string[]) => {
       setSelected(ids);
-      if (viewMode === 'canvas') setInspectorOpen(ids.length > 0);
+      if (viewMode === 'canvas' && !panelsHidden) setInspectorOpen(ids.length > 0);
     },
-    [viewMode],
+    [viewMode, panelsHidden],
   );
   useEffect(() => {
     if (!toast) return;
@@ -179,7 +188,7 @@ export default function App() {
         parseProject(JSON.stringify(next));
         update(() => next);
         setSelected(layers.map((l) => l.id));
-        if (viewMode === 'canvas') setInspectorOpen(true);
+        if (viewMode === 'canvas' && !panelsHidden) setInspectorOpen(true);
         setTool('select');
         return true;
       } catch (e) {
@@ -187,7 +196,7 @@ export default function App() {
         return false;
       }
     },
-    [project, update, notify, viewMode],
+    [project, update, notify, viewMode, panelsHidden],
   );
   const transformSelected = (transform: SelectionTransform) => {
     try {
@@ -289,6 +298,10 @@ export default function App() {
     const layers = reorderVisualLayers(project.layers, selected, direction);
     if (layers !== project.layers) update((p) => ({ ...p, layers }));
   };
+  const setLayerOrder = useCallback(
+    (layers: Layer[], record = true) => update((p) => ({ ...p, layers }), record),
+    [update],
+  );
   const save = useCallback(async () => {
     try {
       const json = JSON.stringify(project);
@@ -373,7 +386,9 @@ export default function App() {
       if (event.defaultPrevented) return;
       if (
         event.target instanceof HTMLElement &&
-        (event.target.matches('input,textarea,select') || event.target.isContentEditable)
+        (event.target.matches('input,textarea,select') ||
+          event.target.isContentEditable ||
+          event.target.closest('[role="dialog"]'))
       )
         return;
       if (exportOpen || componentName !== null || helpOpen) return;
@@ -411,8 +426,15 @@ export default function App() {
         setInspectorOpen(false);
         setProjectMenu(false);
       } else if (event.key.toLowerCase() === 'v') setTool('select');
-      else if (event.key.toLowerCase() === 'p') setTool('draw');
-      else if (event.key.toLowerCase() === 'h') setTool('hand');
+      else if (event.key.toLowerCase() === 'p') {
+        setPlaying(false);
+        setTool('draw');
+        setDrawingStyle((style) => ({ ...style, width: 4 }));
+      } else if (event.key.toLowerCase() === 'b') {
+        setPlaying(false);
+        setTool('pen');
+        setDrawingStyle((style) => ({ ...style, width: 3 }));
+      } else if (event.key.toLowerCase() === 'h') setTool('hand');
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -574,6 +596,7 @@ export default function App() {
             saveComponent={saveComponent}
             group={group}
             libraryRequest={libraryRequest}
+            close={() => setLibraryOpen(false)}
           />
         )}
         <section className={`canvas-workspace ${viewMode === 'depth' ? 'is-depth-view' : ''}`}>
@@ -584,7 +607,10 @@ export default function App() {
                 title="Show or hide files"
                 aria-label="Toggle files panel"
                 aria-pressed={libraryOpen}
-                onClick={() => setLibraryOpen((v) => !v)}
+                onClick={() => {
+                  setPanelsHidden(false);
+                  setLibraryOpen((v) => !v);
+                }}
               >
                 <FolderOpen size={14} /> Files
               </button>
@@ -610,6 +636,26 @@ export default function App() {
               </div>
             </div>
             <div className="board-options">
+              <button
+                className={`board-chip ${panelsHidden ? 'active' : ''}`}
+                aria-label={panelsHidden ? 'Show panels' : 'Hide panels'}
+                title={panelsHidden ? 'Show panels' : 'Hide panels to focus on the canvas'}
+                aria-pressed={panelsHidden}
+                onClick={() => {
+                  if (panelsHidden) {
+                    setLibraryOpen(panelsBeforeFocus.current.library);
+                    setInspectorOpen(panelsBeforeFocus.current.inspector);
+                    setPanelsHidden(false);
+                  } else {
+                    panelsBeforeFocus.current = { library: libraryOpen, inspector: inspectorOpen };
+                    setLibraryOpen(false);
+                    setInspectorOpen(false);
+                    setPanelsHidden(true);
+                  }
+                }}
+              >
+                {panelsHidden ? <Eye size={15} /> : <EyeOff size={15} />}
+              </button>
               <CanvasSizePicker
                 width={project.width}
                 height={project.height}
@@ -639,120 +685,71 @@ export default function App() {
                 aria-label="Toggle properties"
                 title="Properties"
                 aria-pressed={inspectorOpen}
-                onClick={() => setInspectorOpen((v) => !v)}
+                onClick={() => {
+                  setPanelsHidden(false);
+                  setInspectorOpen((v) => !v);
+                }}
               >
                 <SlidersHorizontal size={15} />
               </button>
             </div>
           </div>
-          <div className="creation-toolbar" role="toolbar" aria-label="Canvas tools">
-            <button
-              title="Select (V)"
-              aria-label="Select tool"
-              aria-pressed={tool === 'select'}
-              className={tool === 'select' ? 'active' : ''}
-              onClick={() => setTool('select')}
-            >
-              <ToolGlyph kind="select" />
-            </button>
-            <button
-              title="Hand (H) · drag to pan"
-              aria-label="Hand tool"
-              aria-pressed={tool === 'hand'}
-              className={tool === 'hand' ? 'active' : ''}
-              onClick={() => setTool('hand')}
-            >
-              <ToolGlyph kind="hand" />
-            </button>
-            <span className="creation-divider" />
-            <button
-              title="Add shape"
-              aria-label="Add shape"
-              onClick={() =>
-                add([
-                  createLayer('shape', {
-                    name: 'Shape',
-                    x: project.width * 0.35,
-                    y: project.height * 0.35,
-                    width: 360,
-                    height: 240,
-                    fill: '#ef233c',
-                    radius: 28,
-                    duration: project.duration,
-                  }),
-                ])
+          <CanvasToolbar
+            tool={tool}
+            drawingStyle={drawingStyle}
+            onToolChange={(next) => {
+              if (['draw', 'brush', 'pen'].includes(next)) setPlaying(false);
+              setTool(next);
+            }}
+            onDrawingStyleChange={setDrawingStyle}
+            onAddShape={(id) => add([createShapePreset(id, project, time)])}
+            onAddText={() =>
+              add([
+                createLayer('text', {
+                  text: 'Your next idea.',
+                  name: 'Your next idea',
+                  x: project.width * 0.15,
+                  y: project.height * 0.3,
+                  width: Math.min(1000, project.width * 0.7),
+                  height: 160,
+                  fontSize: 96,
+                  fill: '#2b2d42',
+                  duration: project.duration,
+                }),
+              ])
+            }
+            onImport={() => fileInput.current?.click()}
+            onTemplates={() => {
+              setPanelsHidden(false);
+              setLibraryOpen(true);
+              setLibraryRequest({ tab: 'templates', nonce: Date.now() });
+            }}
+            onComponents={() => {
+              setPanelsHidden(false);
+              setLibraryOpen(true);
+              setLibraryRequest({ tab: 'components', nonce: Date.now() });
+            }}
+            onSaveComponent={saveComponent}
+            onGroup={group}
+            selectedLayers={project.layers.filter((layer) => selected.includes(layer.id))}
+            onLayerChange={change}
+            onMenuOpen={() => setInspectorOpen(false)}
+            onAdjustColor={() => {
+              if (
+                !project.layers.some(
+                  (layer) => selected.includes(layer.id) && layer.kind !== 'audio',
+                )
+              ) {
+                notify('Select an image, video, or graphic to adjust its color.');
+                return;
               }
-            >
-              <ToolGlyph kind="shape" />
-            </button>
-            <button
-              title="Add text"
-              aria-label="Add text"
-              onClick={() =>
-                add([
-                  createLayer('text', {
-                    text: 'Your next idea.',
-                    name: 'Your next idea',
-                    x: project.width * 0.15,
-                    y: project.height * 0.3,
-                    width: Math.min(1000, project.width * 0.7),
-                    height: 160,
-                    fontSize: 96,
-                    fill: '#29292d',
-                    duration: project.duration,
-                  }),
-                ])
-              }
-            >
-              <ToolGlyph kind="text" />
-            </button>
-            <button
-              title="Pencil (P)"
-              aria-label="Pencil tool"
-              aria-pressed={tool === 'draw'}
-              className={tool === 'draw' ? 'active' : ''}
-              onClick={() => setTool('draw')}
-            >
-              <ToolGlyph kind="draw" />
-            </button>
-            <button
-              title="Add media"
-              aria-label="Add media"
-              disabled={busy || !ready}
-              onClick={() => fileInput.current?.click()}
-            >
-              <ToolGlyph kind="media" />
-            </button>
-            <span className="creation-divider" />
-            <button
-              title="Your saved components"
-              aria-label="Saved components"
-              onClick={() => {
-                setLibraryOpen(true);
-                setLibraryRequest({ tab: 'components', nonce: Date.now() });
-              }}
-            >
-              <ToolGlyph kind="component" />
-            </button>
-            {selected.length > 0 && (
-              <button
-                title="Save selection as component"
-                aria-label="Save component"
-                onClick={saveComponent}
-              >
-                <Plus size={18} />
-              </button>
-            )}
-            <button
-              className={`group-tool ${selected.length < 2 ? 'is-unavailable' : ''}`}
-              title="Group (⌘G)"
-              aria-label="Group selection"
-              disabled={selected.length < 2}
-              onClick={group}
-            >
-              <Group size={18} />
-            </button>
-          </div>
+              setPanelsHidden(false);
+              setInspectorOpen(true);
+              setInspectorRequest({ tab: 'color', nonce: Date.now() });
+            }}
+            busy={busy || !ready}
+            depthView={viewMode === 'depth'}
+          />
           {viewMode === 'canvas' ? (
             <CanvasStage
               project={project}
@@ -760,6 +757,7 @@ export default function App() {
               time={time}
               selected={selected}
               tool={tool}
+              drawingStyle={drawingStyle}
               zoom={canvasZoom}
               onZoomChange={setCanvasZoom}
               resetViewKey={resetViewKey}
@@ -775,8 +773,17 @@ export default function App() {
               media={media}
               time={time}
               selected={selected}
-              select={setSelected}
+              select={(ids) => {
+                setPlaying(false);
+                setSelected(ids);
+              }}
               reorder={reorder}
+              change={change}
+              checkpoint={() => {
+                setPlaying(false);
+                checkpoint();
+              }}
+              setLayerOrder={setLayerOrder}
               error={notify}
             />
           )}
@@ -814,6 +821,7 @@ export default function App() {
         {inspectorOpen && (
           <Inspector
             close={() => setInspectorOpen(false)}
+            panelRequest={inspectorRequest}
             project={project}
             selected={selected}
             change={change}
@@ -987,6 +995,8 @@ export default function App() {
               ['Zoom board', '⌘ / Ctrl + scroll'],
               ['Select tool', 'V'],
               ['Pencil tool', 'P'],
+              ['Vector Pen tool', 'B'],
+              ['Finish / cancel a path', 'Enter / Esc'],
               ['Save project', '⌘ S'],
               ['Undo / redo', '⌘ Z / ⇧ ⌘ Z'],
               ['Duplicate', '⌘ D'],

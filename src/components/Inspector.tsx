@@ -31,6 +31,7 @@ import { kindIcons } from './Timeline';
 import { ElementColors, ImageTools, MaskControls, elementColorProperty } from './VisualTools';
 import './Inspector.css';
 interface Props {
+  panelRequest?: { tab: 'design' | 'color'; nonce: number } | null;
   close: () => void;
   project: Project;
   selected: string[];
@@ -131,6 +132,7 @@ function SoundControls({ layer, patch }: { layer: Layer; patch: (value: Partial<
 }
 
 export default function Inspector({
+  panelRequest,
   close,
   project,
   selected,
@@ -146,6 +148,9 @@ export default function Inspector({
   autoRemoveBackground,
 }: Props) {
   const [tab, setTab] = useState('design');
+  useEffect(() => {
+    if (panelRequest) setTab(panelRequest.tab);
+  }, [panelRequest]);
   const lookStrengthGesture = useRef({ active: false, recorded: false });
   const resetLookStrengthGesture = () => {
     lookStrengthGesture.current = { active: false, recorded: false };

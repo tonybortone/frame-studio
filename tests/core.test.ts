@@ -10,6 +10,7 @@ import {
 } from '../src/core/project';
 import { importSvg } from '../src/core/svg';
 import { TEMPLATES } from '../src/core/templates';
+import { createShapePreset, SHAPE_PRESETS } from '../src/core/creation';
 
 describe('project files', () => {
   it('round-trips authored projects and every starter template', () => {
@@ -306,5 +307,28 @@ describe('SVG import', () => {
     ).toThrow(/positive/);
     expect(() => importSvg('<!DOCTYPE svg [<!ENTITY x "hello">]><svg/>')).toThrow(/entities/);
     expect(() => importSvg('<svg>')).toThrow(/valid SVG/);
+  });
+});
+
+describe('toolbar shapes', () => {
+  it('fits editable shape geometry into tiny and portrait frames and clamps insertion to the last frame', () => {
+    for (const [width, height] of [
+      [1, 1],
+      [240, 720],
+      [1920, 1080],
+    ]) {
+      const project = { ...createProject(), width, height };
+      for (const { id } of SHAPE_PRESETS) {
+        const layer = createShapePreset(id, project, project.duration + 10);
+        expect(layer.x).toBeGreaterThanOrEqual(0);
+        expect(layer.y).toBeGreaterThanOrEqual(0);
+        expect(layer.x + layer.width).toBeLessThanOrEqual(width);
+        expect(layer.y + layer.height).toBeLessThanOrEqual(height);
+        expect(layer.start).toBeCloseTo(project.duration - 1 / project.fps);
+        expect(layer.start + layer.duration).toBeCloseTo(project.duration);
+        const stored = { ...project, layers: [layer] };
+        expect(parseProject(JSON.stringify(stored))).toEqual(stored);
+      }
+    }
   });
 });

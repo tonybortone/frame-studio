@@ -4,9 +4,19 @@ These tools edit the selected layer and participate in Undo/Redo. They run local
 
 ![Background removal and color replacement in Frame Studio](images/image-tools.png)
 
+## Shapes and drawing
+
+**Shapes** opens seven choices: rectangle, rounded rectangle, ellipse, triangle, star, line, and arrow. Each inserts an editable layer at the current playhead. Resize and recolor it on the board or in Properties.
+
+**Drawing tools** contains Pencil, Brush, and Pen, with stroke color and width settings. Pencil and Brush create freehand vector strokes; Brush starts with a wider stroke. **Pen (B)** builds a path point by point: click for a corner, drag for a smooth Bézier handle. **Enter / Finish** completes an open path. Click the first point or use **Close path** to make a filled closed shape. **Backspace** removes the last draft point; **Escape / Cancel** discards the draft. Completing the path is one undo step.
+
+Paths stay vector data in project files and SVG snapshots. They can be moved, resized, colored, grouped, masked, and animated like other layers. This creates new paths; reopening imported paths for anchor-by-anchor editing is not yet supported.
+
+Tool menus close with their X, Escape, or a click elsewhere. **Templates** and **Components** have visible toolbar shortcuts. The library has its own close button. **Hide panels** clears both side panels and keeps them hidden while selecting or drawing; **Show panels** restores them. These view changes do not alter the project.
+
 ## Mask and flip
 
-Select one unlocked visual element, then open **Design**. Choose None, Rectangle, Rounded, Ellipse, or Diamond. Inset brings the mask inward equally from each edge; Roundness adjusts the Rounded mask. These are local bounds, so the mask follows the element when it moves, rotates, or animates. Horizontal and vertical flips use its center and leave its placement and clip timing unchanged.
+Select one unlocked visual element, then open **Masks and effects** in the canvas toolbar, or **Design** in Properties. Choose None, Rectangle, Rounded, Ellipse, or Diamond. Inset brings the mask inward equally from each edge; Roundness adjusts the Rounded mask. These are local bounds, so the mask follows the element when it moves, rotates, or animates. Horizontal and vertical flips use its center and leave its placement and clip timing unchanged.
 
 An ellipse fills the element's bounds; use equal width and height for a circle. An explicit mask replaces the legacy rounded corners of an image or video. None removes clipping. The original geometry stays editable, and changing the mask does not crop pixels out of the source file.
 
@@ -27,6 +37,12 @@ Select a still image and open **Color → Background**. **Remove solid backgroun
 This works best for logos, product cutouts, screenshots, and graphics against a plain background. It removes the selected color wherever it occurs, including inside the foreground. It is not AI subject segmentation or a hair-detail tool for complex scenes. Already-transparent borders may not provide a color to estimate; choose a color explicitly in that case.
 
 Background removal and image color replacement currently support still images. Video can use masks, flips, and the existing color adjustments, but does not use these pixel-cleanup effects.
+
+## Arrange layers in 3D
+
+Open **3D layers** and drag an element to change its X/Y position. Multiple selected unlocked elements move together; use Command/Ctrl-click on layer rows to change the selection. The X/Y fields offer precise placement, including in the edge-on Top view. Use **Layer depth** for a single selected layer, or the forward/back buttons for a selection, to change which elements sit in front. A movement gesture takes one Undo step.
+
+Drag empty space or Alt-drag to orbit. Shift-drag or middle-drag pans, and scrolling zooms. Camera angle, spacing, and zoom only change your workspace view. Position and layer order affect the saved project, 2D canvas, and exports; depth is the stacking order of 2D artwork rather than an independent Z coordinate.
 
 ## Preview, save, and export
 

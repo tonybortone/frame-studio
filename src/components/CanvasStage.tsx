@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { createLayer } from '../core/project';
+import { DEFAULT_DRAWING_STYLE, type CanvasTool, type DrawingStyle } from '../core/creation';
 import { getSelectionBounds, transformSelection, type SelectionBounds } from '../core/selection';
+import {
+  appendStrokePoint,
+  isVectorPoint,
+  MAX_PEN_ANCHORS,
+  vectorGeometry,
+  vectorPathData,
+  type VectorAnchor,
+  type VectorPoint,
+} from '../core/vector';
 import type { Layer, Project } from '../core/types';
 import { MediaCache, renderFrame } from '../engine/renderer';
 import './CanvasStage.css';
@@ -45,7 +55,8 @@ interface Props {
   media: MediaCache;
   time: number;
   selected: string[];
-  tool: 'select' | 'draw' | 'hand';
+  tool: CanvasTool;
+  drawingStyle?: DrawingStyle;
   zoom: number;
   onZoomChange?: (zoom: number) => void;
   resetViewKey?: number;
@@ -61,6 +72,7 @@ export default function CanvasStage({
   time,
   selected,
   tool,
+  drawingStyle = DEFAULT_DRAWING_STYLE,
   zoom,
   onZoomChange,
   resetViewKey,
@@ -74,7 +86,12 @@ export default function CanvasStage({
   const surface = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 700, height: 450 });
   const [revision, setRevision] = useState(0);
-  const [drawing, setDrawing] = useState<{ x: number; y: number }[]>([]);
+  const [drawing, setDrawing] = useState<VectorPoint[]>([]);
+  const [penAnchors, setPenAnchors] = useState<VectorAnchor[]>([]);
+  const [penCursor, setPenCursor] = useState<VectorPoint | null>(null);
+  const penDraft = useRef<VectorAnchor[]>([]);
+  const draftStyle = useRef(drawingStyle);
+  const activeVectorCleanup = useRef<(() => void) | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [panning, setPanning] = useState(false);
@@ -133,7 +150,7 @@ export default function CanvasStage({
     const wheel = (event: WheelEvent) => {
       // A non-passive listener keeps trackpad gestures inside the board.
       event.preventDefault();
-      if (activePanCleanup.current) return;
+      if (activePanCleanup.current || activeVectorCleanup.current) return;
       const current = viewport.current;
       const multiplier =
         event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? current.size.height : 1;
@@ -373,59 +390,219 @@ export default function CanvasStage({
     target.addEventListener('pointercancel', end);
     target.addEventListener('lostpointercapture', end);
   };
+  const ink: DrawingStyle = {
+    color: /^#[0-9a-f]{6}$/i.test(drawingStyle.color)
+      ? drawingStyle.color
+      : DEFAULT_DRAWING_STYLE.color,
+    width: Number.isFinite(drawingStyle.width)
+      ? Math.max(1, Math.min(128, drawingStyle.width))
+      : DEFAULT_DRAWING_STYLE.width,
+  };
+  const updatePen = (anchors: VectorAnchor[]) => {
+    penDraft.current = anchors;
+    setPenAnchors(anchors);
+  };
+  const resetVectorDraft = () => {
+    activeVectorCleanup.current?.();
+    updatePen([]);
+    setPenCursor(null);
+    setDrawing([]);
+  };
+  const addVector = (
+    anchors: VectorAnchor[],
+    closed: boolean,
+    style: DrawingStyle,
+    pen: boolean,
+  ) => {
+    const geometry = vectorGeometry(anchors, closed, style.width);
+    if (!geometry) {
+      error('This path is too large. Draw a smaller path inside the canvas.');
+      return;
+    }
+    const start = Math.max(
+      0,
+      Math.min(project.duration - 1 / project.fps, Math.round(time * project.fps) / project.fps),
+    );
+    add([
+      createLayer(pen ? 'svg' : 'drawing', {
+        ...geometry,
+        name: pen
+          ? closed
+            ? 'Pen shape'
+            : 'Pen path'
+          : tool === 'brush'
+            ? 'Brush stroke'
+            : 'Pencil stroke',
+        fill: closed ? style.color : 'transparent',
+        stroke: style.color,
+        strokeWidth: style.width,
+        start,
+        duration: Math.max(1 / project.fps, project.duration - start),
+      }),
+    ]);
+  };
+  const finishPen = (closed: boolean) => {
+    const anchors = penDraft.current;
+    if (anchors.length < (closed ? 3 : 2)) return;
+    resetVectorDraft();
+    addVector(anchors, closed, ink, true);
+  };
+  const vectorActions = useRef({
+    cancel: resetVectorDraft,
+    finish: finishPen,
+    removeAnchor: () => {},
+    penActive: tool === 'pen',
+  });
+  vectorActions.current = {
+    cancel: resetVectorDraft,
+    finish: finishPen,
+    penActive: tool === 'pen',
+    removeAnchor: () => {
+      // Removing an anchor also ends a handle drag, without committing the path.
+      const remaining = penDraft.current.slice(0, -1);
+      activeVectorCleanup.current?.();
+      updatePen(remaining);
+      setPenCursor(null);
+    },
+  };
+  useEffect(() => {
+    vectorActions.current.cancel();
+    return () => activeVectorCleanup.current?.();
+  }, [tool, project.id, project.width, project.height, resetViewKey]);
+  useEffect(() => {
+    const keyDown = (event: KeyboardEvent) => {
+      if (
+        !penDraft.current.length &&
+        !activeVectorCleanup.current &&
+        !(vectorActions.current.penActive && ['Backspace', 'Delete'].includes(event.key))
+      )
+        return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target.closest('input, textarea, select, [role="dialog"]'))
+      )
+        return;
+      const isDraftKey = ['Escape', 'Backspace', 'Delete', 'Enter'].includes(event.key);
+      if (
+        !isDraftKey ||
+        (event.key === 'Enter' && target instanceof Element && target.closest('button'))
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === 'Escape') vectorActions.current.cancel();
+      else if (event.key === 'Enter') vectorActions.current.finish(false);
+      else vectorActions.current.removeAnchor();
+    };
+    const cancel = () => vectorActions.current.cancel();
+    window.addEventListener('keydown', keyDown, true);
+    window.addEventListener('blur', cancel);
+    return () => {
+      window.removeEventListener('keydown', keyDown, true);
+      window.removeEventListener('blur', cancel);
+    };
+  }, []);
+  const captureVectorPointer = (
+    event: PointerEvent<HTMLDivElement>,
+    onMove: (next: globalThis.PointerEvent) => void,
+    onFinish: (next: globalThis.PointerEvent) => void,
+    onCancel: () => void,
+  ) => {
+    const target = event.currentTarget;
+    const pointerId = event.pointerId;
+    const cleanup = () => {
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', finish);
+      target.removeEventListener('pointercancel', cancel);
+      target.removeEventListener('lostpointercapture', cancel);
+      activeVectorCleanup.current = null;
+      if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+    };
+    const move = (next: globalThis.PointerEvent) => {
+      if (next.pointerId === pointerId) onMove(next);
+    };
+    const finish = (next: globalThis.PointerEvent) => {
+      if (next.pointerId !== pointerId) return;
+      cleanup();
+      onFinish(next);
+    };
+    const cancel = (next?: globalThis.PointerEvent) => {
+      if (next && next.pointerId !== pointerId) return;
+      cleanup();
+      onCancel();
+    };
+    try {
+      target.setPointerCapture(pointerId);
+    } catch {
+      onCancel();
+      return;
+    }
+    activeVectorCleanup.current = cancel;
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', finish);
+    target.addEventListener('pointercancel', cancel);
+    target.addEventListener('lostpointercapture', cancel);
+  };
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || tool === 'hand' || spacePressed.current) return;
     const origin = point(event);
+    if (!isVectorPoint(origin)) return;
     const target = event.currentTarget;
-    target.setPointerCapture(event.pointerId);
-    if (tool === 'draw') {
-      const points = [origin];
-      setDrawing([...points]);
-      const move = (e: globalThis.PointerEvent) => {
-        points.push(point(e));
-        setDrawing([...points]);
-      };
-      const end = () => {
-        target.removeEventListener('pointermove', move);
-        target.removeEventListener('pointerup', end);
-        target.removeEventListener('pointercancel', cancel);
-        setDrawing([]);
-        if (points.length < 2) return;
-        const minX = Math.min(...points.map((p) => p.x)),
-          minY = Math.min(...points.map((p) => p.y));
-        const width = Math.max(1, Math.max(...points.map((p) => p.x)) - minX),
-          height = Math.max(1, Math.max(...points.map((p) => p.y)) - minY);
-        add([
-          createLayer('drawing', {
-            name: 'Pencil stroke',
-            x: minX,
-            y: minY,
-            width,
-            height,
-            viewBox: `0 0 ${width} ${height}`,
-            path: points
-              .map(
-                (p, i) => `${i ? 'L' : 'M'}${(p.x - minX).toFixed(2)} ${(p.y - minY).toFixed(2)}`,
-              )
-              .join(' '),
-            fill: 'transparent',
-            stroke: '#e88a57',
-            strokeWidth: 6,
-            duration: project.duration,
-          }),
-        ]);
-      };
-      const cancel = () => {
-        target.removeEventListener('pointermove', move);
-        target.removeEventListener('pointerup', end);
-        target.removeEventListener('pointercancel', cancel);
-        setDrawing([]);
-      };
-      target.addEventListener('pointermove', move);
-      target.addEventListener('pointerup', end);
-      target.addEventListener('pointercancel', cancel);
+    if (tool === 'draw' || tool === 'brush' || tool === 'pen') {
+      event.preventDefault();
+      if (activeVectorCleanup.current) return;
+      if (tool === 'pen') {
+        const anchors = penDraft.current;
+        const first = anchors[0];
+        if (
+          anchors.length >= 3 &&
+          Math.hypot(origin.x - first.x, origin.y - first.y) * scale <= 9
+        ) {
+          finishPen(true);
+          return;
+        }
+        if (anchors.length >= MAX_PEN_ANCHORS) {
+          error('Finish this path before adding more points.');
+          return;
+        }
+        updatePen([...anchors, origin]);
+        setPenCursor(null);
+        const dragHandle = (next: globalThis.PointerEvent) => {
+          const position = point(next);
+          if (!isVectorPoint(position)) return;
+          const handle = { x: position.x - origin.x, y: position.y - origin.y };
+          const anchor =
+            Math.hypot(handle.x, handle.y) * scale < 3 ? origin : { ...origin, handle };
+          updatePen([...anchors, anchor]);
+        };
+        captureVectorPointer(event, dragHandle, dragHandle, resetVectorDraft);
+      } else {
+        let points = [origin];
+        const style = { ...ink };
+        draftStyle.current = style;
+        setDrawing(points);
+        const sample = (next: globalThis.PointerEvent, minimumDistance = 0.75 / scale) => {
+          const sampled = appendStrokePoint(points, point(next), minimumDistance);
+          if (sampled !== points) {
+            points = sampled;
+            setDrawing(points);
+          }
+        };
+        captureVectorPointer(
+          event,
+          sample,
+          (next) => {
+            sample(next, 0);
+            setDrawing([]);
+            if (points.length > 1) addVector(points, false, style, false);
+          },
+          () => setDrawing([]),
+        );
+      }
       return;
     }
+    target.setPointerCapture(event.pointerId);
     const hit = [...project.layers].reverse().find((l) => {
       if (
         l.hidden ||
@@ -484,7 +661,7 @@ export default function CanvasStage({
   };
   return (
     <div
-      className={`canvas-surface board-surface ${tool === 'draw' ? 'draw-mode' : ''} ${tool === 'hand' || spaceHeld ? 'hand-mode' : ''} ${panning ? 'is-panning' : ''}`}
+      className={`canvas-surface board-surface ${tool === 'draw' || tool === 'brush' || tool === 'pen' ? 'draw-mode' : ''} ${tool === 'hand' || spaceHeld ? 'hand-mode' : ''} ${panning ? 'is-panning' : ''}`}
       ref={surface}
       tabIndex={0}
       role="region"
@@ -510,6 +687,12 @@ export default function CanvasStage({
           top: board.centerY + pan.y,
         }}
         onPointerDown={onPointerDown}
+        onPointerMove={(event) => {
+          if (tool !== 'pen' || !penDraft.current.length || activeVectorCleanup.current) return;
+          const position = point(event);
+          if (isVectorPoint(position)) setPenCursor(position);
+        }}
+        onPointerLeave={() => setPenCursor(null)}
       >
         <div className="artboard-name">
           {project.name}
@@ -632,17 +815,117 @@ export default function CanvasStage({
             </div>
           ))}
         {drawing.length > 1 && (
-          <svg className="drawing-preview" viewBox={`0 0 ${project.width} ${project.height}`}>
+          <svg
+            className="drawing-preview"
+            aria-hidden="true"
+            viewBox={`0 0 ${project.width} ${project.height}`}
+          >
             <path
-              d={drawing.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(' ')}
+              d={vectorPathData(drawing)}
               fill="none"
-              stroke="#e88a57"
-              strokeWidth="6"
+              stroke={draftStyle.current.color}
+              strokeWidth={draftStyle.current.width}
               strokeLinecap="round"
+              strokeLinejoin="round"
             />
           </svg>
         )}
+        {penAnchors.length > 0 && (
+          <svg
+            className="drawing-preview pen-preview"
+            aria-hidden="true"
+            viewBox={`0 0 ${project.width} ${project.height}`}
+          >
+            <path
+              d={vectorPathData(penAnchors)}
+              fill="none"
+              stroke={ink.color}
+              strokeWidth={ink.width}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            {penCursor && (
+              <path
+                d={vectorPathData([penAnchors[penAnchors.length - 1], penCursor])}
+                fill="none"
+                stroke={ink.color}
+                strokeWidth={1 / scale}
+                strokeDasharray={`${4 / scale} ${4 / scale}`}
+                opacity="0.6"
+              />
+            )}
+            {penAnchors.map((anchor, index) => (
+              <g key={index}>
+                {anchor.handle && (
+                  <>
+                    <line
+                      x1={anchor.x - anchor.handle.x}
+                      y1={anchor.y - anchor.handle.y}
+                      x2={anchor.x + anchor.handle.x}
+                      y2={anchor.y + anchor.handle.y}
+                      stroke="#8d99ae"
+                      strokeWidth={1 / scale}
+                    />
+                    {[-1, 1].map((direction) => (
+                      <circle
+                        key={direction}
+                        cx={anchor.x + anchor.handle!.x * direction}
+                        cy={anchor.y + anchor.handle!.y * direction}
+                        r={2.5 / scale}
+                        fill="#edf2f4"
+                        stroke="#2b2d42"
+                        strokeWidth={1 / scale}
+                      />
+                    ))}
+                  </>
+                )}
+                <rect
+                  x={anchor.x - 3.5 / scale}
+                  y={anchor.y - 3.5 / scale}
+                  width={7 / scale}
+                  height={7 / scale}
+                  rx={index === 0 ? 3.5 / scale : 1 / scale}
+                  fill={index === penAnchors.length - 1 ? ink.color : '#edf2f4'}
+                  stroke={ink.color}
+                  strokeWidth={1.5 / scale}
+                />
+              </g>
+            ))}
+          </svg>
+        )}
       </div>
+      {tool === 'pen' && (
+        <div className="vector-tool-hint" role="group" aria-label="Pen path controls">
+          <span>
+            {penAnchors.length
+              ? `${penAnchors.length} points · Drag for curves`
+              : 'Click points · Drag for curves'}
+          </span>
+          {penAnchors.length > 0 && (
+            <>
+              <button
+                type="button"
+                disabled={penAnchors.length < 2}
+                title="Finish an open path (Enter)"
+                onClick={() => finishPen(false)}
+              >
+                Finish
+              </button>
+              <button
+                type="button"
+                disabled={penAnchors.length < 3}
+                title="Close and fill the path, or click its first point"
+                onClick={() => finishPen(true)}
+              >
+                Close path
+              </button>
+              <button type="button" title="Discard this path (Escape)" onClick={resetVectorDraft}>
+                Cancel
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

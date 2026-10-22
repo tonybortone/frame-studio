@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { ArrowUpFromLine, Plus, Component, Group, EyeOff, LockKeyhole } from '../icons';
+import { ArrowUpFromLine, Plus, Component, Group, EyeOff, LockKeyhole, X } from '../icons';
 import { LAYER_COLORS, LAYER_LABELS, type Layer, type Project } from '../core/types';
 import { ASSET_FOLDERS, type AssetFolder, type AssetFolderId } from '../core/libraryAssets';
 import { createLayer } from '../core/project';
@@ -13,6 +13,7 @@ import './Sidebar.css';
 
 export type LibraryTab = 'media' | 'text' | 'elements' | 'templates' | 'components';
 interface Props {
+  close: () => void;
   project: Project;
   time: number;
   selected: string[];
@@ -51,6 +52,7 @@ function ratio(project: Project): string {
 }
 
 export default function Sidebar({
+  close,
   project,
   time,
   selected,
@@ -166,21 +168,32 @@ export default function Sidebar({
 
   return (
     <aside className="sidebar fs-library" aria-label="Library">
-      <div className="fs-library-tabs" role="tablist" aria-label="Sidebar">
-        {(['files', 'layers', 'templates'] as const).map((item) => (
-          <button
-            key={item}
-            role="tab"
-            aria-selected={panel === item}
-            className={panel === item ? 'is-active' : ''}
-            onClick={() => {
-              setPanel(item);
-              if (item === 'files') setFolder(null);
-            }}
-          >
-            {item === 'files' ? 'Files' : item === 'layers' ? 'Layers' : 'Templates'}
-          </button>
-        ))}
+      <div className="fs-library-header">
+        <div className="fs-library-tabs" role="tablist" aria-label="Sidebar">
+          {(['files', 'layers', 'templates'] as const).map((item) => (
+            <button
+              key={item}
+              role="tab"
+              aria-selected={panel === item}
+              className={panel === item ? 'is-active' : ''}
+              onClick={() => {
+                setPanel(item);
+                if (item === 'files') setFolder(null);
+              }}
+            >
+              {item === 'files' ? 'Files' : item === 'layers' ? 'Layers' : 'Templates'}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="fs-library-close"
+          aria-label="Close library"
+          title="Close library"
+          onClick={close}
+        >
+          <X size={14} />
+        </button>
       </div>
       <div className="fs-library-scroll">
         {panel === 'files' && !folder && (

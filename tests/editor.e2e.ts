@@ -437,7 +437,7 @@ test('grouping stale selection after undo is harmless and selecting a clip prese
       exact: true,
       includeHidden: true,
     }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await page.keyboard.press('ControlOrMeta+g');
   await expect(page.getByRole('status')).toContainText('Select two or more layers to group them.');
   await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
@@ -960,13 +960,15 @@ test('orbits and spaces the 3D layer view without editing the saved composition'
   await page.getByRole('button', { name: 'Front view', exact: true }).click();
   const front = (await plane.boundingBox())!;
 
-  // Orbit by dragging actual rendered content, then exercise keyboard camera navigation.
+  // Alt-drag orbits even over content; ordinary layer drags now edit position.
   await page.mouse.move(front.x + front.width / 2, front.y + front.height / 2);
+  await page.keyboard.down('Alt');
   await page.mouse.down();
   await page.mouse.move(front.x + front.width / 2 + 65, front.y + front.height / 2 - 35, {
     steps: 5,
   });
   await page.mouse.up();
+  await page.keyboard.up('Alt');
   await expect.poll(async () => (await plane.boundingBox())!.x).not.toBeCloseTo(front.x, 0);
   await view.focus();
   await view.press('ArrowRight');
@@ -1036,6 +1038,179 @@ test('reorders selected 3D layers in the project and PNG export, with one-step u
   expect(await exportedPixel(page, 100, 100)).toEqual([141, 153, 174, 255]);
 });
 
+test('drags a layer in 3D, saves its position, exports that position, and undoes the whole gesture', async ({
+  page,
+}) => {
+  const fixture = depthFixture();
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  expect(await exportedPixel(page, 44, 44)).toEqual([239, 35, 60, 255]);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  await page.getByRole('button', { name: 'Front view', exact: true }).click();
+  const hit = page.getByRole('button', { name: 'Inspect Red square', exact: true });
+  const before = (await hit.boundingBox())!;
+  await page.mouse.move(before.x + 10, before.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(before.x + 50, before.y + 30, { steps: 8 });
+  await page.mouse.up();
+  const moved = await saveProject(page, fixture.name);
+  expect(moved.layers[0].x).toBeCloseTo(original.layers[0].x + 40 / (before.width / 160), 0);
+  expect(moved.layers[0].y).toBeCloseTo(original.layers[0].y + 20 / (before.height / 160), 0);
+  expect(moved.layers.slice(1)).toEqual(original.layers.slice(1));
+  await expect(page.getByRole('region', { name: '3D layer view', exact: true })).toHaveAttribute(
+    'data-view',
+    'front',
+  );
+  await page.getByRole('button', { name: '2D canvas', exact: true }).click();
+  expect(await exportedPixel(page, 44, 44)).toEqual([237, 242, 244, 255]);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(moved);
+});
+
+test('drags a selection correctly from the back, keeps locks fixed, and positions precisely from top', async ({
+  page,
+}) => {
+  const fixture = depthFixture();
+  fixture.layers.push(
+    createLayer('shape', {
+      name: 'Locked marker',
+      x: 12,
+      y: 12,
+      width: 12,
+      height: 12,
+      duration: 6,
+      locked: true,
+    }),
+  );
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  await page.getByRole('button', { name: 'Back view', exact: true }).click();
+  await page.getByRole('button', { name: 'Select 3D layer Red square', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Select 3D layer Slate square', exact: true })
+    .click({ modifiers: ['Meta'] });
+  await page
+    .getByRole('button', { name: 'Select 3D layer Locked marker', exact: true })
+    .click({ modifiers: ['Meta'] });
+  const hit = page.getByRole('button', { name: 'Inspect Red square', exact: true });
+  const box = (await hit.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 30, box.y + box.height / 2 + 20, { steps: 6 });
+  await page.mouse.up();
+  const moved = await saveProject(page, fixture.name);
+  const dx = moved.layers[0].x - original.layers[0].x;
+  const dy = moved.layers[0].y - original.layers[0].y;
+  expect(dx).toBeLessThan(-5);
+  expect(dy).toBeGreaterThan(5);
+  expect(moved.layers[2].x - original.layers[2].x).toBeCloseTo(dx, 4);
+  expect(moved.layers[2].y - original.layers[2].y).toBeCloseTo(dy, 4);
+  expect(moved.layers[1]).toEqual(original.layers[1]);
+  expect(moved.layers[3]).toEqual(original.layers[3]);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  await page.getByRole('button', { name: 'Select 3D layer Slate square', exact: true }).click();
+  await page.getByRole('button', { name: 'Top view', exact: true }).click();
+  const x = page.getByRole('spinbutton', { name: '3D position X', exact: true });
+  await x.fill('123');
+  await x.press('Enter');
+  expect((await saveProject(page, fixture.name)).layers[2].x).toBe(123);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
+test('changes depth with a continuous slider gesture and restores the entire stack in one undo', async ({
+  page,
+}) => {
+  const fixture = depthFixture();
+  fixture.layers.push(
+    createLayer('shape', { name: 'Third plane', x: 220, y: 0, width: 20, height: 20, duration: 6 }),
+  );
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  await page.getByRole('button', { name: 'Select 3D layer Red square', exact: true }).click();
+  const slider = page.getByRole('slider', { name: 'Layer depth', exact: true });
+  await expect(slider).toBeEnabled();
+  const bounds = (await slider.boundingBox())!;
+  await page.mouse.move(bounds.x + 5, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width - 5, bounds.y + bounds.height / 2, { steps: 12 });
+  await page.mouse.up();
+  const reordered = await saveProject(page, fixture.name);
+  expect(reordered.layers.map((layer) => layer.id)).toEqual([
+    original.layers[2].id,
+    original.layers[1].id,
+    original.layers[3].id,
+    original.layers[0].id,
+  ]);
+  for (const layer of original.layers) {
+    expect(reordered.layers.find((candidate) => candidate.id === layer.id)).toEqual(layer);
+  }
+  await page.getByRole('button', { name: '2D canvas', exact: true }).click();
+  expect(await exportedPixel(page, 100, 100)).toEqual([239, 35, 60, 255]);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
+test('keeps a dragged element under the pointer in a zoomed and panned perspective view', async ({
+  page,
+}) => {
+  const fixture = depthFixture();
+  fixture.layers = [
+    createLayer('shape', { name: 'Back plane', x: 0, y: 0, width: 8, height: 8, duration: 6 }),
+    createLayer('shape', {
+      name: 'Small plane',
+      x: 112,
+      y: 112,
+      width: 32,
+      height: 32,
+      radius: 0,
+      duration: 6,
+    }),
+  ];
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  const zoom = page.getByRole('slider', { name: '3D zoom', exact: true });
+  await zoom.focus();
+  for (let step = 0; step < 4; step++) await zoom.press('ArrowRight');
+  const hit = page.getByRole('button', { name: 'Inspect Small plane', exact: true });
+  const start = (await hit.boundingBox())!;
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.keyboard.down('Shift');
+  await page.mouse.down();
+  await page.mouse.move(start.x + start.width / 2 + 20, start.y + start.height / 2 - 12, {
+    steps: 4,
+  });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  const before = (await hit.boundingBox())!;
+  await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(before.x + before.width / 2 + 24, before.y + before.height / 2 + 16, {
+    steps: 5,
+  });
+  await page.mouse.up();
+  const after = (await hit.boundingBox())!;
+  expect(Math.abs(after.x + after.width / 2 - before.x - before.width / 2 - 24)).toBeLessThan(2);
+  expect(Math.abs(after.y + after.height / 2 - before.y - before.height / 2 - 16)).toBeLessThan(2);
+  await expect(page.getByRole('region', { name: '3D layer view', exact: true })).toHaveAttribute(
+    'data-view',
+    'perspective',
+  );
+  const moved = await saveProject(page, fixture.name);
+  expect(moved.layers[0]).toEqual(original.layers[0]);
+  expect(moved.layers[1].x).not.toBe(original.layers[1].x);
+  expect(moved.layers[1].y).not.toBe(original.layers[1].y);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
 test('3D inspection respects visibility, clip time, audio separation, and locked ordering', async ({
   page,
 }) => {
@@ -1066,6 +1241,16 @@ test('3D inspection respects visibility, clip time, audio separation, and locked
   const backward = page.getByRole('button', { name: 'Move layer backward', exact: true });
   await expect(forward).toBeDisabled();
   await expect(backward).toBeDisabled();
+  await expect(page.getByRole('slider', { name: 'Layer depth', exact: true })).toBeDisabled();
+  await expect(page.getByRole('spinbutton', { name: '3D position X', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Front view', exact: true }).click();
+  const lockedHit = (await page
+    .getByRole('button', { name: 'Inspect Red square', exact: true })
+    .boundingBox())!;
+  await page.mouse.move(lockedHit.x + 10, lockedHit.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(lockedHit.x + 40, lockedHit.y + 30, { steps: 4 });
+  await page.mouse.up();
   await forward.dispatchEvent('click');
   expect(await saveProject(page, fixture.name)).toEqual(original);
 
@@ -1594,4 +1779,170 @@ test('palette recolors shapes and outline strokes together without filling trans
     expect(layer).toMatchObject({ fill: 'transparent', stroke: '#ef233c' });
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   expect(await saveProject(page, fixture.name)).toEqual(parseProject(JSON.stringify(fixture)));
+});
+
+test('toolbar menus dismiss without edits and panels can stay hidden while selecting', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
+  await page.getByRole('button', { name: 'Add shape', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Shapes', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Shapes', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Timeline clip Caption', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Add shape', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Drawing tools', exact: true }).click();
+  await page.getByRole('button', { name: 'Close drawing tools', exact: true }).click();
+  await page.getByRole('button', { name: 'Masks and effects', exact: true }).click();
+  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Masks & adjustments', exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole('button', { name: 'Templates', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Templates', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Close library', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: 'Library' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Templates', exact: true }).click();
+  await page.getByRole('button', { name: 'Hide panels', exact: true }).click();
+  await page.getByRole('button', { name: 'Timeline clip Edition', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: 'Library' })).toHaveCount(0);
+  await expect(page.getByRole('complementary', { name: 'Properties' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show panels', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: 'Library' })).toBeVisible();
+  expect(await saveProject(page)).toEqual(original);
+});
+
+test('adds a vector shape from the toolbar and edits its mask with independent undo', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  const playhead = Number(
+    await page
+      .getByRole('slider', { name: 'Timeline position', exact: true })
+      .getAttribute('aria-valuenow'),
+  );
+  await page.getByRole('button', { name: 'Add shape', exact: true }).click();
+  await page.getByRole('button', { name: 'Add star', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Shapes', exact: true })).toHaveCount(0);
+  const added = await saveProject(page);
+  const star = added.layers.at(-1)!;
+  expect(star).toMatchObject({ name: 'Star', kind: 'svg', start: playhead });
+  expect(star.path).toContain('Z');
+  await page.getByRole('button', { name: 'Masks and effects', exact: true }).click();
+  const masks = page.getByRole('dialog', { name: 'Masks & adjustments', exact: true });
+  await masks.getByRole('button', { name: 'Ellipse mask', exact: true }).click();
+  await masks.getByRole('spinbutton', { name: 'Mask inset value', exact: true }).fill('12');
+  await page.keyboard.press('Escape');
+  expect((await saveProject(page)).layers.at(-1)).toMatchObject({
+    id: star.id,
+    mask: 'ellipse',
+    maskInset: 12,
+  });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect((await saveProject(page)).layers.at(-1)).toEqual(star);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
+});
+
+test('creates a curved Pen path that survives SVG export, undo, redo, and reopening', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  await page.getByRole('button', { name: 'Drawing tools', exact: true }).click();
+  await page.getByRole('button', { name: 'Pen tool', exact: true }).click();
+  const canvas = await page.getByLabel('Composition canvas').boundingBox();
+  expect(canvas).not.toBeNull();
+  const x = canvas!.x,
+    y = canvas!.y,
+    w = canvas!.width,
+    h = canvas!.height;
+  await page.mouse.move(x + w * 0.2, y + h * 0.4);
+  await page.mouse.down();
+  await page.mouse.move(x + w * 0.27, y + h * 0.22, { steps: 5 });
+  await page.mouse.up();
+  await page.mouse.click(x + w * 0.6, y + h * 0.6);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /^Timeline clip / })).toHaveCount(
+    original.layers.length + 1,
+  );
+  const authored = await saveProject(page);
+  const path = authored.layers.at(-1)!;
+  expect(path.kind).toBe('svg');
+  expect(path.path).toContain('C');
+  expect(path.strokeWidth).toBe(3);
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export your creation' });
+  await dialog.getByRole('button', { name: 'SVG · editable frame', exact: true }).click();
+  const download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Export SVG', exact: true }).click();
+  expect((await downloadBytes(await download)).toString('utf8')).toContain(path.path);
+  await dialog.getByRole('button', { name: 'Close export', exact: true }).click();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect((await saveProject(page)).layers.at(-1)).toEqual(path);
+  await openProjectFixture(page, authored);
+  expect((await saveProject(page)).layers.at(-1)).toEqual(path);
+});
+
+test('cancels Pen drafts safely and closes a filled path by its first anchor', async ({ page }) => {
+  const original = await saveProject(page);
+  await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
+  await page.getByRole('button', { name: 'Drawing tools', exact: true }).click();
+  await page.getByRole('button', { name: 'Pen tool', exact: true }).click();
+  const bounds = (await page.getByLabel('Composition canvas').boundingBox())!;
+  const points = [
+    [0.24, 0.25],
+    [0.6, 0.4],
+    [0.35, 0.72],
+  ].map(([x, y]) => ({ x: bounds.x + x * bounds.width, y: bounds.y + y * bounds.height }));
+  for (const point of points) await page.mouse.click(point.x, point.y);
+  await page.keyboard.press('Backspace');
+  await page.getByRole('button', { name: 'Drawing tools', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Drawing tools', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  expect(await saveProject(page)).toEqual(original);
+  await page.getByRole('button', { name: 'Drawing tools', exact: true }).click();
+  await page.getByRole('button', { name: 'Pen tool', exact: true }).click();
+  for (const point of points) await page.mouse.click(point.x, point.y);
+  await page.mouse.click(points[0].x, points[0].y);
+  const authored = await saveProject(page);
+  expect(authored.layers).toHaveLength(original.layers.length + 1);
+  expect(authored.layers.at(-1)).toMatchObject({ kind: 'svg', fill: '#ef233c' });
+  expect(authored.layers.at(-1)!.path).toMatch(/Z$/i);
+});
+
+test('brush strokes use the chosen width and color and save as vector data', async ({ page }) => {
+  const original = await saveProject(page);
+  await page.getByRole('button', { name: 'Drawing tools', exact: true }).click();
+  await page.getByRole('button', { name: 'Brush tool', exact: true }).click();
+  await page.getByRole('button', { name: 'Drawing tools', exact: true }).click();
+  await page.getByRole('button', { name: 'Drawing color #d90429', exact: true }).click();
+  await page.getByRole('spinbutton', { name: 'Drawing stroke width', exact: true }).fill('18');
+  await page.getByRole('button', { name: 'Close drawing tools', exact: true }).click();
+  const bounds = (await page.getByLabel('Composition canvas').boundingBox())!;
+  await page.mouse.move(bounds.x + bounds.width * 0.2, bounds.y + bounds.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width * 0.6, bounds.y + bounds.height * 0.7, {
+    steps: 12,
+  });
+  await page.mouse.up();
+  const authored = await saveProject(page);
+  expect(authored.layers).toHaveLength(original.layers.length + 1);
+  expect(authored.layers.at(-1)).toMatchObject({
+    kind: 'drawing',
+    strokeWidth: 18,
+    stroke: '#d90429',
+  });
+  expect(authored.layers.at(-1)!.path).toContain('L');
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
 });

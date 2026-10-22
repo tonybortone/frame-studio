@@ -1,0 +1,482 @@
+.creation-toolbar {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-height: calc(100% - 108px);
+  padding: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #8d99ae36;
+  border-radius: 11px;
+  background: #252735;
+  box-shadow: 0 4px 16px #0003;
+  transform: translateY(-50%);
+  scrollbar-width: none;
+}
+.creation-toolbar::-webkit-scrollbar {
+  width: 0;
+}
+.creation-toolbar > button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #b1bacb;
+  transition:
+    background 120ms,
+    color 120ms,
+    border-color 120ms;
+}
+.creation-toolbar > button:hover:not(:disabled),
+.creation-toolbar > button.is-open {
+  background: #edf2f40d;
+  color: #edf2f4;
+  border-color: #8d99ae25;
+}
+.creation-toolbar > button.active,
+.creation-toolbar > button.active:hover {
+  background: #edf2f4;
+  color: #2b2d42;
+  border-color: #edf2f4;
+}
+.creation-toolbar > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.creation-toolbar .creation-menu-caret {
+  position: absolute;
+  right: 2px;
+  bottom: 3px;
+  opacity: 0.8;
+}
+.creation-divider {
+  width: 22px;
+  min-height: 1px;
+  background: #8d99ae24;
+  margin: 3px 0;
+}
+.creation-toolbar > button:focus-visible,
+.canvas-tool-popover button:focus-visible,
+.canvas-tool-popover input:focus-visible {
+  outline: 2px solid #8d99ae;
+  outline-offset: 2px;
+}
+.canvas-tool-popover {
+  position: fixed;
+  z-index: 120;
+  width: 264px;
+  max-width: calc(100vw - 20px);
+  max-height: calc(100dvh - 20px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border: 1px solid #8d99ae3d;
+  border-radius: 12px;
+  background: #252735;
+  color: #edf2f4;
+  box-shadow:
+    0 12px 40px #0005,
+    0 2px 8px #0003;
+  font-size: 11px;
+}
+.canvas-tool-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 10px;
+}
+.canvas-tool-heading strong {
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+.canvas-tool-heading > button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #aeb6c7;
+}
+.canvas-tool-heading > button:hover {
+  color: #edf2f4;
+  background: #edf2f40c;
+}
+.canvas-shape-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.canvas-shape-grid > button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 74px;
+  padding: 9px 3px;
+  border: 1px solid #8d99ae20;
+  border-radius: 7px;
+  background: #2b2d42;
+  color: #c7cedb;
+}
+.canvas-shape-grid > button:hover {
+  color: #edf2f4;
+  border-color: #8d99ae80;
+  background: #8d99ae14;
+}
+.canvas-shape-grid > button span {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+}
+.canvas-tool-hint {
+  margin: 11px 1px 0;
+  color: #a1aabd;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.canvas-drawing-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.canvas-drawing-options > button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #b7c0d0;
+  text-align: left;
+}
+.canvas-drawing-options > button:hover {
+  background: #edf2f408;
+  color: #edf2f4;
+}
+.canvas-drawing-options > button[aria-pressed='true'] {
+  border-color: #8d99ae45;
+  background: #8d99ae17;
+  color: #edf2f4;
+}
+.canvas-drawing-options > button > svg {
+  flex-shrink: 0;
+}
+.canvas-drawing-options > button > span {
+  flex: 1;
+}
+.canvas-drawing-options strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+}
+.canvas-drawing-options small {
+  display: block;
+  margin-top: 4px;
+  font-size: 9px;
+  color: #a1aabd;
+}
+.canvas-drawing-options kbd {
+  padding: 2px 4px;
+  border: 1px solid #8d99ae28;
+  border-radius: 4px;
+  color: #8d99ae;
+  font-family: inherit;
+  font-size: 9px;
+}
+.canvas-drawing-style {
+  margin-top: 11px;
+  padding-top: 12px;
+  border-top: 1px solid #8d99ae26;
+}
+.canvas-stroke-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #b5becf;
+  font-size: 10px;
+}
+.canvas-stroke-input {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 7px 4px 4px;
+  border: 1px solid #8d99ae30;
+  border-radius: 5px;
+  color: #cbd2df;
+  font-size: 10px;
+}
+.canvas-stroke-input input[type='color'] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.canvas-stroke-input input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.canvas-stroke-input input[type='color']::-webkit-color-swatch {
+  border: 1px solid #8d99ae44;
+  border-radius: 3px;
+}
+.canvas-drawing-palette {
+  display: flex;
+  gap: 7px;
+  margin: 11px 0 14px;
+}
+.canvas-drawing-palette > button {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #edf2f42b;
+  border-radius: 4px;
+}
+.canvas-drawing-palette > button[aria-pressed='true'] {
+  outline: 1px solid #edf2f4;
+  outline-offset: 2px;
+}
+.canvas-stroke-width {
+  display: flex;
+  align-items: center;
+  padding: 4px 6px;
+  border: 1px solid #8d99ae30;
+  border-radius: 5px;
+  font-size: 10px;
+  color: #8d99ae;
+}
+.canvas-stroke-width input {
+  width: 34px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #edf2f4;
+  font-size: 10px;
+  appearance: textfield;
+  text-align: right;
+  margin-right: 6px;
+}
+.canvas-stroke-width input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+.canvas-drawing-style > input[type='range'] {
+  display: block;
+  width: 100%;
+  height: 4px;
+  padding: 0;
+  margin: 12px 0 0;
+  accent-color: #edf2f4;
+}
+.canvas-mask-controls {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.canvas-mask-controls .property-section {
+  margin: 0;
+  padding: 0;
+}
+.canvas-mask-controls h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 3px 0 11px;
+  color: #aeb6c7;
+  font-size: 10px;
+  font-weight: 450;
+}
+.canvas-mask-controls .recipe-state {
+  font-size: 9px;
+  color: #8d99ae;
+}
+.canvas-mask-controls .mask-choices {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+.canvas-mask-controls .mask-choices button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  height: 52px;
+  padding: 5px 1px;
+  border: 1px solid #8d99ae25;
+  border-radius: 6px;
+  background: #2b2d42;
+  color: #aeb6c7;
+  font-size: 8px;
+}
+.canvas-mask-controls .mask-choices button:hover {
+  color: #edf2f4;
+  border-color: #8d99ae60;
+}
+.canvas-mask-controls .mask-choices button[aria-pressed='true'] {
+  background: #ef233c12;
+  border-color: #ef233c;
+  color: #edf2f4;
+}
+.canvas-mask-controls .visual-percent {
+  margin-top: 13px;
+}
+.canvas-mask-controls .visual-percent-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  color: #aeb6c7;
+  font-size: 10px;
+}
+.canvas-mask-controls .visual-percent-number {
+  display: flex;
+  align-items: center;
+  width: 48px;
+  height: 24px;
+  border: 1px solid #8d99ae30;
+  border-radius: 4px;
+  background: #2b2d42;
+  color: #8d99ae;
+}
+.canvas-mask-controls .visual-percent-number input {
+  width: 32px;
+  min-width: 0;
+  padding: 3px 2px;
+  border: 0;
+  appearance: textfield;
+  background: transparent;
+  color: #edf2f4;
+  font-size: 10px;
+  text-align: right;
+}
+.canvas-mask-controls .visual-percent-number input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+.canvas-mask-controls .visual-percent > input {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin: 10px 0 5px;
+  padding: 0;
+  accent-color: #edf2f4;
+}
+.canvas-mask-controls .visual-flips {
+  display: flex;
+  gap: 6px;
+  margin-top: 11px;
+}
+.canvas-mask-controls .visual-flips button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 29px;
+  padding: 4px;
+  border: 1px solid #8d99ae30;
+  border-radius: 6px;
+  background: #2b2d42;
+  color: #aeb6c7;
+  font-size: 10px;
+}
+.canvas-mask-controls .visual-flips button[aria-pressed='true'] {
+  border-color: #ef233c;
+  color: #edf2f4;
+}
+.canvas-mask-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 3px 15px;
+  color: #8d99ae;
+}
+.canvas-mask-empty > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.canvas-mask-empty p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #b7c0d0;
+}
+.canvas-tool-color-action {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin-top: 13px;
+  padding: 11px 8px;
+  border: 1px solid #8d99ae30;
+  border-radius: 7px;
+  background: #2b2d42;
+  color: #edf2f4;
+  text-align: left;
+}
+.canvas-tool-color-action > span:first-of-type {
+  flex: 1;
+  font-size: 11px;
+}
+.canvas-tool-color-action small {
+  display: block;
+  margin-top: 4px;
+  color: #a1aabd;
+  font-size: 9px;
+}
+.canvas-tool-color-action:hover:not(:disabled) {
+  background: #8d99ae17;
+  border-color: #8d99ae60;
+}
+.canvas-tool-color-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+@media (max-height: 800px) {
+  .creation-toolbar {
+    gap: 1px;
+    padding: 4px;
+    border-radius: 10px;
+  }
+  .creation-toolbar > button {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+  .creation-toolbar .tool-glyph {
+    width: 19px;
+    height: 19px;
+  }
+  .creation-divider {
+    margin: 2px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .creation-toolbar > button {
+    transition: none;
+  }
+}
