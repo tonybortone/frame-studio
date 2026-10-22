@@ -1,4 +1,5 @@
 import type { Layer, Project } from '../core/types';
+import { audioEnvelope, easeProgress, getMotionTiming } from '../core/motion';
 
 type MediaElement = HTMLImageElement | HTMLVideoElement | HTMLAudioElement;
 interface Entry {
@@ -184,10 +185,20 @@ export function animationState(
   layer: Layer,
   time: number,
 ): { opacity: number; x: number; y: number; scale: number } {
-  const progress = Math.min(1, Math.max(0, (time - layer.start) / Math.min(0.6, layer.duration)));
-  const eased = 1 - Math.pow(1 - progress, 3);
+  const elapsed = time - layer.start;
+  const { delay, duration, exitDuration } = getMotionTiming(layer);
+  const progress = duration > 0 ? (elapsed - delay) / duration : elapsed >= delay ? 1 : 0;
+  const eased = easeProgress(progress, layer.animationEasing);
+  const exit =
+    exitDuration > 0
+      ? 1 -
+        easeProgress(
+          (elapsed - layer.duration + exitDuration) / exitDuration,
+          layer.animationEasing,
+        )
+      : 1;
   return {
-    opacity: layer.opacity * (layer.animation === 'none' ? 1 : eased),
+    opacity: layer.opacity * (layer.animation === 'none' ? 1 : eased) * exit,
     x: layer.animation === 'slide' ? -80 * (1 - eased) : 0,
     y: layer.animation === 'rise' ? 48 * (1 - eased) : 0,
     scale: layer.animation === 'pop' ? 0.72 + 0.28 * eased : 1,
@@ -313,7 +324,12 @@ export function syncMedia(
     const validTime = Number.isFinite(element.duration)
       ? Math.min(target, Math.max(0, element.duration - 0.001))
       : target;
-    media.setLevel(id, active && !layer.muted ? Math.min(1, Math.max(0, layer.volume ?? 1)) : 0);
+    media.setLevel(
+      id,
+      active && !layer.muted
+        ? Math.min(1, Math.max(0, layer.volume ?? 1)) * audioEnvelope(layer, time)
+        : 0,
+    );
     if (
       (active || !playing) &&
       element.readyState >= 1 &&

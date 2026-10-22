@@ -154,6 +154,8 @@ export async function exportVideo(
       };
       recorder!.start(250);
       const started = performance.now();
+      let lastVisualFrame = 0;
+      onProgress(0);
       const frame = () => {
         if (settled || exportError) return;
         try {
@@ -165,10 +167,18 @@ export async function exportVideo(
             recorder!.stop();
             return;
           }
+          // Sound envelopes need a steady cadence even when exporting a low-frame-rate scene.
           syncMedia(project, time, true, media);
-          renderFrame(context, project, time, media);
-          onProgress(time / project.duration);
-          timer = setTimeout(frame, 1000 / project.fps);
+          const visualFrame = Math.floor(time * project.fps);
+          if (visualFrame > lastVisualFrame) {
+            renderFrame(context, project, time, media);
+            onProgress(time / project.duration);
+            lastVisualFrame = visualFrame;
+          }
+          timer = setTimeout(
+            frame,
+            Math.max(1, Math.min(1000 / 60, (project.duration - time) * 1000)),
+          );
         } catch (error) {
           fail(error instanceof Error ? error : new Error(String(error)));
         }

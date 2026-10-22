@@ -8,12 +8,12 @@ Initial scope: a React/TypeScript editor with an Electron shell; semantic layer 
 
 **Exit criteria:** a short composition can be created, edited, saved, reopened, previewed, and exported; automated model checks and the renderer build pass; known import/export limits are documented; a local Mac package can be exercised.
 
-**Current constraints:** embedded media and a 50 MB import limit, a flat layer model, a limited SVG subset, fixed animation presets, and real-time capture. This phase does not establish professional editor parity or a signed public download.
+**Current constraints:** embedded media and a 50 MB import limit, a flat layer model, a limited SVG subset, preset-based motion with editable timing and easing, and real-time capture. This phase does not establish professional editor parity or a signed public download.
 
 ## 1 — Reliable everyday editing
 
 - Improve selection, snapping, alignment, keyboard commands, and discoverability.
-- Add precise numeric clip editing, clearer audio waveforms, fades, and timeline navigation.
+- Add precise numeric clip editing, real audio waveforms and more precise timeline navigation.
 - Strengthen undo/redo coverage, validation, error recovery, and project compatibility.
 - Introduce managed assets and missing-media relinking; strengthen existing autosave and recovery.
 - Establish performance budgets with realistic multi-clip projects and long media.
@@ -49,7 +49,7 @@ These are independently designed motion tools inspired by familiar workflows. Th
 - Build deterministic frame rendering and a dedicated encoding pipeline.
 - Define explicit codec/container, frame-rate, alpha-channel, and audio-output support.
 - Add proxies and hardware-aware decode/render paths for heavier projects.
-- Add audio gain envelopes, metering, mixing, and carefully scoped processing tools.
+- Extend the current fade envelopes with metering, mixing, and carefully scoped processing tools.
 - Expand color controls to curves, white balance, LUTs, and scopes with defined color management.
 - Add render queues, progress, cancellation, and export recovery.
 

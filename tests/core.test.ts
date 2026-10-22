@@ -27,6 +27,75 @@ describe('project files', () => {
     expect(loaded.components).toEqual([]);
     expect(loaded.layers[0].brightness).toBe(1);
     expect(loaded.layers[0].animation).toBe('none');
+    expect(loaded.layers[0].animationDuration).toBeUndefined();
+    expect(loaded.layers[0].animationEasing).toBeUndefined();
+    expect(loaded.layers[0].audioFadeIn).toBeUndefined();
+  });
+
+  it('round-trips authored motion and sound settings in projects and saved components', () => {
+    const project = createProject();
+    const layer = createLayer('video', {
+      animation: 'slide',
+      animationDuration: 1.2,
+      animationDelay: 0.3,
+      animationEasing: 'ease-in-out',
+      exitDuration: 0.4,
+      audioFadeIn: 0.2,
+      audioFadeOut: 1,
+    });
+    project.layers = [layer];
+    project.components = [{ id: 'motion-card', name: 'Motion card', layers: [layer] }];
+    expect(parseProject(JSON.stringify(project))).toEqual(project);
+    expect(duplicateLayers([layer])[0]).toMatchObject({
+      animationDelay: 0.3,
+      animationEasing: 'ease-in-out',
+      audioFadeOut: 1,
+    });
+  });
+
+  it('rejects invalid motion timings and easing in both layers and saved components', () => {
+    const timings = [
+      'animationDuration',
+      'animationDelay',
+      'exitDuration',
+      'audioFadeIn',
+      'audioFadeOut',
+    ];
+    for (const key of timings) {
+      for (const value of [-0.1, 3600.1, '1', null]) {
+        const project = createProject();
+        project.layers = [createLayer('shape', { [key]: value })];
+        expect(() => parseProject(JSON.stringify(project))).toThrow();
+      }
+      const project = createProject();
+      project.layers = [createLayer('shape', { [key]: 1 })];
+      expect(() =>
+        parseProject(JSON.stringify(project).replace(`"${key}":1`, `"${key}":1e999`)),
+      ).toThrow('finite number');
+    }
+    const project = createProject();
+    project.components = [{ id: 'motion', name: 'Motion', layers: [createLayer('shape')] }];
+    const invalid = JSON.stringify(project).replace(
+      '"name":"Shape"',
+      '"name":"Shape","animationEasing":"spring"',
+    );
+    expect(() => parseProject(invalid)).toThrow('Unsupported animation easing');
+  });
+
+  it('accepts zero timings and all supported easing curves without changing authored values', () => {
+    const project = createProject();
+    project.layers = (['linear', 'ease-in', 'ease-out', 'ease-in-out'] as const).map(
+      (animationEasing) =>
+        createLayer('shape', {
+          animationEasing,
+          animationDuration: 0,
+          animationDelay: 3600,
+          exitDuration: 0,
+          audioFadeIn: 0,
+          audioFadeOut: 0,
+        }),
+    );
+    expect(parseProject(JSON.stringify(project))).toEqual(project);
   });
 
   it.each([
@@ -115,6 +184,30 @@ describe('editing operations', () => {
     expect(splitLayer(original, 5)).toEqual([original]);
     expect(splitLayer(original, 15)).toEqual([original]);
     expect(splitLayer(original, NaN)).toEqual([original]);
+  });
+
+  it('retains clip-relative authored motion and sound timings when splitting', () => {
+    const original = createLayer('video', {
+      duration: 4,
+      animation: 'pop',
+      animationDelay: 0.2,
+      animationDuration: 2,
+      exitDuration: 1.5,
+      audioFadeIn: 1,
+      audioFadeOut: 2,
+    });
+    const parts = splitLayer(original, 1);
+    expect(parts.map((layer) => layer.duration)).toEqual([1, 3]);
+    for (const layer of parts) {
+      expect(layer).toMatchObject({
+        animation: 'pop',
+        animationDelay: 0.2,
+        animationDuration: 2,
+        exitDuration: 1.5,
+        audioFadeIn: 1,
+        audioFadeOut: 2,
+      });
+    }
   });
 
   it('duplicates component groups independently while preserving layout and media offsets', () => {

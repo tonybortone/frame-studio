@@ -30,6 +30,8 @@ import ToolGlyph from './components/ToolGlyph';
 import PlaybackDock from './components/PlaybackDock';
 import CanvasStage from './components/CanvasStage';
 import ExportDialog from './components/ExportDialog';
+import CanvasSizePicker from './components/CanvasSizePicker';
+import TimelineResizeHandle, { maxTimelineHeight } from './components/TimelineResizeHandle';
 import { useEditor } from './hooks/useEditor';
 import {
   createLayer,
@@ -44,12 +46,6 @@ import { MediaCache, syncMedia, stopMedia } from './engine/renderer';
 import { importMedia } from './engine/assets';
 import { saveBlob } from './engine/export';
 
-const ASPECTS = [
-  { label: '16:9', name: 'Landscape', w: 1920, h: 1080 },
-  { label: '9:16', name: 'Portrait', w: 1080, h: 1920 },
-  { label: '1:1', name: 'Square', w: 1080, h: 1080 },
-  { label: '4:5', name: 'Social', w: 1080, h: 1350 },
-];
 export default function App() {
   const { project, ready, saveStatus, update, checkpoint, undo, redo } = useEditor();
   const [selected, setSelected] = useState<string[]>([]);
@@ -65,6 +61,9 @@ export default function App() {
     nonce: number;
   } | null>(null);
   const [timelineZoom, setTimelineZoom] = useState(66);
+  const [timelineHeight, setTimelineHeight] = useState(() =>
+    Math.min(window.innerHeight <= 800 ? 246 : 308, maxTimelineHeight()),
+  );
   const [exportOpen, setExportOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [projectMenu, setProjectMenu] = useState(false);
@@ -394,11 +393,15 @@ export default function App() {
     helpOpen,
     togglePlayback,
   ]);
-  const aspect =
-    ASPECTS.find((a) => a.w === project.width && a.h === project.height)?.label ?? 'Custom';
+  useEffect(() => {
+    const fit = () => setTimelineHeight((height) => Math.min(height, maxTimelineHeight()));
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
   return (
     <div
       className="app-shell"
+      style={{ gridTemplateRows: `52px minmax(220px, 1fr) ${timelineHeight}px` }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -548,21 +551,30 @@ export default function App() {
               <FolderOpen size={14} /> Files
             </button>
             <div className="board-options">
-              <select
-                aria-label="Canvas aspect ratio"
-                value={aspect}
-                onChange={(e) => {
-                  const a = ASPECTS.find((a) => a.label === e.target.value);
-                  if (a) update((p) => changeAspectRatio(p, a.w, a.h));
+              <CanvasSizePicker
+                width={project.width}
+                height={project.height}
+                onChange={(width, height, fitContents) => {
+                  const resized = fitContents
+                    ? changeAspectRatio(project, width, height)
+                    : { ...project, width, height };
+                  try {
+                    parseProject(JSON.stringify(resized));
+                  } catch (error) {
+                    throw new Error(
+                      fitContents
+                        ? 'Some elements cannot fit at this size. Turn off “Fit contents to frame” or choose a larger frame.'
+                        : error instanceof Error
+                          ? error.message
+                          : 'This frame size could not be applied.',
+                    );
+                  }
+                  setPlaying(false);
+                  update(() => resized);
+                  setCanvasZoom(1);
+                  setResetViewKey((value) => value + 1);
                 }}
-              >
-                {aspect === 'Custom' && <option value="Custom">Custom</option>}
-                {ASPECTS.map((a) => (
-                  <option key={a.label} value={a.label}>
-                    {a.label} · {a.name}
-                  </option>
-                ))}
-              </select>
+              />
               <button
                 className={`board-chip ${inspectorOpen ? 'active' : ''}`}
                 aria-label="Toggle properties"
@@ -610,7 +622,7 @@ export default function App() {
                     y: project.height * 0.35,
                     width: 360,
                     height: 240,
-                    fill: '#ffb18b',
+                    fill: '#ef233c',
                     radius: 28,
                     duration: project.duration,
                   }),
@@ -756,6 +768,7 @@ export default function App() {
         )}
       </main>
       <section className="timeline-section">
+        <TimelineResizeHandle height={timelineHeight} onChange={setTimelineHeight} />
         <div className="timeline-toolbar">
           <div className="timeline-edit-tools">
             <button title="Undo (⌘Z)" aria-label="Undo" onClick={undo}>
@@ -856,7 +869,7 @@ export default function App() {
             <h2 id="component-heading">Save component</h2>
             <p>
               Keep {selected.length} {selected.length === 1 ? 'element' : 'elements'} in your
-              Personalised folder.
+              Components library.
             </p>
             <label className="field-label">
               Component name

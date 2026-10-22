@@ -2,6 +2,14 @@ import type { Layer, LayerKind, Project } from './types';
 
 const KINDS: LayerKind[] = ['video', 'audio', 'image', 'text', 'shape', 'svg', 'drawing'];
 const ANIMATIONS = ['none', 'fade', 'rise', 'pop', 'slide'];
+const EASINGS = ['linear', 'ease-in', 'ease-out', 'ease-in-out'];
+const TIMING_KEYS = [
+  'animationDuration',
+  'animationDelay',
+  'exitDuration',
+  'audioFadeIn',
+  'audioFadeOut',
+] as const;
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const MAX_LAYERS = 1_000;
 const uid = () => globalThis.crypto.randomUUID();
@@ -73,7 +81,7 @@ export function createLayer(kind: LayerKind, overrides: Partial<Layer> = {}): La
     height: 180,
     rotation: 0,
     opacity: 1,
-    fill: kind === 'text' ? '#252725' : '#ee956c',
+    fill: kind === 'text' ? '#2b2d42' : '#ef233c',
     radius: 20,
     animation: 'none',
     brightness: 1,
@@ -95,7 +103,7 @@ export function createProject(): Project {
     height: 1080,
     fps: 30,
     duration: 12,
-    background: '#e9e6df',
+    background: '#edf2f4',
     components: [],
     layers: [
       createLayer('text', {
@@ -107,7 +115,7 @@ export function createProject(): Project {
         height: 45,
         fontSize: 24,
         fontWeight: 600,
-        fill: '#64675f',
+        fill: '#8d99ae',
       }),
       createLayer('text', {
         name: 'A little idea',
@@ -118,7 +126,7 @@ export function createProject(): Project {
         height: 350,
         fontSize: 128,
         fontWeight: 600,
-        fill: '#252725',
+        fill: '#2b2d42',
         animation: 'rise',
       }),
       createLayer('text', {
@@ -130,29 +138,29 @@ export function createProject(): Project {
         height: 80,
         fontSize: 34,
         fontWeight: 400,
-        fill: '#666960',
+        fill: '#2b2d42',
         animation: 'fade',
       }),
       createLayer('shape', {
-        name: 'Orange card',
+        name: 'Red card',
         x: 1408,
         y: 676,
         width: 286,
         height: 286,
         rotation: -13,
-        fill: '#e99165',
+        fill: '#ef233c',
         radius: 48,
         groupId: cardGroup,
         animation: 'pop',
       }),
       createLayer('shape', {
-        name: 'Mint card',
+        name: 'Slate card',
         x: 1590,
         y: 610,
         width: 206,
         height: 206,
         rotation: 12,
-        fill: '#a4bca8',
+        fill: '#8d99ae',
         radius: 42,
         groupId: cardGroup,
         animation: 'pop',
@@ -166,7 +174,7 @@ export function createProject(): Project {
         height: 42,
         fontSize: 21,
         fontWeight: 500,
-        fill: '#73766d',
+        fill: '#8d99ae',
       }),
     ],
   };
@@ -184,7 +192,10 @@ export function duplicateLayers(layers: Layer[]): Layer[] {
   });
 }
 
-/** Keep source time continuous when a media clip is divided. */
+/**
+ * Keep source time continuous when media is divided. Motion remains clip-relative:
+ * each half retains its authored settings, fitted to its new length at render time.
+ */
 export function splitLayer(layer: Layer, time: number): Layer[] {
   const elapsed = time - layer.start;
   if (!Number.isFinite(time) || elapsed < 0.01 || layer.duration - elapsed < 0.01) return [layer];
@@ -314,6 +325,8 @@ const LAYER_KEYS = [
   'locked',
   'groupId',
   'animation',
+  'animationEasing',
+  ...TIMING_KEYS,
   'brightness',
   'contrast',
   'saturation',
@@ -328,6 +341,8 @@ function parseLayer(value: unknown): Layer {
   if (!KINDS.includes(item.kind as LayerKind)) throw new Error('Unsupported layer kind.');
   if (item.animation !== undefined && !ANIMATIONS.includes(item.animation as string))
     throw new Error('Unsupported layer animation.');
+  if (item.animationEasing !== undefined && !EASINGS.includes(item.animationEasing as string))
+    throw new Error('Unsupported animation easing.');
   const layer: Layer = {
     id: string(item.id, 'Layer ID', 128, 1),
     name: string(item.name, 'Layer name', 256, 1),
@@ -347,6 +362,11 @@ function parseLayer(value: unknown): Layer {
     contrast: number(item.contrast ?? 1, 'Contrast', 0, 10),
     saturation: number(item.saturation ?? 1, 'Saturation', 0, 10),
   };
+  for (const key of TIMING_KEYS) {
+    if (item[key] !== undefined) layer[key] = number(item[key], key, 0, 3600);
+  }
+  if (item.animationEasing !== undefined)
+    layer.animationEasing = item.animationEasing as Layer['animationEasing'];
   if (item.text !== undefined) layer.text = string(item.text, 'Layer text', 100_000);
   if (item.fontSize !== undefined) layer.fontSize = number(item.fontSize, 'Font size', 1, 2048);
   if (item.fontWeight !== undefined)

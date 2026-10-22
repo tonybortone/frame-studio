@@ -17,6 +17,31 @@ async function saveProject(page: Page, projectName = 'A little idea') {
   return parseProject((await downloadBytes(download)).toString('utf8'));
 }
 
+function toneWav(seconds = 3): Buffer {
+  const sampleRate = 8000;
+  const samples = Math.round(sampleRate * seconds);
+  const bytes = Buffer.alloc(44 + samples * 2);
+  bytes.write('RIFF', 0);
+  bytes.writeUInt32LE(bytes.length - 8, 4);
+  bytes.write('WAVEfmt ', 8);
+  bytes.writeUInt32LE(16, 16);
+  bytes.writeUInt16LE(1, 20);
+  bytes.writeUInt16LE(1, 22);
+  bytes.writeUInt32LE(sampleRate, 24);
+  bytes.writeUInt32LE(sampleRate * 2, 28);
+  bytes.writeUInt16LE(2, 32);
+  bytes.writeUInt16LE(16, 34);
+  bytes.write('data', 36);
+  bytes.writeUInt32LE(samples * 2, 40);
+  for (let sample = 0; sample < samples; sample++) {
+    bytes.writeInt16LE(
+      Math.round(Math.sin((sample / sampleRate) * 440 * Math.PI * 2) * 4000),
+      44 + sample * 2,
+    );
+  }
+  return bytes;
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   // IndexedDB is isolated by Playwright's fresh context for every test.
@@ -66,9 +91,7 @@ test('edits text, duplicates it, undoes duplication, and saves the edited data',
 test('groups separate layers and inserts an independent reusable component', async ({ page }) => {
   await page.getByRole('tab', { name: 'Layers', exact: true }).click();
   await page.getByRole('button', { name: 'Caption', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Orange card', exact: true })
-    .click({ modifiers: ['Shift'] });
+  await page.getByRole('button', { name: 'Red card', exact: true }).click({ modifiers: ['Shift'] });
   await expect(page.getByText('2 elements', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Group / ungroup selection', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Elements grouped');
@@ -80,7 +103,7 @@ test('groups separate layers and inserts an independent reusable component', asy
   await expect(dialog).not.toBeVisible();
 
   await page.getByRole('tab', { name: 'Files', exact: true }).click();
-  await page.getByRole('button', { name: 'Personalised', exact: true }).click();
+  await page.getByRole('button', { name: 'Components', exact: true }).click();
   await page.getByRole('button', { name: /Lower third.*2 elements/ }).click();
   await expect(page.getByRole('button', { name: /^Timeline clip / })).toHaveCount(8);
 
@@ -101,7 +124,12 @@ test('groups separate layers and inserts an independent reusable component', asy
 });
 
 test('changes aspect ratio and saves the portrait composition dimensions', async ({ page }) => {
-  await page.getByLabel('Canvas aspect ratio').selectOption('9:16');
+  await page.getByRole('button', { name: 'Canvas size', exact: true }).click();
+  const size = page.getByRole('dialog', { name: 'Canvas size settings', exact: true });
+  await expect(
+    size.getByRole('checkbox', { name: 'Fit contents to frame', exact: true }),
+  ).toBeChecked();
+  await size.getByRole('button', { name: 'Portrait 9:16', exact: true }).click();
   const canvas = page.getByLabel('Composition canvas');
   await expect(canvas).toHaveAttribute('width', '1080');
   await expect(canvas).toHaveAttribute('height', '1920');
@@ -109,7 +137,7 @@ test('changes aspect ratio and saves the portrait composition dimensions', async
   const saved = await saveProject(page);
   expect([saved.width, saved.height]).toEqual([1080, 1920]);
   expect(saved.layers).toHaveLength(6);
-  const card = saved.layers.find((layer) => layer.name === 'Orange card')!;
+  const card = saved.layers.find((layer) => layer.name === 'Red card')!;
   expect(card.width).toBeCloseTo(286 * (1080 / 1920));
   expect(card.width / card.height).toBeCloseTo(1);
 });
@@ -289,7 +317,7 @@ test('grouping stale selection after undo is harmless and selecting a clip prese
 });
 
 test('resizes a shape from its canvas handle and undoes the entire gesture', async ({ page }) => {
-  await page.getByRole('button', { name: 'Vectors', exact: true }).click();
+  await page.getByRole('button', { name: 'Shapes & SVG', exact: true }).click();
   await page.getByRole('button', { name: 'Rectangle', exact: true }).click();
   const width = Number(await page.getByRole('spinbutton', { name: 'W', exact: true }).inputValue());
   const height = Number(
@@ -351,28 +379,42 @@ test('pans the board without editing the project and fits it back into view', as
     .toBeCloseTo(originalBounds!.width, 1);
 });
 
-test('loads the supplied folder artwork and browses files without changing the scene', async ({
+test('organizes media and creation tools with accurate counts without changing the scene', async ({
   page,
 }) => {
+  const original = await saveProject(page);
   const library = page.getByRole('complementary', { name: 'Library' });
-  for (const name of ['Videos', 'Audio', 'Images', 'Vectors', 'Fonts', 'Personalised']) {
-    const folder = library.getByRole('button', { name, exact: true });
+  const media = library.getByRole('region', { name: 'Media files', exact: true });
+  const create = library.getByRole('region', { name: 'Create', exact: true });
+  for (const name of ['Videos', 'Audio', 'Images']) {
+    const folder = media.getByRole('button', { name, exact: true });
     await expect(folder).toBeVisible();
-    await expect
-      .poll(() =>
-        folder.locator('img').evaluate((image) => {
-          const artwork = image as HTMLImageElement;
-          return artwork.complete && artwork.naturalWidth > 0;
-        }),
-      )
-      .toBe(true);
+    await expect(folder.locator('.fs-library-count')).toHaveText('0');
+    await expect(create.getByRole('button', { name, exact: true })).toHaveCount(0);
   }
-  await library.getByRole('button', { name: 'Videos', exact: true }).click();
-  await expect(library.getByText('No videos yet.', { exact: true })).toBeVisible();
+  for (const [name, count] of [
+    ['Text', '4'],
+    ['Shapes & SVG', '2'],
+    ['Components', '0'],
+  ]) {
+    const folder = create.getByRole('button', { name, exact: true });
+    await expect(folder).toBeVisible();
+    await expect(folder.locator('.fs-library-count')).toHaveText(count);
+    await expect(media.getByRole('button', { name, exact: true })).toHaveCount(0);
+  }
+  await media.getByRole('button', { name: 'Videos', exact: true }).click();
+  await expect(library.getByRole('button', { name: 'Import videos', exact: true })).toBeVisible();
+  await expect(
+    library.getByText('Import video clips or screen recordings to start editing.', { exact: true }),
+  ).toBeVisible();
   await library.getByRole('button', { name: 'Back to files', exact: true }).click();
-  await library.getByRole('button', { name: 'Vectors', exact: true }).click();
+  await library.getByRole('button', { name: 'Shapes & SVG', exact: true }).click();
   await expect(library.getByRole('button', { name: 'Rectangle', exact: true })).toBeVisible();
+  await library.getByRole('button', { name: 'Back to files', exact: true }).click();
+  await library.getByRole('button', { name: 'Text', exact: true }).click();
+  await expect(library.getByRole('button', { name: 'Add a heading', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Timeline clip / })).toHaveCount(6);
+  expect(await saveProject(page)).toEqual(original);
 });
 
 test('opening properties keeps the board stable during a direct layer drag', async ({ page }) => {
@@ -461,9 +503,7 @@ test('keeps the Files button clear of the creation toolbar in a small window wit
   await page.setViewportSize({ width: 1000, height: 700 });
   await page.getByRole('tab', { name: 'Layers', exact: true }).click();
   await page.getByRole('button', { name: 'Caption', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Orange card', exact: true })
-    .click({ modifiers: ['Shift'] });
+  await page.getByRole('button', { name: 'Red card', exact: true }).click({ modifiers: ['Shift'] });
   await expect(page.getByText('2 elements', { exact: true })).toBeVisible();
 
   const files = page.getByRole('button', { name: 'Toggle files panel', exact: true });
@@ -477,4 +517,211 @@ test('keeps the Files button clear of the creation toolbar in a small window wit
   // Verify the visible control remains directly clickable, without forcing past an overlay.
   await files.click();
   await expect(page.getByRole('complementary', { name: 'Library', exact: true })).not.toBeVisible();
+});
+
+test('applies custom canvas dimensions without moving contents and restores everything with undo', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1000, height: 700 });
+  const original = await saveProject(page);
+  await page.getByRole('button', { name: 'Canvas size', exact: true }).click();
+  const size = page.getByRole('dialog', { name: 'Canvas size settings', exact: true });
+  await size.getByRole('spinbutton', { name: 'Canvas width', exact: true }).fill('1440');
+  await size.getByRole('spinbutton', { name: 'Canvas height', exact: true }).fill('900');
+  await size.getByRole('checkbox', { name: 'Fit contents to frame', exact: true }).uncheck();
+  await expect(size.getByRole('button', { name: /^Apply size/ })).toBeInViewport();
+  await size.getByRole('button', { name: /^Apply size/ }).click();
+  await expect(size).not.toBeVisible();
+  await expect(page.getByLabel('Composition canvas')).toHaveAttribute('width', '1440');
+  await expect(page.getByLabel('Composition canvas')).toHaveAttribute('height', '900');
+  const resized = await saveProject(page);
+  expect([resized.width, resized.height]).toEqual([1440, 900]);
+  expect(resized.layers).toEqual(original.layers);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
+});
+
+test('previews editable templates, applies a chapter layout, and restores the original scene', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  await page.getByRole('tab', { name: 'Templates', exact: true }).click();
+  const library = page.getByRole('complementary', { name: 'Library' });
+  await expect(library.getByRole('button', { name: /^Use template:/ })).toHaveCount(7);
+  const preview = library.getByRole('img', { name: 'Preview of Tutorial chapter', exact: true });
+  await expect(preview).toBeAttached();
+  const colors = await preview.evaluate((element) => {
+    const canvas = element as HTMLCanvasElement;
+    const context = canvas.getContext('2d')!;
+    return {
+      left: Array.from(context.getImageData(3, 3, 1, 1).data),
+      right: Array.from(context.getImageData(canvas.width - 4, 3, 1, 1).data),
+    };
+  });
+  // The real template has a red chapter panel and a light composition background.
+  expect(colors.left).toEqual([239, 35, 60, 255]);
+  expect(colors.right).toEqual([237, 242, 244, 255]);
+  await library
+    .getByRole('button', { name: 'Use template: Tutorial chapter', exact: true })
+    .click();
+  const chapter = await saveProject(page, 'Tutorial chapter');
+  expect(chapter.duration).toBe(5);
+  expect([chapter.width, chapter.height]).toEqual([1920, 1080]);
+  expect(chapter.layers.find((layer) => layer.name === 'Chapter title')?.text).toBe(
+    'Start with\na clear idea.',
+  );
+  expect(chapter.layers.some((layer) => (layer.animationDelay ?? 0) > 0)).toBe(true);
+  expect(chapter.layers.some((layer) => (layer.exitDuration ?? 0) > 0)).toBe(true);
+  expect(chapter.layers.every((layer) => ['shape', 'text'].includes(layer.kind))).toBe(true);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
+});
+
+test('edits motion in the timeline, undoes a change, and saves the timing controls', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  const caption = original.layers.find((layer) => layer.name === 'Caption')!;
+  await page.getByRole('button', { name: 'Edit motion for Caption', exact: true }).click();
+  const motion = page.getByRole('group', { name: 'Motion editor for Caption', exact: true });
+  const duration = motion.getByRole('spinbutton', {
+    name: 'Animation duration for Caption',
+    exact: true,
+  });
+  await duration.fill('1.2');
+  expect(
+    (await saveProject(page)).layers.find((layer) => layer.id === caption.id)?.animationDuration,
+  ).toBe(1.2);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
+  await motion
+    .getByRole('combobox', { name: 'Motion preset for Caption', exact: true })
+    .selectOption('slide');
+  await motion
+    .getByRole('spinbutton', { name: 'Animation delay for Caption', exact: true })
+    .fill('0.4');
+  await duration.fill('1.2');
+  await motion
+    .getByRole('combobox', { name: 'Animation easing for Caption', exact: true })
+    .selectOption('linear');
+  await motion.getByRole('spinbutton', { name: 'Exit fade for Caption', exact: true }).fill('0.5');
+  const saved = await saveProject(page);
+  expect(saved.layers.find((layer) => layer.id === caption.id)).toMatchObject({
+    animation: 'slide',
+    animationDelay: 0.4,
+    animationDuration: 1.2,
+    animationEasing: 'linear',
+    exitDuration: 0.5,
+  });
+  expect(saved.layers.filter((layer) => layer.id !== caption.id)).toEqual(
+    original.layers.filter((layer) => layer.id !== caption.id),
+  );
+  await expect(
+    motion.getByRole('button', { name: 'Move entrance for Caption', exact: true }),
+  ).toBeAttached();
+  await expect(
+    motion.getByRole('button', { name: 'Resize exit fade for Caption', exact: true }),
+  ).toBeAttached();
+});
+
+test('separates imported audio from visuals and saves real volume, fade, and mute edits', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  const chosen = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await (await chosen).setFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: toneWav() });
+  await expect(page.getByRole('status')).toContainText('1 file imported');
+  const visuals = page.getByRole('group', { name: 'Visual tracks', exact: true });
+  const audio = page.getByRole('group', { name: 'Audio tracks', exact: true });
+  await expect(visuals.getByRole('button', { name: /^Timeline clip / })).toHaveCount(6);
+  await expect(audio.getByRole('button', { name: /^Timeline clip / })).toHaveCount(1);
+  await expect(
+    audio.getByRole('button', { name: 'Timeline clip tone', exact: true }),
+  ).toBeAttached();
+  await page.getByRole('button', { name: 'Edit audio for tone', exact: true }).click();
+  const sound = page.getByRole('group', { name: 'Audio editor for tone', exact: true });
+  await sound.getByRole('spinbutton', { name: 'Audio volume for tone', exact: true }).fill('35');
+  await sound.getByRole('spinbutton', { name: 'Audio fade in for tone', exact: true }).fill('0.4');
+  await sound.getByRole('spinbutton', { name: 'Audio fade out for tone', exact: true }).fill('0.6');
+  const mute = sound.getByRole('button', { name: 'Mute audio for tone', exact: true });
+  await mute.click();
+  await expect(mute).toHaveAttribute('aria-pressed', 'true');
+  const saved = await saveProject(page);
+  const clip = saved.layers.find((layer) => layer.name === 'tone')!;
+  expect(clip).toMatchObject({
+    kind: 'audio',
+    volume: 0.35,
+    audioFadeIn: 0.4,
+    audioFadeOut: 0.6,
+    muted: true,
+  });
+  expect(clip.duration).toBeCloseTo(3, 2);
+  expect(clip.sourceDuration).toBeCloseTo(3, 2);
+  expect(clip.src).toMatch(/^data:audio\/wav;base64,/);
+  expect(saved.layers.filter((layer) => layer.kind !== 'audio')).toEqual(original.layers);
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await expect(inspector.getByRole('spinbutton', { name: 'X', exact: true })).toHaveCount(0);
+  await expect(inspector.getByRole('slider', { name: 'Opacity', exact: true })).toHaveCount(0);
+  await expect(inspector.getByRole('slider', { name: 'Volume', exact: true })).toHaveValue('0.35');
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  const unmuted = (await saveProject(page)).layers.find((layer) => layer.id === clip.id)!;
+  expect(unmuted.muted).toBe(false);
+  expect([unmuted.audioFadeIn, unmuted.audioFadeOut, unmuted.volume]).toEqual([0.4, 0.6, 0.35]);
+});
+
+test('resizes the timeline with keyboard and pointer without editing the project', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  const separator = page.getByRole('separator', { name: 'Timeline height', exact: true });
+  const initial = Number(await separator.getAttribute('aria-valuenow'));
+  const section = page.locator('.timeline-section');
+  const originalBounds = (await section.boundingBox())!;
+  await separator.focus();
+  await separator.press('ArrowUp');
+  await expect(separator).toHaveAttribute('aria-valuenow', String(initial + 20));
+  await expect
+    .poll(async () => (await section.boundingBox())!.height)
+    .toBeCloseTo(originalBounds.height + 20, 1);
+  const grip = (await separator.boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 - 40, { steps: 4 });
+  await page.mouse.up();
+  await expect(separator).toHaveAttribute('aria-valuenow', String(initial + 60));
+  expect(await saveProject(page)).toEqual(original);
+});
+
+test('rejects a frame that would invalidate fitted elements and allows an unscaled tiny frame', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  const canvas = page.getByLabel('Composition canvas');
+  await page.getByRole('button', { name: 'Canvas size', exact: true }).click();
+  const size = page.getByRole('dialog', { name: 'Canvas size settings', exact: true });
+  await size.getByRole('spinbutton', { name: 'Canvas width', exact: true }).fill('16');
+  await size.getByRole('spinbutton', { name: 'Canvas height', exact: true }).fill('16');
+  await size.getByRole('checkbox', { name: 'Fit contents to frame', exact: true }).check();
+  await size.getByRole('button', { name: /^Apply size/ }).click();
+  await expect(size).toBeVisible();
+  await expect(size.getByRole('alert')).toContainText('Some elements cannot fit');
+  await expect(canvas).toHaveAttribute('width', '1920');
+  await expect(canvas).toHaveAttribute('height', '1080');
+  // Saving through the normal menu closes the popover and verifies the unchanged project data.
+  expect(await saveProject(page)).toEqual(original);
+
+  await page.getByRole('button', { name: 'Canvas size', exact: true }).click();
+  await size.getByRole('spinbutton', { name: 'Canvas width', exact: true }).fill('16');
+  await size.getByRole('spinbutton', { name: 'Canvas height', exact: true }).fill('16');
+  await size.getByRole('checkbox', { name: 'Fit contents to frame', exact: true }).uncheck();
+  await size.getByRole('button', { name: /^Apply size/ }).click();
+  await expect(size).not.toBeVisible();
+  await expect(canvas).toHaveAttribute('width', '16');
+  await expect(canvas).toHaveAttribute('height', '16');
+  const tiny = await saveProject(page);
+  expect([tiny.width, tiny.height]).toEqual([16, 16]);
+  expect(tiny.layers).toEqual(original.layers);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
 });

@@ -1,5 +1,6 @@
 export type LayerKind = 'video' | 'audio' | 'image' | 'text' | 'shape' | 'svg' | 'drawing';
 export type Animation = 'none' | 'fade' | 'rise' | 'pop' | 'slide';
+export type AnimationEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
 export interface Layer {
   id: string;
   name: string;
@@ -27,6 +28,14 @@ export interface Layer {
   locked?: boolean;
   groupId?: string;
   animation: Animation;
+  /** Motion timings are seconds relative to this clip, including after a split or trim. */
+  animationDuration?: number;
+  animationDelay?: number;
+  animationEasing?: AnimationEasing;
+  exitDuration?: number;
+  /** Linear gain ramps applied to audio and video sound in preview and export. */
+  audioFadeIn?: number;
+  audioFadeOut?: number;
   brightness: number;
   contrast: number;
   saturation: number;
@@ -53,13 +62,13 @@ export interface Project {
   components: SavedComponent[];
 }
 export const LAYER_COLORS: Record<LayerKind, string> = {
-  video: '#9985ed',
-  audio: '#bb98ef',
-  image: '#ffa568',
-  text: '#ffb27b',
-  shape: '#ed9bc1',
-  svg: '#b18aef',
-  drawing: '#74d8be',
+  video: '#ef233c',
+  audio: '#8d99ae',
+  image: '#d90429',
+  text: '#edf2f4',
+  shape: '#8d99ae',
+  svg: '#ef233c',
+  drawing: '#edf2f4',
 };
 export const LAYER_LABELS: Record<LayerKind, string> = {
   video: 'Video',

@@ -4,7 +4,7 @@ A local-first canvas and video editor for Mac. Arrange video, audio, images, tex
 
 Frame Studio is an early, open-source alpha. The aim is the directness of a design tool with an approachable video-editing workflow: reusable compositions, clear controls, and an interface that feels at home on a Mac.
 
-The workspace keeps the board in focus: a sculpted silver side tool bar, a folder library for your files, and compact, color-coded timeline tracks. A floating playback dock keeps play, pause, and scrubbing close to the canvas. Pan around the board with the hand tool or Space + drag, and open folders for videos, audio, images, vectors, text presets, and saved components.
+The workspace separates media from creation tools and keeps visuals above a dedicated audio area. Expand a timeline layer to edit entrances, easing, exit fades, or sound levels and fades. Resize the timeline, choose a canvas preset or custom dimensions, and start from seven editable templates. A floating dock keeps playback close to the canvas.
 
 ![Frame Studio editor](docs/images/editor.png)
 
@@ -39,9 +39,9 @@ Packaging currently targets **Apple Silicon Macs (arm64)** and writes DMG and ZI
 | ---------------- | --------------------------------------------------------------------------------------------- |
 | Canvas           | Select and arrange layers; text, shapes, freehand drawing, and editable common SVG primitives |
 | Timeline         | Move, trim, and split clips; preview a composition                                            |
-| Media            | Import local video, audio, and images; basic volume and mute controls                         |
+| Media            | Import local video, audio, and images; volume, mute, and audio fade controls                  |
 | Organization     | Multiple selection, grouping, duplication, and reusable saved compositions                    |
-| Motion and color | Fade, rise, pop, and slide presets; brightness, contrast, and saturation                      |
+| Motion and color | Timed fade, rise, pop, and slide entrances; easing and exit fades; basic color adjustments    |
 | Layout           | Common aspect ratios and starter layouts for screen recordings and presenters                 |
 | Projects         | Device-local autosave; save and reopen projects with embedded media                           |
 | Export           | PNG/SVG snapshots and real-time video recording using supported runtime formats               |

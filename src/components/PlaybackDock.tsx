@@ -43,10 +43,10 @@ export default function PlaybackDock({
           >
             <defs>
               <pattern id={`${id}-idle-dots`} width="5" height="5" patternUnits="userSpaceOnUse">
-                <circle cx="2.5" cy="2.5" r=".85" fill="#343434" />
+                <circle cx="2.5" cy="2.5" r=".85" fill="#41465e" />
               </pattern>
               <pattern id={`${id}-played-dots`} width="5" height="5" patternUnits="userSpaceOnUse">
-                <circle cx="2.5" cy="2.5" r=".85" fill="#e4e4e4" />
+                <circle cx="2.5" cy="2.5" r=".85" fill="#edf2f4" />
               </pattern>
             </defs>
             <rect width="175" height="20" fill={`url(#${id}-idle-dots)`} />

@@ -42,3 +42,19 @@ The alpha does not provide managed external assets, media relinking, proxies, in
 - Document migration and recovery behavior before introducing a new persistent asset format.
 
 `sourceDuration`, when present on audio/video layers, records the original media length in seconds. Trimming is bounded by this value and `mediaOffset`. Older files without it remain supported.
+
+## Clip-relative motion and sound
+
+Optional version-one fields are backward-compatible; absent values retain the original behavior.
+
+| Field                         | Meaning / default                                           |
+| ----------------------------- | ----------------------------------------------------------- |
+| `animationDuration`           | Entrance length in seconds, default `0.6`                   |
+| `animationDelay`              | Entrance delay after the layer starts, default `0`          |
+| `animationEasing`             | `linear`, `ease-in`, `ease-out` (default), or `ease-in-out` |
+| `exitDuration`                | End fade length in seconds, default `0` (off)               |
+| `audioFadeIn`, `audioFadeOut` | Linear sound gain ramps in seconds, default `0` (off)       |
+
+Timing values must be finite, nonnegative, and at most 3,600 seconds. Authored settings are retained when trimming; effective timings fit inside the current clip. Entrance delay and duration fit together, while overlapping entrance/end fades multiply. Sound fades multiply the layer volume independently of its visual opacity.
+
+Moving a clip carries its motion. Splitting retains the same clip-relative settings in each half, so an entrance restarts for the new clip; continuous source-relative motion across a split is not implemented. Saved components preserve these settings. Preview, PNG/SVG snapshots, and real-time video export use the same motion evaluation; preview and video export share the sound envelope.

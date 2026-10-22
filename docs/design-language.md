@@ -1,61 +1,76 @@
 # Design language
 
-Frame Studio is a simple board for making videos. A spacious, dotted workspace surrounds the editable video frame, a small vertical tool bar puts creation tools beside it, and compact tracks keep the timeline readable. Restrained black surfaces, subtle silver highlights, and clearly separated controls give the workspace depth without competing with the composition. Color belongs primarily to the creator's work and the file categories.
+Frame Studio keeps the board at the center of a compact editing workspace. The library explains what can be added, the board shows the composition, and the timeline separates visual layers from sound. A restrained navy, slate, paper, and red palette gives those areas a consistent hierarchy.
 
 ## Interface principles
 
-1. **Make the object directly editable.** Select on the canvas, see its bounds, and change its position without navigating a deep panel tree.
-2. **Keep the common path short.** Import, trim, add text, adjust sound, and export should be obvious. Advanced controls can unfold when needed.
-3. **Use color to orient.** Asset kind has a stable color in the library, layers, and timeline. Color is paired with an icon or label.
-4. **Preserve calm.** Use neutral surfaces, precise spacing, rounded controls, legible type, and restrained motion. Let the work remain visually dominant.
-5. **Keep compositions reusable.** A title with a shape, a presenter layout, or a motion treatment should be saveable and editable after reuse.
+1. **Edit the object directly.** Select, move, and resize on the board. Selection is shared with the library and timeline.
+2. **Keep files separate from creation tools.** Video, audio, and image imports are media. Text, vector shapes, and reusable components have a dedicated Create group.
+3. **Keep controls close to their effect.** Expand a timeline track to adjust its motion or sound. Use properties for the selected element's other details.
+4. **Make previews truthful.** Template thumbnails use the same composition renderer as preview and export. Audio waveforms, analysis, or arbitrary keyframe capabilities must not be implied when unavailable.
+5. **Keep changes reversible.** Applying a template and changing frame size remain undoable. View navigation and timeline height do not alter project content.
 
-## Semantic layer palette
+## Palette
 
-The source of truth is `LAYER_COLORS` and `LAYER_LABELS` in `src/core/types.ts`.
+The base palette is:
 
-| Kind      | Label   | Color     | Intent        |
-| --------- | ------- | --------- | ------------- |
-| `video`   | Video   | `#9985ED` | Violet        |
-| `audio`   | Audio   | `#BB98EF` | Soft lavender |
-| `image`   | Image   | `#FFA568` | Orange        |
-| `text`    | Text    | `#FFB27B` | Peach         |
-| `shape`   | Shape   | `#ED9BC1` | Pink          |
-| `svg`     | Vector  | `#B18AEF` | Purple        |
-| `drawing` | Drawing | `#74D8BE` | Mint          |
+| Token   | Color     | Use                                      |
+| ------- | --------- | ---------------------------------------- |
+| Navy    | `#2B2D42` | Raised surfaces and composition text     |
+| Slate   | `#8D99AE` | Secondary labels, sound, subtle borders  |
+| Paper   | `#EDF2F4` | Primary text, light compositions, focus  |
+| Red     | `#EF233C` | Active controls and visual accents       |
+| Crimson | `#D90429` | Strong actions and secondary red accents |
 
-These are identification colors, not the object's rendered fill. An image clip stays identifiable as an image even when its content or color adjustment changes. User-assigned layer colors and themes are planned; they should preserve a visible asset-kind indicator.
+Darker navy surfaces and transparent variants provide depth without adding unrelated hues. A fine outline, quiet hover surface, and clear active state are more useful than decorative chrome. Every interactive icon keeps a descriptive accessible name.
 
-## Control surface direction
+`LAYER_COLORS` and `LAYER_LABELS` in `src/core/types.ts` define category colors. These identify layers independently of their rendered fill:
 
-The Flask reference suggests a compact, carefully drawn control surface: dark translucent panels, small pill tabs, original illustrated tool glyphs, silver control edges, and a dot-matrix display. Frame Studio adapts those visual qualities to editing rather than adding decorative instruments.
+| Kind      | Label   | Color     |
+| --------- | ------- | --------- |
+| `video`   | Video   | `#EF233C` |
+| `audio`   | Audio   | `#8D99AE` |
+| `image`   | Image   | `#D90429` |
+| `text`    | Text    | `#EDF2F4` |
+| `shape`   | Shape   | `#8D99AE` |
+| `svg`     | Vector  | `#EF233C` |
+| `drawing` | Drawing | `#EDF2F4` |
 
-- **Keep surfaces quiet.** Use near-black panels with a fine border and restrained translucency. Separate the library, tools, properties, and timeline through spacing and rounded outlines rather than a large grid of boxes.
-- **Draw the primary tools consistently.** Creation glyphs use original silver material illustrations with consistent lighting, soft edge highlights, and a restrained shadow. Active tools need a visible surface change, and every icon keeps a descriptive accessible name.
-- **Reserve metallic highlights for controls.** A soft silver edge on a playback button or playhead makes the interaction visible. It should not become a bright frame around every panel.
-- **Make the dot matrix truthful.** Playback progress comes from the current project time and duration. Dots must not simulate an audio meter or imply analysis that has not happened. Exact time remains available as text.
-- **Keep semantic clips rich and legible.** Each clip has a saturated two-pixel type-color edge and a subtle vertical tint over near-black. The body blends approximately 27–36% of the category color; selection raises that tint and adds a fine pale outline. This preserves identification without filling the whole timeline with flat pastel blocks.
+Categories share a small palette, so icons and labels always accompany color. The user's imported media retains its original appearance.
 
-## Workspace behavior
+## Library and templates
 
-- The compact library has three tabs: Files, Layers, and Templates. Files opens a two-column folder grid using the creator's supplied artwork in `public/library-icons`. Videos, Audio, Images, Vectors, Fonts, and Personalised lead directly to the relevant files or creation controls.
-- Fonts holds heading, subheading, and body-text presets. Vectors holds shapes and SVG import. Personalised holds reusable saved components. Folder navigation uses a simple back button; there is no second row of categories or promotional content.
-- The board supports direct selection and resizing, hand-tool or Space-drag panning, and pointer-centered zoom. Panning and zooming affect the workspace view, not the video composition.
-- Canvas selection and timeline selection refer to the same objects.
-- The inspector shows shared controls for multiple selection and type-specific controls for a single layer.
-- Timeline lanes are 32 pixels tall, with 24-pixel clips. Fine grid lines stop at the project duration. A small silver playhead grip, coral position point, and pale vertical line make the current frame easy to find.
-- Clip edges show trim grips on hover, keyboard focus, or selection. Image clips display their actual imported thumbnail. Audio keeps a type icon until a real waveform is available; decorative waveform data is never substituted.
-- Playback controls and exact time readouts share one floating dock in the board, close to the timeline. Repeated playback controls should not appear in multiple toolbars.
-- Export makes aspect ratio, output dimensions, and supported formats understandable before rendering begins.
+The library has three tabs: Files, Layers, and Templates. Files opens two concise groups:
 
-These are design targets. Not every advanced behavior is implemented in the alpha.
+- **Media:** Videos, Audio, and Images. Each row shows the current project count and opens its files and import action.
+- **Create:** Text, Shapes & SVG, and Components. Text offers heading, subheading, and body presets; Shapes & SVG adds editable graphics; Components saves and reuses selections.
+
+Small original vector icons identify categories. Large decorative folder thumbnails are no longer part of navigation. The previously supplied PNG artwork remains in the repository. Empty states describe what belongs in each category. The Layers tab separates Visuals and Audio while preserving the relative visual stacking order.
+
+Seven editable templates are provided: Blank canvas, Portrait title, Screen + camera, Speaker lower third, Tutorial chapter, Product spotlight, and Square announcement. Each uses the five-color palette and ordinary project layers. The template card renders its actual composition, identifies its ratio and duration, and provides a clearly labeled Use template action. Footage and product-image spaces are labeled placeholders, not bundled stock media. Templates replace the current scene; Undo restores it.
+
+## Board and frame size
+
+The board supports direct selection and resizing, hand-tool or Space-drag panning, and pointer-centered zoom. Panning and zooming affect the workspace view, not the exported composition. Properties float over the workspace without shifting the board during a drag.
+
+The frame-size picker offers landscape, portrait, square, and social presets, plus custom pixel dimensions. Fit contents to frame scales existing objects uniformly; turning it off changes frame dimensions while preserving object coordinates and sizes. The same operation can be undone.
+
+Playback controls and exact time readouts share a compact dock. The dot display reflects project time and duration; it does not simulate an audio meter.
+
+## Timeline, motion, and sound
+
+Visual and audio tracks have separate labeled sections. Each layer keeps its own editable clip, and the relative order of visual layers remains unchanged. The ruler displays time against the project frame rate. Trim edges are visible on interaction, and image clips use their real imported thumbnails. The timeline height can be changed by dragging its separator or using its arrow-key controls.
+
+Expanding a visual track exposes entrance and exit timing. Entrance presets are None, Fade, Rise, Pop, and Slide. Duration, delay, easing, and exit fade are editable through the inline controls and properties. The entrance and exit strips represent those actual timing settings and can be adjusted directly. This is preset-based motion editing, not an arbitrary keyframe graph editor.
+
+Expanding an audio track exposes volume, mute, and fade-in/fade-out duration. Audio-only properties omit visual transforms and opacity. Sound fades affect gain independently of visual opacity. Shared timing calculations keep preview and export consistent; shortening a clip clamps its effective timing without discarding authored values.
 
 ## Accessibility and motion
 
-Do not encode asset kind, mute, lock, or selection through color alone. Provide labels/tooltips for icon buttons, visible keyboard focus, generous pointer targets, and legible text contrast. Keep keyboard navigation predictable and avoid trapping focus in the canvas.
+Do not encode category, mute, lock, or selection through color alone. Provide descriptive labels and tooltips, visible focus, keyboard access to controls, and readable contrast. Empty categories remain usable through their import or creation action.
 
-Interface animation should explain selection and state changes, and should respect reduced-motion preferences. This preference governs interface motion; it should not silently alter animation intentionally authored into a video.
+Interface motion respects reduced-motion preferences. That preference governs the interface; it does not alter animation intentionally authored into a video.
 
 ## Inspiration and originality
 
-The product brief draws on CapCut's editing accessibility, Figma's object manipulation and reusable compositions, and iOS visual polish. The reference screenshots guide the spacious dark board, vertical creation tools, and differentiated timeline tracks. The later [Flask](https://flask.do/) direction informs the restrained control surfaces and display treatment. The folder artwork was supplied by the creator; other controls and compositions are developed for Frame Studio, with original primary tool glyphs rather than copied reference artwork.
+The brief draws on CapCut's approachable editing, Figma's direct object manipulation, and iOS clarity. Reference screenshots inform the spacious board and differentiated tracks. The earlier [Flask](https://flask.do/) study informed compact control surfaces, while the current palette and library organization simplify them for editing. All controls, template compositions, and application code are developed for Frame Studio.

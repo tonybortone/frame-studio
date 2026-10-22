@@ -1,23 +1,63 @@
 import type { LayerKind } from './types';
 
 export type AssetFolderId = 'videos' | 'audio' | 'images' | 'vectors' | 'fonts' | 'personalised';
-
-/** Folder artwork supplied by the project's creator; everything stays local. */
-export const ASSET_FOLDERS: {
+export interface AssetFolder {
   id: AssetFolderId;
   label: string;
-  icon: string;
+  description: string;
+  section: 'media' | 'create';
   kinds: LayerKind[];
-}[] = [
-  { id: 'videos', label: 'Videos', icon: '/library-icons/videos.png', kinds: ['video'] },
-  { id: 'audio', label: 'Audio', icon: '/library-icons/audio.png', kinds: ['audio'] },
-  { id: 'images', label: 'Images', icon: '/library-icons/images.png', kinds: ['image'] },
+  color: string;
+}
+
+/** Media categories contain imported files; creation tools stay in their own group. */
+export const ASSET_FOLDERS: AssetFolder[] = [
+  {
+    id: 'videos',
+    label: 'Videos',
+    description: 'Clips & recordings',
+    section: 'media',
+    kinds: ['video'],
+    color: '#ef233c',
+  },
+  {
+    id: 'audio',
+    label: 'Audio',
+    description: 'Voice, music & sound',
+    section: 'media',
+    kinds: ['audio'],
+    color: '#8d99ae',
+  },
+  {
+    id: 'images',
+    label: 'Images',
+    description: 'Photos & graphics',
+    section: 'media',
+    kinds: ['image'],
+    color: '#edf2f4',
+  },
+  {
+    id: 'fonts',
+    label: 'Text',
+    description: 'Titles & captions',
+    section: 'create',
+    kinds: ['text'],
+    color: '#edf2f4',
+  },
   {
     id: 'vectors',
-    label: 'Vectors',
-    icon: '/library-icons/vectors.png',
+    label: 'Shapes & SVG',
+    description: 'Editable graphic elements',
+    section: 'create',
     kinds: ['svg', 'shape', 'drawing'],
+    color: '#8d99ae',
   },
-  { id: 'fonts', label: 'Fonts', icon: '/library-icons/fonts.png', kinds: ['text'] },
-  { id: 'personalised', label: 'Personalised', icon: '/library-icons/personalised.png', kinds: [] },
+  {
+    id: 'personalised',
+    label: 'Components',
+    description: 'Your reusable designs',
+    section: 'create',
+    kinds: [],
+    color: '#ef233c',
+  },
 ];
