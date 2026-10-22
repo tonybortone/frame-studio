@@ -450,13 +450,15 @@ export default function Timeline({
               </div>
             ))}
             <div className="ruler-playhead" style={{ left: time * pixels }} />
-            <output
+            <span
+              role="timer"
+              aria-live="off"
               className="ruler-current-time"
               aria-label="Current timeline time"
               style={{ left: Math.max(36, Math.min(width - 36, time * pixels)) }}
             >
               {timecode(time, project.fps)}
-            </output>
+            </span>
           </div>
         </div>
       </div>
