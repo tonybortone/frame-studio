@@ -31,11 +31,13 @@ User action → project operation → updated Project
                                       └── project serialization / export
 ```
 
-The `Project` is serializable editor content. Selection, hover, open panels, playback position, transient drag state, and decode caches belong to the editor/runtime rather than the saved model.
+The `Project` is serializable editor content. Selection, hover, open panels, playback position, transient drag state, depth-view camera settings, and decode caches belong to the editor/runtime rather than the saved model.
 
 Time values are seconds. A layer occupies a span beginning at `start` for `duration`; its media source can begin at a separate `mediaOffset`. Keep these concepts separate when trimming or splitting: changing where a clip appears in the composition must not accidentally change which part of its source plays.
 
 The initial model is a flat ordered layer collection. `groupId` associates layers for editing; it is not a nested scene graph or an independent group transform. Saved components contain layer copies. They do not have live instance propagation, override resolution, or dependency graphs.
+
+The CSS 3D layer-inspection view projects the active visual layers into separated planes. Its orbit, pan, zoom, and spacing are temporary view state, not a persistent Z coordinate or a new 3D scene model. Audio stays in the timeline. At most 64 planes are drawn at once, with a bounded preview texture budget; selecting another layer changes the inspected window. These preview limits do not change export resolution. Moving a layer forward or backward updates the shared ordered layer collection, preserving audio slots; the existing Canvas 2D renderer and exports then use that order. This operation participates in the editor's undo history.
 
 ## Module boundaries
 

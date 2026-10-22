@@ -4,7 +4,9 @@ A local-first canvas and video editor for Mac. Arrange video, audio, images, tex
 
 Frame Studio is an early, open-source alpha. The aim is the directness of a design tool with an approachable video-editing workflow: reusable compositions, clear controls, and an interface that feels at home on a Mac.
 
-The workspace separates media from creation tools and keeps visuals above a dedicated audio area. Expand a timeline layer to edit entrances, easing, exit fades, or sound levels and fades. Resize the timeline, choose a canvas preset or custom dimensions, and start from seven editable templates. A floating dock keeps playback close to the canvas.
+The workspace separates media from creation tools and keeps visuals above a dedicated audio area. Expand a timeline layer to edit entrances, easing, exit fades, or sound levels and fades. Resize or fit the timeline, choose a canvas preset or custom dimensions, and start from seven editable templates. Playback and seeking sit together in the timeline toolbar.
+
+Switch to **3D layers** to inspect the composition's stacking order from the front, back, top, or an orbiting perspective. Select a layer and move it forward or backward to change its actual order in the composition. This is a CSS 3D inspection view of editable 2D layers; camera angle, spacing, and zoom are workspace controls and do not change exported geometry. It does not import 3D models or render a 3D scene into video.
 
 ![Frame Studio editor](docs/images/editor.png)
 
@@ -35,16 +37,16 @@ Packaging currently targets **Apple Silicon Macs (arm64)** and writes DMG and ZI
 
 ## Alpha scope
 
-| Area             | First implementation                                                                          |
-| ---------------- | --------------------------------------------------------------------------------------------- |
-| Canvas           | Select and arrange layers; text, shapes, freehand drawing, and editable common SVG primitives |
-| Timeline         | Move, trim, and split clips; preview a composition                                            |
-| Media            | Import local video, audio, and images; volume, mute, and audio fade controls                  |
-| Organization     | Multiple selection, grouping, duplication, and reusable saved compositions                    |
-| Motion and color | Timed fade, rise, pop, and slide entrances; easing and exit fades; basic color adjustments    |
-| Layout           | Common aspect ratios and starter layouts for screen recordings and presenters                 |
-| Projects         | Device-local autosave; save and reopen projects with embedded media                           |
-| Export           | PNG/SVG snapshots and real-time video recording using supported runtime formats               |
+| Area             | First implementation                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| Canvas           | Select and arrange layers; text, shapes, freehand drawing, and editable common SVG primitives             |
+| Timeline         | Move, trim, and split clips; preview a composition                                                        |
+| Media            | Import local video, audio, and images; volume, mute, and audio fade controls                              |
+| Organization     | Multiple selection, grouping, duplication, reusable compositions, and layer ordering through a depth view |
+| Motion and color | Timed fade, rise, pop, and slide entrances; easing and exit fades; basic color adjustments                |
+| Layout           | Common aspect ratios and starter layouts for screen recordings and presenters                             |
+| Projects         | Device-local autosave; save and reopen projects with embedded media                                       |
+| Export           | PNG/SVG snapshots and real-time video recording using supported runtime formats                           |
 
 Video export uses the runtime's `MediaRecorder` capabilities. **WebM is the primary target; MP4 is only available when supported by the current runtime.** Export runs in real time. This is not yet a deterministic frame-by-frame render engine.
 

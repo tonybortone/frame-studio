@@ -27,16 +27,25 @@
 }
 .timeline-simple .timeline-visual-scroll {
   flex: 1 1 0;
-  min-height: 40px;
+  min-height: 24px;
 }
 .timeline-simple .timeline-audio-scroll {
-  flex: 0 0 clamp(58px, 30%, 108px);
+  flex: 0 0 min(var(--audio-band-height), 38%);
+  min-height: 34px;
   border-top: 1px solid #8d99ae35;
   background: #161825;
 }
+.timeline-simple .timeline-audio-scroll.is-empty {
+  flex-basis: 34px;
+  overflow-y: hidden;
+}
+.timeline-simple .timeline-audio-scroll.is-empty .timeline-section-heading {
+  height: 33px;
+  border-bottom: 0;
+}
 .timeline-simple.audio-editor-open .timeline-audio-scroll {
-  flex-basis: min(60%, 178px);
-  min-height: 58px;
+  flex-basis: min(178px, max(34px, calc(100% - 68px)));
+  min-height: 34px;
 }
 .timeline-simple .timeline-horizontal-scroll {
   flex: 0 0 11px;
@@ -179,6 +188,26 @@
 .timeline-simple .timeline-section-heading small {
   color: #8d99ae;
   font-size: 9px;
+  font-weight: 400;
+}
+.timeline-simple .timeline-stack-hint,
+.timeline-simple .timeline-empty-audio-hint {
+  font-size: 9px;
+  font-weight: 400;
+  color: #8d99ae;
+  margin-left: 7px;
+}
+.timeline-simple .timeline-stack-hint {
+  margin-left: auto;
+  margin-right: 10px;
+}
+.timeline-simple .track-order-badge {
+  flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: #8d99ae12;
+  color: #8d99ae;
+  font-size: 8px;
   font-weight: 400;
 }
 .timeline-simple .timeline-audio-section .timeline-section-heading {

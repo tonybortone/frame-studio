@@ -22,6 +22,7 @@ import {
   Film,
   CheckCheck,
   SlidersHorizontal,
+  Layers3,
 } from './icons';
 import Sidebar from './components/Sidebar';
 import Inspector from './components/Inspector';
@@ -29,6 +30,7 @@ import Timeline from './components/Timeline';
 import ToolGlyph from './components/ToolGlyph';
 import PlaybackDock from './components/PlaybackDock';
 import CanvasStage from './components/CanvasStage';
+import LayerDepthStage from './components/LayerDepthStage';
 import ExportDialog from './components/ExportDialog';
 import CanvasSizePicker from './components/CanvasSizePicker';
 import TimelineResizeHandle, { maxTimelineHeight } from './components/TimelineResizeHandle';
@@ -42,6 +44,7 @@ import {
 } from './core/project';
 import { importSvg } from './core/svg';
 import { type Layer } from './core/types';
+import { reorderVisualLayers } from './core/layerOrder';
 import { MediaCache, syncMedia, stopMedia } from './engine/renderer';
 import { importMedia } from './engine/assets';
 import { saveBlob } from './engine/export';
@@ -53,6 +56,7 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [tool, setTool] = useState<'select' | 'draw' | 'hand'>('select');
   const [canvasZoom, setCanvasZoom] = useState(1);
+  const [viewMode, setViewMode] = useState<'canvas' | 'depth'>('canvas');
   const [resetViewKey, setResetViewKey] = useState(0);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(true);
@@ -61,6 +65,7 @@ export default function App() {
     nonce: number;
   } | null>(null);
   const [timelineZoom, setTimelineZoom] = useState(66);
+  const [timelineResetKey, setTimelineResetKey] = useState(0);
   const [timelineHeight, setTimelineHeight] = useState(() =>
     Math.min(window.innerHeight <= 800 ? 246 : 308, maxTimelineHeight()),
   );
@@ -72,12 +77,16 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const projectInput = useRef<HTMLInputElement>(null);
+  const timelineSection = useRef<HTMLElement>(null);
   const media = useRef(new MediaCache()).current;
   const notify = useCallback((message: string) => setToast(message), []);
-  const selectLayers = useCallback((ids: string[]) => {
-    setSelected(ids);
-    setInspectorOpen(ids.length > 0);
-  }, []);
+  const selectLayers = useCallback(
+    (ids: string[]) => {
+      setSelected(ids);
+      if (viewMode === 'canvas') setInspectorOpen(ids.length > 0);
+    },
+    [viewMode],
+  );
   useEffect(() => {
     if (!toast) return;
     const id = setTimeout(() => setToast(''), 5500);
@@ -150,13 +159,13 @@ export default function App() {
         parseProject(JSON.stringify(next));
         update(() => next);
         setSelected(layers.map((l) => l.id));
-        setInspectorOpen(true);
+        if (viewMode === 'canvas') setInspectorOpen(true);
         setTool('select');
       } catch (e) {
         notify(e instanceof Error ? e.message : 'Could not add elements');
       }
     },
-    [project, update, notify],
+    [project, update, notify, viewMode],
   );
   const remove = useCallback(() => {
     if (!selected.length) return;
@@ -242,16 +251,8 @@ export default function App() {
     }));
   };
   const reorder = (direction: number) => {
-    update((p) => {
-      const layers = [...p.layers];
-      const ids = direction > 0 ? [...selected].reverse() : selected;
-      ids.forEach((id) => {
-        const index = layers.findIndex((l) => l.id === id),
-          next = Math.max(0, Math.min(layers.length - 1, index + direction));
-        if (index >= 0) [layers[index], layers[next]] = [layers[next], layers[index]];
-      });
-      return { ...p, layers };
-    });
+    const layers = reorderVisualLayers(project.layers, selected, direction);
+    if (layers !== project.layers) update((p) => ({ ...p, layers }));
   };
   const save = useCallback(async () => {
     try {
@@ -539,17 +540,39 @@ export default function App() {
             libraryRequest={libraryRequest}
           />
         )}
-        <section className="canvas-workspace">
+        <section className={`canvas-workspace ${viewMode === 'depth' ? 'is-depth-view' : ''}`}>
           <div className="board-topbar">
-            <button
-              className={`board-chip ${libraryOpen ? 'active' : ''}`}
-              title="Show or hide files"
-              aria-label="Toggle files panel"
-              aria-pressed={libraryOpen}
-              onClick={() => setLibraryOpen((v) => !v)}
-            >
-              <FolderOpen size={14} /> Files
-            </button>
+            <div className="board-view-controls">
+              <button
+                className={`board-chip ${libraryOpen ? 'active' : ''}`}
+                title="Show or hide files"
+                aria-label="Toggle files panel"
+                aria-pressed={libraryOpen}
+                onClick={() => setLibraryOpen((v) => !v)}
+              >
+                <FolderOpen size={14} /> Files
+              </button>
+              <div className="board-view-switch" role="group" aria-label="Canvas view">
+                <button
+                  aria-label="2D canvas"
+                  aria-pressed={viewMode === 'canvas'}
+                  onClick={() => setViewMode('canvas')}
+                >
+                  2D
+                </button>
+                <button
+                  aria-label="3D layers"
+                  aria-pressed={viewMode === 'depth'}
+                  title="Orbit and arrange layer depth"
+                  onClick={() => {
+                    setViewMode('depth');
+                    setInspectorOpen(false);
+                  }}
+                >
+                  <Layers3 size={13} /> 3D layers
+                </button>
+              </div>
+            </div>
             <div className="board-options">
               <CanvasSizePicker
                 width={project.width}
@@ -699,57 +722,63 @@ export default function App() {
               <Group size={18} />
             </button>
           </div>
-          <CanvasStage
-            project={project}
-            media={media}
-            time={time}
-            selected={selected}
-            tool={tool}
-            zoom={canvasZoom}
-            onZoomChange={setCanvasZoom}
-            resetViewKey={resetViewKey}
-            select={selectLayers}
-            change={change}
-            checkpoint={checkpoint}
-            add={add}
-            error={notify}
-          />
-          <PlaybackDock
-            time={time}
-            duration={project.duration}
-            fps={project.fps}
-            playing={playing}
-            onSeek={seek}
-            onPlayPause={togglePlayback}
-          />
-          <div className="canvas-bottom">
-            <div className="canvas-zoom">
-              <button
-                aria-label="Zoom canvas out"
-                onClick={() => setCanvasZoom((z) => Math.max(0.15, z - 0.1))}
-              >
-                <Minus size={13} />
-              </button>
-              <span>{Math.round(canvasZoom * 100)}%</span>
-              <button
-                aria-label="Zoom canvas in"
-                onClick={() => setCanvasZoom((z) => Math.min(3, z + 0.1))}
-              >
-                <Plus size={13} />
-              </button>
-              <span className="tool-divider" />
-              <button
-                aria-label="Fit canvas"
-                title="Fit canvas"
-                onClick={() => {
-                  setCanvasZoom(1);
-                  setResetViewKey((v) => v + 1);
-                }}
-              >
-                <Maximize size={14} />
-              </button>
+          {viewMode === 'canvas' ? (
+            <CanvasStage
+              project={project}
+              media={media}
+              time={time}
+              selected={selected}
+              tool={tool}
+              zoom={canvasZoom}
+              onZoomChange={setCanvasZoom}
+              resetViewKey={resetViewKey}
+              select={selectLayers}
+              change={change}
+              checkpoint={checkpoint}
+              add={add}
+              error={notify}
+            />
+          ) : (
+            <LayerDepthStage
+              project={project}
+              media={media}
+              time={time}
+              selected={selected}
+              select={setSelected}
+              reorder={reorder}
+              error={notify}
+            />
+          )}
+          {viewMode === 'canvas' && (
+            <div className="canvas-bottom">
+              <div className="canvas-zoom">
+                <button
+                  aria-label="Zoom canvas out"
+                  onClick={() => setCanvasZoom((z) => Math.max(0.15, z - 0.1))}
+                >
+                  <Minus size={13} />
+                </button>
+                <span>{Math.round(canvasZoom * 100)}%</span>
+                <button
+                  aria-label="Zoom canvas in"
+                  onClick={() => setCanvasZoom((z) => Math.min(3, z + 0.1))}
+                >
+                  <Plus size={13} />
+                </button>
+                <span className="tool-divider" />
+                <button
+                  aria-label="Fit canvas"
+                  title="Fit canvas"
+                  onClick={() => {
+                    setCanvasZoom(1);
+                    setResetViewKey((v) => v + 1);
+                  }}
+                >
+                  <Maximize size={14} />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </section>
         {inspectorOpen && (
           <Inspector
@@ -767,7 +796,7 @@ export default function App() {
           />
         )}
       </main>
-      <section className="timeline-section">
+      <section className="timeline-section" ref={timelineSection} aria-label="Timeline">
         <TimelineResizeHandle height={timelineHeight} onChange={setTimelineHeight} />
         <div className="timeline-toolbar">
           <div className="timeline-edit-tools">
@@ -803,22 +832,38 @@ export default function App() {
               <Trash2 size={14} />
             </button>
           </div>
-          <div className="timeline-caption">
-            <span className="timeline-live-dot" />
-            Timeline <span>{project.layers.length} layers</span>
-          </div>
+          <PlaybackDock
+            time={time}
+            duration={project.duration}
+            fps={project.fps}
+            playing={playing}
+            onSeek={seek}
+            onPlayPause={togglePlayback}
+          />
           <div className="timeline-zoom">
-            <span>Zoom</span>
+            <span>Timeline zoom</span>
             <Minus size={12} />
             <input
               aria-label="Timeline zoom"
               type="range"
-              min="25"
+              min="0.001"
               max="140"
+              step="any"
               value={timelineZoom}
               onChange={(e) => setTimelineZoom(Number(e.target.value))}
             />
             <Plus size={12} />
+            <button
+              aria-label="Fit timeline"
+              title="Fit the whole sequence"
+              onClick={() => {
+                const available = Math.max(1, (timelineSection.current?.clientWidth ?? 900) - 224);
+                setTimelineZoom(Math.max(0.001, Math.min(140, available / project.duration)));
+                setTimelineResetKey((value) => value + 1);
+              }}
+            >
+              <Maximize size={13} /> Fit
+            </button>
           </div>
         </div>
         <Timeline
@@ -826,6 +871,7 @@ export default function App() {
           selected={selected}
           time={time}
           zoom={timelineZoom}
+          resetScrollKey={timelineResetKey}
           seek={seek}
           select={selectLayers}
           change={change}

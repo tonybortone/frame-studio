@@ -51,6 +51,7 @@ interface Props {
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   checkpoint: () => void;
   onExpand?: () => void;
+  resetScrollKey?: number;
 }
 export default function Timeline({
   project,
@@ -62,6 +63,7 @@ export default function Timeline({
   change,
   checkpoint,
   onExpand,
+  resetScrollKey = 0,
 }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const rulerScroll = useRef<HTMLDivElement>(null);
@@ -70,11 +72,13 @@ export default function Timeline({
   const horizontalScroll = useRef<HTMLDivElement>(null);
   const expandedTrack = useRef<HTMLDivElement>(null);
   const horizontalPosition = useRef(0);
+  const [horizontalOffset, setHorizontalOffset] = useState(0);
   const syncHorizontal = useCallback((left: number) => {
     const master = horizontalScroll.current;
     if (!master) return;
     const position = Math.max(0, Math.min(master.scrollWidth - master.clientWidth, left));
     horizontalPosition.current = position;
+    setHorizontalOffset(position);
     [rulerScroll, visualScroll, audioScroll, horizontalScroll].forEach((reference) => {
       if (reference.current && reference.current.scrollLeft !== position)
         reference.current.scrollLeft = position;
@@ -130,13 +134,24 @@ export default function Timeline({
       viewport.scrollTop += rowBounds.top - top;
     else if (rowBounds.bottom > bottom) viewport.scrollTop += rowBounds.bottom - bottom;
   }, [expandedId]);
-  const pixels = zoom;
-  const width = Math.max(640, viewportWidth - LABEL_WIDTH, project.duration * pixels + 100);
-  const tickInterval = pixels >= 48 ? 1 : pixels >= 24 ? 2 : 5;
+  const pixels = Math.max(0.001, Math.min(140, Number.isFinite(zoom) ? zoom : 66));
+  const width = Math.max(640, viewportWidth - LABEL_WIDTH, project.duration * pixels + 24);
+  const minimumTickInterval = Math.max(1, 70 / pixels);
+  const tickMagnitude = 10 ** Math.floor(Math.log10(minimumTickInterval));
+  const tickInterval =
+    tickMagnitude *
+    ([1, 2, 5, 10].find((step) => step * tickMagnitude >= minimumTickInterval) ?? 10);
+  // Only build tick labels for the visible time range, even in a long, zoomed-in project.
+  const firstTick = Math.max(0, Math.floor(horizontalOffset / pixels / tickInterval) - 1);
+  const lastTick = Math.min(
+    Math.floor(project.duration / tickInterval),
+    Math.ceil((horizontalOffset + viewportWidth - LABEL_WIDTH) / pixels / tickInterval) + 1,
+  );
   useEffect(
     () => syncHorizontal(horizontalPosition.current),
     [width, viewportWidth, syncHorizontal],
   );
+  useLayoutEffect(() => syncHorizontal(0), [resetScrollKey, syncHorizontal]);
   const startDrag = (
     event: PointerEvent<HTMLDivElement>,
     layer: Layer,
@@ -246,7 +261,7 @@ export default function Timeline({
     activeGesture.current = end;
   };
 
-  const renderTrack = (layer: Layer) => {
+  const renderTrack = (layer: Layer, stackPosition?: 'Front' | 'Back') => {
     const Icon = kindIcons[layer.kind];
     const active = selected.includes(layer.id);
     const expanded = expandedId === layer.id;
@@ -281,6 +296,16 @@ export default function Timeline({
             </button>
             <Icon size={13} className="track-kind" />
             <span>{layer.name}</span>
+            {stackPosition && (
+              <small
+                className="track-order-badge"
+                title={
+                  stackPosition === 'Front' ? 'Frontmost visual layer' : 'Backmost visual layer'
+                }
+              >
+                {stackPosition}
+              </small>
+            )}
             <button
               className={`track-visibility ${audio && layer.muted ? 'is-muted' : ''}`}
               aria-label={
@@ -393,6 +418,7 @@ export default function Timeline({
           '--timeline-viewport-width': `${viewportWidth}px`,
           '--grid-step': `${pixels}px`,
           '--grid-width': `${project.duration * pixels}px`,
+          '--audio-band-height': `${Math.min(2, audioLayers.length) * 32 + 28}px`,
         } as CSSProperties
       }
     >
@@ -440,13 +466,15 @@ export default function Timeline({
                 } as CSSProperties
               }
             />
-            {Array.from({ length: Math.floor(project.duration / tickInterval) + 1 }, (_, index) => (
+            {Array.from({ length: Math.max(0, lastTick - firstTick + 1) }, (_, offset) => (
               <div
-                key={index}
+                key={firstTick + offset}
                 className="ruler-tick"
-                style={{ left: index * tickInterval * pixels }}
+                style={{ left: (firstTick + offset) * tickInterval * pixels }}
               >
-                <span>{timecode(index * tickInterval, project.fps).slice(0, -3)}</span>
+                <span>
+                  {timecode((firstTick + offset) * tickInterval, project.fps).slice(0, -3)}
+                </span>
               </div>
             ))}
             <div className="ruler-playhead" style={{ left: time * pixels }} />
@@ -473,8 +501,14 @@ export default function Timeline({
               <Video size={12} />
               <span>Visuals</span>
               <small>{visualLayers.length}</small>
+              <span className="timeline-stack-hint">Front at top</span>
             </div>
-            {visualLayers.map(renderTrack)}
+            {visualLayers.map((layer, index) =>
+              renderTrack(
+                layer,
+                index === 0 ? 'Front' : index === visualLayers.length - 1 ? 'Back' : undefined,
+              ),
+            )}
             {visualLayers.length === 0 && (
               <div className="timeline-section-empty">Add a video, image, or element.</div>
             )}
@@ -483,7 +517,7 @@ export default function Timeline({
         </div>
       </div>
       <div
-        className="timeline-audio-scroll"
+        className={`timeline-audio-scroll ${audioLayers.length === 0 ? 'is-empty' : ''}`}
         ref={audioScroll}
         onScroll={(event) => syncHorizontal(event.currentTarget.scrollLeft)}
       >
@@ -497,11 +531,13 @@ export default function Timeline({
               <Music2 size={12} />
               <span>Audio</span>
               <small>{audioLayers.length}</small>
+              {audioLayers.length === 0 && (
+                <span className="timeline-empty-audio-hint">
+                  Your audio tracks will appear here.
+                </span>
+              )}
             </div>
-            {audioLayers.map(renderTrack)}
-            {audioLayers.length === 0 && (
-              <div className="timeline-section-empty">Your audio tracks will appear here.</div>
-            )}
+            {audioLayers.map((layer) => renderTrack(layer))}
           </div>
           {playhead}
         </div>

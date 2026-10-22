@@ -25,6 +25,8 @@ The supported kinds are `video`, `audio`, `image`, `text`, `shape`, `svg`, and `
 
 `groupId` links flat layers for selection and manipulation. It does not create a parent coordinate system. `SavedComponent.layers` stores copies for reinsertion; changes to the saved component do not update previously inserted layers.
 
+Visual layers render in array order, from back to front. The timeline and depth-view list show the frontmost visual layer first. Reordering through the depth view changes the visual entries in this array while preserving audio positions. The depth view's camera angle, pan, zoom, and layer spacing are not saved; there is no persistent 3D transform or model format.
+
 ## Assets and portability
 
 Imported media is embedded as data URLs, and the initial import limit is **50 MB per file**. Project loading has a **100 MB total file limit**. This makes a saved project self-contained for the supported media, at the cost of larger JSON files and higher memory use. Base64 encoding adds approximately one-third to binary media size before other project overhead. Duplicate layers and saved components may repeat media data in serialized JSON, so the project limit can be reached with fewer than 100 MB of original media.

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Download, type Page } from '@playwright/test';
-import { parseProject } from '../src/core/project';
+import { createLayer, createProject, parseProject } from '../src/core/project';
+import type { Project } from '../src/core/types';
 
 async function downloadBytes(download: Download): Promise<Buffer> {
   const filename = await download.path();
@@ -15,6 +16,90 @@ async function saveProject(page: Page, projectName = 'A little idea') {
   const download = await downloaded;
   expect(download.suggestedFilename()).toBe(`${projectName}.framestudio`);
   return parseProject((await downloadBytes(download)).toString('utf8'));
+}
+
+async function openProjectFixture(page: Page, project: Project) {
+  await page
+    .getByRole('banner')
+    .getByRole('button', { name: 'A little idea', exact: true })
+    .click();
+  const chosen = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Open project', exact: true }).click();
+  await (
+    await chosen
+  ).setFiles({
+    name: `${project.name}.framestudio`,
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(project)),
+  });
+  await expect(
+    page.getByRole('banner').getByRole('button', { name: project.name, exact: true }),
+  ).toBeVisible();
+}
+
+async function exportedPixel(page: Page, x: number, y: number) {
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export your creation' });
+  await dialog.getByRole('button', { name: 'PNG · current frame', exact: true }).click();
+  const downloaded = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Export PNG', exact: true }).click();
+  const bytes = await downloadBytes(await downloaded);
+  const pixel = await page.evaluate(
+    async ({ bytes, x, y }) => {
+      const bitmap = await createImageBitmap(
+        new Blob([Uint8Array.from(bytes)], { type: 'image/png' }),
+      );
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return Array.from(context.getImageData(x, y, 1, 1).data);
+    },
+    { bytes: Array.from(bytes), x, y },
+  );
+  await dialog.getByRole('button', { name: 'Close export', exact: true }).click();
+  return pixel;
+}
+
+function depthFixture(): Project {
+  return {
+    ...createProject(),
+    name: 'Layer order study',
+    width: 256,
+    height: 256,
+    duration: 6,
+    layers: [
+      createLayer('shape', {
+        name: 'Red square',
+        x: 40,
+        y: 40,
+        width: 160,
+        height: 160,
+        radius: 0,
+        fill: '#ef233c',
+        duration: 6,
+      }),
+      createLayer('audio', {
+        name: 'Sound bed',
+        duration: 6,
+        sourceDuration: 6,
+        src: `data:audio/wav;base64,${toneWav(6).toString('base64')}`,
+      }),
+      createLayer('shape', {
+        name: 'Slate square',
+        x: 80,
+        y: 80,
+        width: 160,
+        height: 160,
+        radius: 0,
+        fill: '#8d99ae',
+        duration: 6,
+      }),
+    ],
+    components: [],
+  };
 }
 
 function toneWav(seconds = 3): Buffer {
@@ -440,16 +525,19 @@ test('opening properties keeps the board stable during a direct layer drag', asy
   expect([restored.x, restored.y]).toEqual([caption.x, caption.y]);
 });
 
-test('preview dock seeks, advances during playback, and pauses without editing the project', async ({
+test('timeline transport seeks, advances during playback, and pauses without editing the project', async ({
   page,
 }) => {
   const original = await saveProject(page);
-  const dock = page.getByRole('group', { name: 'Preview playback', exact: true });
+  const dock = page
+    .locator('.timeline-toolbar')
+    .getByRole('group', { name: 'Preview playback', exact: true });
+  await expect(dock).toBeVisible();
   const position = dock.getByRole('slider', { name: 'Preview position', exact: true });
   const currentTime = async () => Number(await position.inputValue());
   const lastFrame = original.duration - 1 / original.fps;
 
-  // Native range keyboard controls exercise the same seeking path as the dot display.
+  // Native range keyboard controls exercise the visible timeline transport.
   await position.focus();
   await position.press('Home');
   for (let step = 0; step < 5; step++) await position.press('PageUp');
@@ -801,4 +889,194 @@ test('moves a clamped entrance without stretching it and undoes the whole drag o
   });
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   expect(await saveProject(page)).toEqual(before);
+});
+
+test('orbits and spaces the 3D layer view without editing the saved composition', async ({
+  page,
+}) => {
+  const fixture = depthFixture();
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  const view = page.getByRole('region', { name: '3D layer view', exact: true });
+  await expect(view).toBeVisible();
+  await expect(view.locator('[data-depth-plane]')).toHaveCount(2);
+  const plane = view.locator(`[data-depth-plane][data-layer-id="${fixture.layers[0].id}"]`);
+  await page.getByRole('button', { name: 'Front view', exact: true }).click();
+  const front = (await plane.boundingBox())!;
+
+  // Orbit by dragging actual rendered content, then exercise keyboard camera navigation.
+  await page.mouse.move(front.x + front.width / 2, front.y + front.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(front.x + front.width / 2 + 65, front.y + front.height / 2 - 35, {
+    steps: 5,
+  });
+  await page.mouse.up();
+  await expect.poll(async () => (await plane.boundingBox())!.x).not.toBeCloseTo(front.x, 0);
+  await view.focus();
+  await view.press('ArrowRight');
+  const orbited = (await plane.boundingBox())!;
+
+  const spacing = page.getByRole('slider', { name: 'Layer spacing', exact: true });
+  await spacing.focus();
+  await spacing.press('End');
+  await expect.poll(async () => (await plane.boundingBox())!.x).not.toBeCloseTo(orbited.x, 0);
+  const spaced = (await plane.boundingBox())!;
+  const zoom = page.getByRole('slider', { name: '3D zoom', exact: true });
+  await zoom.focus();
+  await zoom.press('Home');
+  await expect.poll(async () => (await plane.boundingBox())!.width).toBeLessThan(spaced.width);
+
+  for (const [preset, mode] of [
+    ['Back view', 'back'],
+    ['Top view', 'top'],
+    ['Perspective view', 'perspective'],
+    ['Front view', 'front'],
+    ['Reset 3D view', 'perspective'],
+  ]) {
+    await page.getByRole('button', { name: preset, exact: true }).click();
+    await expect(view).toHaveAttribute('data-view', mode);
+  }
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  await page.getByRole('button', { name: '2D canvas', exact: true }).click();
+  await expect(page.getByLabel('Composition canvas')).toHaveAttribute('width', '256');
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
+test('reorders selected 3D layers in the project and PNG export, with one-step undo', async ({
+  page,
+}) => {
+  const fixture = depthFixture();
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  expect(await exportedPixel(page, 100, 100)).toEqual([141, 153, 174, 255]);
+
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  const red = page.getByRole('button', { name: 'Select 3D layer Red square', exact: true });
+  await page.getByRole('button', { name: 'Select 3D layer Slate square', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Inspect Slate square', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Front view', exact: true }).click();
+  // The red square's exposed top-left corner selects the underlying object directly.
+  await page
+    .getByRole('button', { name: 'Inspect Red square', exact: true })
+    .click({ position: { x: 8, y: 8 } });
+  await expect(red).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Move layer forward', exact: true }).click();
+  const reordered = await saveProject(page, fixture.name);
+  expect(reordered.layers.map((layer) => layer.id)).toEqual([
+    original.layers[2].id,
+    original.layers[1].id,
+    original.layers[0].id,
+  ]);
+  // Ordering changes neither the objects nor the audio slot in the serialized sequence.
+  for (const layer of original.layers) {
+    expect(reordered.layers.find((candidate) => candidate.id === layer.id)).toEqual(layer);
+  }
+  await page.getByRole('button', { name: '2D canvas', exact: true }).click();
+  expect(await exportedPixel(page, 100, 100)).toEqual([239, 35, 60, 255]);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  expect(await exportedPixel(page, 100, 100)).toEqual([141, 153, 174, 255]);
+});
+
+test('3D inspection respects visibility, clip time, audio separation, and locked ordering', async ({
+  page,
+}) => {
+  const fixture = depthFixture();
+  fixture.layers[0].locked = true;
+  fixture.layers[2].duration = 2;
+  fixture.layers.push(
+    createLayer('shape', { name: 'Hidden square', hidden: true, duration: 6 }),
+    createLayer('shape', { name: 'Later square', start: 3, duration: 3 }),
+  );
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  const view = page.getByRole('region', { name: '3D layer view', exact: true });
+  await expect(view.locator('[data-depth-plane]')).toHaveCount(2);
+  await expect(
+    page.getByRole('button', { name: 'Select 3D layer Sound bed', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Select 3D layer Hidden square', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Select 3D layer Later square', exact: true }),
+  ).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Select 3D layer Red square', exact: true }).click();
+  const forward = page.getByRole('button', { name: 'Move layer forward', exact: true });
+  const backward = page.getByRole('button', { name: 'Move layer backward', exact: true });
+  await expect(forward).toBeDisabled();
+  await expect(backward).toBeDisabled();
+  await forward.dispatchEvent('click');
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+
+  const position = page.getByRole('slider', { name: 'Timeline position', exact: true });
+  await position.focus();
+  await position.press('Home');
+  for (let second = 0; second < 4; second++) await position.press('Shift+ArrowRight');
+  await expect(position).toHaveAttribute('aria-valuenow', '4');
+  await expect(
+    page.getByRole('button', { name: 'Select 3D layer Later square', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Select 3D layer Slate square', exact: true }),
+  ).toHaveCount(0);
+  await expect(view.locator('[data-depth-plane]')).toHaveCount(2);
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
+test('fits a long timeline into view and seeks its final clip without editing content', async ({
+  page,
+}) => {
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Long sequence',
+    duration: 180,
+    layers: [
+      createLayer('shape', { name: 'Full sequence', duration: 180 }),
+      createLayer('text', { name: 'Final title', start: 175, duration: 5 }),
+    ],
+  };
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  const zoom = page.getByRole('slider', { name: 'Timeline zoom', exact: true });
+  await zoom.focus();
+  await zoom.press('End');
+  const viewport = page.locator('.timeline-visual-scroll');
+  const longClip = page.getByRole('button', { name: 'Timeline clip Full sequence', exact: true });
+  const available = (await viewport.boundingBox())!;
+  expect((await longClip.boundingBox())!.width).toBeGreaterThan(available.width);
+  await viewport.hover();
+  await page.mouse.wheel(10_000, 0);
+  await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+
+  await page.getByRole('button', { name: 'Fit timeline', exact: true }).click();
+  await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBe(0);
+  const finalClip = page.getByRole('button', { name: 'Timeline clip Final title', exact: true });
+  await expect(finalClip).toBeInViewport();
+  const fitted = (await longClip.boundingBox())!;
+  expect(fitted.x).toBeGreaterThanOrEqual(available.x);
+  expect(fitted.x + fitted.width).toBeLessThanOrEqual(available.x + available.width);
+  const ending = (await finalClip.boundingBox())!;
+  expect(ending.x + ending.width).toBeLessThanOrEqual(available.x + available.width);
+  // Seek the real ruler above the middle of the final clip, now reachable without scrolling.
+  const ruler = page.getByRole('slider', { name: 'Timeline position', exact: true });
+  const rulerBounds = (await ruler.boundingBox())!;
+  await page.mouse.click(ending.x + ending.width / 2, rulerBounds.y + rulerBounds.height / 2);
+  await expect
+    .poll(async () => Number(await ruler.getAttribute('aria-valuenow')))
+    .toBeGreaterThanOrEqual(175);
+  expect(Number(await ruler.getAttribute('aria-valuenow'))).toBeLessThan(180);
+  const transport = page
+    .locator('.timeline-toolbar')
+    .getByRole('slider', { name: 'Preview position', exact: true });
+  expect(Number(await transport.inputValue())).toBeCloseTo(
+    Number(await ruler.getAttribute('aria-valuenow')),
+    2,
+  );
+  expect(await saveProject(page, fixture.name)).toEqual(original);
 });

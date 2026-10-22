@@ -8,7 +8,7 @@ Frame Studio keeps the board at the center of a compact editing workspace. The l
 2. **Keep files separate from creation tools.** Video, audio, and image imports are media. Text, vector shapes, and reusable components have a dedicated Create group.
 3. **Keep controls close to their effect.** Expand a timeline track to adjust its motion or sound. Use properties for the selected element's other details.
 4. **Make previews truthful.** Template thumbnails use the same composition renderer as preview and export. Audio waveforms, analysis, or arbitrary keyframe capabilities must not be implied when unavailable.
-5. **Keep changes reversible.** Applying a template and changing frame size remain undoable. View navigation and timeline height do not alter project content.
+5. **Keep changes reversible.** Applying a template, changing frame size, and reordering layers remain undoable. View navigation, depth-view camera controls, and timeline height do not alter project content.
 
 ## Palette
 
@@ -55,11 +55,15 @@ The board supports direct selection and resizing, hand-tool or Space-drag pannin
 
 The frame-size picker offers landscape, portrait, square, and social presets, plus custom pixel dimensions. Fit contents to frame scales existing objects uniformly; turning it off changes frame dimensions while preserving object coordinates and sizes. The same operation can be undone.
 
-Playback controls and exact time readouts share a compact dock. The dot display reflects project time and duration; it does not simulate an audio meter.
+Playback controls, exact time readouts, and a visible seek slider share a compact row in the timeline toolbar. The canvas remains available for the composition and its editing tools.
+
+The 3D layers view separates the current frame's visible visual layers into CSS 3D planes. Orbit or pan the view, change layer spacing and zoom, or use front, back, top, and perspective presets to inspect overlap. Audio has no visual plane. Hidden layers and clips outside the current time are omitted. These camera controls affect inspection only; the composition and exports remain 2D.
+
+Selecting a plane or its layer-list row shares selection with the editor. Moving a selected layer forward or backward changes its saved stacking order and the 2D result, with Undo available. Ordering controls ignore locked selections and disable when nothing can move. The workspace distinguishes camera navigation from these actual content edits.
 
 ## Timeline, motion, and sound
 
-Visual and audio tracks have separate labeled sections. Each layer keeps its own editable clip, and the relative order of visual layers remains unchanged. The ruler displays time against the project frame rate. Trim edges are visible on interaction, and image clips use their real imported thumbnails. The timeline height can be changed by dragging its separator or using its arrow-key controls.
+Visual and audio tracks have separate labeled sections. Visual tracks show the frontmost layer at the top, with front/back cues corresponding to the composition's stacking order. Each layer keeps its own editable clip. The ruler displays time against the project frame rate and adjusts label spacing as the timeline zoom changes. Fit timeline makes the full sequence reachable in the available width. Trim edges are visible on interaction, and image clips use their real imported thumbnails. The timeline height can be changed by dragging its separator or using its arrow-key controls.
 
 Expanding a visual track exposes entrance and exit timing. Entrance presets are None, Fade, Rise, Pop, and Slide. Duration, delay, easing, and exit fade are editable through the inline controls and properties. The entrance and exit strips represent those actual timing settings and can be adjusted directly. This is preset-based motion editing, not an arbitrary keyframe graph editor.
 

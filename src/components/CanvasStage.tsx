@@ -4,8 +4,8 @@ import type { Layer, Project } from '../core/types';
 import { MediaCache, renderFrame } from '../engine/renderer';
 import './CanvasStage.css';
 
-// Keep the floating creation tools and preview transport clear at Fit zoom.
-const BOARD_INSETS = { left: 88, right: 32, top: 50, bottom: 120 } as const;
+// Keep the creation tools, view switch, and canvas zoom clear at Fit zoom.
+const BOARD_INSETS = { left: 88, right: 32, top: 72, bottom: 56 } as const;
 function boardGeometry(size: { width: number; height: number }) {
   return {
     centerX: (size.width + BOARD_INSETS.left - BOARD_INSETS.right) / 2,
