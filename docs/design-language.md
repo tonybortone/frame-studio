@@ -63,6 +63,8 @@ Selecting a plane or its layer-list row shares selection with the editor. Draggi
 
 The selected layer's depth slider and forward/back buttons change its saved stacking order and the 2D result. Depth represents layer order rather than an independent 3D coordinate. Position and depth gestures each create one Undo step. Locked selections cannot be moved; audio keeps its own array slots during depth changes. Visible Back/Front endpoints and the numbered layer list make the order clear.
 
+![Position and depth controls in the 3D workspace](images/layer-depth.png)
+
 ## Timeline, motion, and sound
 
 Visual and audio tracks have separate labeled sections. Visual tracks show the frontmost layer at the top, with front/back cues corresponding to the composition's stacking order. Each layer keeps its own editable clip. The ruler displays time against the project frame rate and adjusts label spacing as the timeline zoom changes. Fit timeline makes the full sequence reachable in the available width. Trim edges are visible on interaction, and image clips use their real imported thumbnails. The timeline height can be changed by dragging its separator or using its arrow-key controls.

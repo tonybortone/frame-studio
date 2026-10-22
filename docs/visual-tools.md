@@ -1,4 +1,4 @@
-# Masks, color, and background tools
+# Visual editing tools
 
 These tools edit the selected layer and participate in Undo/Redo. They run locally and keep the original imported image intact.
 
@@ -8,9 +8,11 @@ These tools edit the selected layer and participate in Undo/Redo. They run local
 
 **Shapes** opens seven choices: rectangle, rounded rectangle, ellipse, triangle, star, line, and arrow. Each inserts an editable layer at the current playhead. Resize and recolor it on the board or in Properties.
 
+![Compact shape menu on the canvas](images/toolbar.png)
+
 **Drawing tools** contains Pencil, Brush, and Pen, with stroke color and width settings. Pencil and Brush create freehand vector strokes; Brush starts with a wider stroke. **Pen (B)** builds a path point by point: click for a corner, drag for a smooth Bézier handle. **Enter / Finish** completes an open path. Click the first point or use **Close path** to make a filled closed shape. **Backspace** removes the last draft point; **Escape / Cancel** discards the draft. Completing the path is one undo step.
 
-Paths stay vector data in project files and SVG snapshots. They can be moved, resized, colored, grouped, masked, and animated like other layers. This creates new paths; reopening imported paths for anchor-by-anchor editing is not yet supported.
+Paths stay vector data in project files and SVG exports. They can be moved, resized, colored, grouped, masked, and animated like other layers. This creates new paths; reopening imported paths for anchor-by-anchor editing is not yet supported.
 
 Tool menus close with their X, Escape, or a click elsewhere. **Templates** and **Components** have visible toolbar shortcuts. The library has its own close button. **Hide panels** clears both side panels and keeps them hidden while selecting or drawing; **Show panels** restores them. These view changes do not alter the project.
 
