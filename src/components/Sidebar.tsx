@@ -1,25 +1,14 @@
-import { useState } from 'react';
-import {
-  ArrowUpFromLine,
-  Search,
-  Plus,
-  Type,
-  Layers3,
-  LayoutTemplate,
-  Component,
-  FolderOpen,
-  ImagePlus,
-  ChevronDown,
-  LockKeyhole,
-  Group,
-  EyeOff,
-} from '../icons';
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { ArrowUpFromLine, Plus, Component, Group, EyeOff, LockKeyhole } from '../icons';
 import { LAYER_COLORS, LAYER_LABELS, type Layer, type Project } from '../core/types';
+import { ASSET_FOLDERS, type AssetFolderId } from '../core/libraryAssets';
 import { createLayer } from '../core/project';
 import { TEMPLATES } from '../core/templates';
 import { kindIcons } from './Timeline';
-type LibraryTab = 'media' | 'text' | 'elements' | 'templates' | 'components';
+import './Sidebar.css';
+
+export type LibraryTab = 'media' | 'text' | 'elements' | 'templates' | 'components';
 interface Props {
   project: Project;
   selected: string[];
@@ -30,14 +19,9 @@ interface Props {
   insertComponent: (id: string) => void;
   saveComponent: () => void;
   group: () => void;
+  libraryRequest?: { tab: LibraryTab; nonce: number } | null;
 }
-const tabs: { id: LibraryTab; label: string; icon: typeof FolderOpen }[] = [
-  { id: 'media', label: 'Media', icon: FolderOpen },
-  { id: 'text', label: 'Text', icon: Type },
-  { id: 'elements', label: 'Elements', icon: Layers3 },
-  { id: 'templates', label: 'Templates', icon: LayoutTemplate },
-  { id: 'components', label: 'Saved', icon: Component },
-];
+
 export default function Sidebar({
   project,
   selected,
@@ -48,15 +32,36 @@ export default function Sidebar({
   insertComponent,
   saveComponent,
   group,
+  libraryRequest,
 }: Props) {
-  const [tab, setTab] = useState<LibraryTab>('elements');
-  const [query, setQuery] = useState('');
-  const [panel, setPanel] = useState<'library' | 'layers'>('library');
-  const addShape = (shape: 'square' | 'circle' | 'pill') =>
+  const [panel, setPanel] = useState<'files' | 'layers' | 'templates'>('files');
+  const [folder, setFolder] = useState<AssetFolderId | null>(null);
+
+  useEffect(() => {
+    if (!libraryRequest) return;
+    setPanel(libraryRequest.tab === 'templates' ? 'templates' : 'files');
+    setFolder(
+      libraryRequest.tab === 'text'
+        ? 'fonts'
+        : libraryRequest.tab === 'elements'
+          ? 'vectors'
+          : libraryRequest.tab === 'components'
+            ? 'personalised'
+            : null,
+    );
+  }, [libraryRequest]);
+
+  const activeFolder = ASSET_FOLDERS.find((item) => item.id === folder);
+  const folderLayers = activeFolder
+    ? project.layers.filter((layer) => activeFolder.kinds.includes(layer.kind))
+    : [];
+  const importedLayers = project.layers.filter((layer) => layer.src);
+
+  function addShape(shape: 'square' | 'circle' | 'pill') {
     add([
       createLayer('shape', {
         name: shape === 'circle' ? 'Circle' : shape === 'pill' ? 'Rounded label' : 'Rectangle',
-        fill: shape === 'circle' ? '#8fb7a8' : '#e98d68',
+        fill: shape === 'circle' ? '#a9d5b4' : '#ffab78',
         width: shape === 'pill' ? 420 : 280,
         height: shape === 'pill' ? 110 : 280,
         radius: shape === 'circle' ? 140 : shape === 'pill' ? 55 : 24,
@@ -65,328 +70,290 @@ export default function Sidebar({
         duration: project.duration,
       }),
     ]);
+  }
+
+  function renderFile(layer: Layer) {
+    const Icon = kindIcons[layer.kind];
+    return (
+      <button
+        key={layer.id}
+        className={`fs-library-file ${selected.includes(layer.id) ? 'is-selected' : ''}`}
+        onClick={(event) =>
+          select(event.shiftKey ? Array.from(new Set([...selected, layer.id])) : [layer.id])
+        }
+        style={{ '--file-color': LAYER_COLORS[layer.kind] } as CSSProperties}
+        title={layer.name}
+      >
+        <div className="fs-library-file-preview">
+          {layer.kind === 'image' && layer.src ? (
+            <img src={layer.src} alt="" />
+          ) : layer.kind === 'video' && layer.src ? (
+            <video
+              src={`${layer.src}#t=0.1`}
+              muted
+              playsInline
+              preload="metadata"
+              aria-hidden="true"
+            />
+          ) : (
+            <Icon size={23} strokeWidth={1.5} />
+          )}
+          {(layer.kind === 'audio' || layer.kind === 'video') && (
+            <small>{layer.duration.toFixed(1)}s</small>
+          )}
+        </div>
+        <span>{layer.name}</span>
+        <small>{LAYER_LABELS[layer.kind]}</small>
+      </button>
+    );
+  }
+
   return (
-    <aside className="sidebar">
-      <div className="sidebar-switch">
-        <button className={panel === 'library' ? 'active' : ''} onClick={() => setPanel('library')}>
-          Library
-        </button>
-        <button className={panel === 'layers' ? 'active' : ''} onClick={() => setPanel('layers')}>
-          Layers <span>{project.layers.length}</span>
-        </button>
+    <aside className="sidebar fs-library" aria-label="Library">
+      <div className="fs-library-tabs" role="tablist" aria-label="Sidebar">
+        {(['files', 'layers', 'templates'] as const).map((item) => (
+          <button
+            key={item}
+            role="tab"
+            aria-selected={panel === item}
+            className={panel === item ? 'is-active' : ''}
+            onClick={() => {
+              setPanel(item);
+              if (item === 'files') setFolder(null);
+            }}
+          >
+            {item === 'files' ? 'Files' : item === 'layers' ? 'Layers' : 'Templates'}
+          </button>
+        ))}
       </div>
-      {panel === 'library' ? (
-        <>
-          <div className="library-tabs">
-            {tabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setTab(id)}
-                className={tab === id ? 'active' : ''}
-                aria-label={label}
-              >
-                <Icon size={18} />
-                <span>{label}</span>
+
+      <div className="fs-library-scroll">
+        {panel === 'files' && !folder && (
+          <>
+            <div className="fs-library-heading">
+              <span>Your files</span>
+              <button title="Import files" aria-label="Import files" onClick={importFiles}>
+                <Plus size={15} />
               </button>
-            ))}
-          </div>
-          <div className="sidebar-body">
-            <div className="search-field">
-              <Search size={14} />
-              <input
-                aria-label="Search library"
-                placeholder={`Search ${tab === 'components' ? 'components' : tab}`}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <kbd>⌕</kbd>
             </div>
-            {tab === 'elements' && (
-              <>
-                <div className="section-label">
-                  THE BUILDING BLOCKS <span>06</span>
-                </div>
-                <div className="element-grid">
-                  {[
-                    ['Rectangle', 'square'],
-                    ['Circle', 'circle'],
-                    ['Pill', 'pill'],
-                  ]
-                    .filter(([name]) => name.toLowerCase().includes(query.toLowerCase()))
-                    .map(([name, shape]) => (
-                      <button
-                        className="element-card"
-                        key={name}
-                        onClick={() => addShape(shape as 'square' | 'circle' | 'pill')}
-                      >
-                        <div className={`shape-preview ${shape}`} />
-                        <span>{name}</span>
-                      </button>
-                    ))}
-                  {'heading'.includes(query.toLowerCase()) && (
-                    <button
-                      className="element-card"
-                      onClick={() => {
-                        setTab('text');
-                        add([
-                          createLayer('text', {
-                            name: 'Heading',
-                            text: 'Make it yours.',
-                            fontSize: 100,
-                            fontWeight: 700,
-                            width: 1100,
-                            height: 150,
-                            x: 200,
-                            y: 200,
-                            duration: project.duration,
-                            fill: '#242724',
-                          }),
-                        ]);
-                      }}
-                    >
-                      <div className="type-preview">Aa</div>
-                      <span>Heading</span>
-                    </button>
-                  )}
-                  {'label'.includes(query.toLowerCase()) && (
-                    <button
-                      className="element-card"
-                      onClick={() =>
-                        add([
-                          createLayer('text', {
-                            name: 'Label',
-                            text: 'SOMETHING GOOD IS COMING',
-                            fontSize: 24,
-                            fontWeight: 600,
-                            width: 650,
-                            height: 50,
-                            x: 200,
-                            y: 160,
-                            duration: project.duration,
-                            fill: '#66746b',
-                          }),
-                        ])
-                      }
-                    >
-                      <div className="label-preview">LABEL</div>
-                      <span>Label</span>
-                    </button>
-                  )}
-                  {'svg'.includes(query.toLowerCase()) && (
-                    <button className="element-card" onClick={importFiles}>
-                      <ImagePlus size={34} strokeWidth={1} />
-                      <span>Import SVG</span>
-                    </button>
-                  )}
-                </div>
-                <div className="library-note">
-                  <div className="note-icon">
-                    <Component size={18} />
-                  </div>
-                  <strong>Good ideas are reusable.</strong>
-                  <p>Group your elements and save them as a component.</p>
-                  <button onClick={() => setTab('components')}>
-                    Explore your components <span>↗</span>
-                  </button>
-                </div>
-              </>
-            )}
-            {tab === 'text' && (
-              <>
-                <div className="section-label">START WITH A FEW WORDS</div>
-                {[
-                  { label: 'Add a heading', size: 100, weight: 700 },
-                  { label: 'Add a subheading', size: 56, weight: 500 },
-                  { label: 'Add body text', size: 32, weight: 400 },
-                ]
-                  .filter((item) => item.label.toLowerCase().includes(query.toLowerCase()))
-                  .map((item) => (
-                    <button
-                      className="text-preset"
-                      key={item.label}
-                      style={{ fontSize: item.size / 4 + 8, fontWeight: item.weight }}
-                      onClick={() =>
-                        add([
-                          createLayer('text', {
-                            name: item.label.replace('Add a ', ''),
-                            text: item.label.replace('Add a ', 'Your '),
-                            fontSize: item.size,
-                            fontWeight: item.weight,
-                            width: 1100,
-                            height: item.size * 2,
-                            x: 180,
-                            y: 200,
-                            duration: project.duration,
-                            fill: '#26352f',
-                          }),
-                        ])
-                      }
-                    >
-                      {item.label}
-                      <Plus size={14} />
-                    </button>
-                  ))}
-                <p className="helper-copy">
-                  Select your text on the canvas to change its words, color, and size.
-                </p>
-              </>
-            )}
-            {tab === 'media' && (
-              <>
-                <button className="import-zone" onClick={importFiles}>
-                  <ArrowUpFromLine size={26} strokeWidth={1.3} />
-                  <strong>Bring your story in</strong>
-                  <span>Video, audio, images & SVG</span>
-                  <small>Choose files · up to 50 MB each</small>
-                </button>
-                <div className="section-label">IN THIS PROJECT</div>
-                <div className="media-grid">
-                  {project.layers
-                    .filter(
-                      (l) =>
-                        ['image', 'video', 'audio'].includes(l.kind) &&
-                        l.name.toLowerCase().includes(query.toLowerCase()),
-                    )
-                    .map((l) => {
-                      const Icon = kindIcons[l.kind];
-                      return (
-                        <button className="media-item" key={l.id} onClick={() => select([l.id])}>
-                          {l.kind === 'image' && l.src ? (
-                            <img src={l.src} alt="" />
-                          ) : (
-                            <div style={{ color: LAYER_COLORS[l.kind] }}>
-                              <Icon size={28} />
-                            </div>
-                          )}
-                          <span>{l.name}</span>
-                          <small>
-                            {LAYER_LABELS[l.kind]} · {l.duration.toFixed(1)}s
-                          </small>
-                        </button>
-                      );
-                    })}
-                </div>
-                {!project.layers.some((l) => l.src) && (
-                  <p className="helper-copy">
-                    Your files stay on your device. Start with a clip, or build a scene from
-                    scratch.
-                  </p>
-                )}
-              </>
-            )}
-            {tab === 'templates' && (
-              <>
-                <div className="section-label">A LITTLE HEAD START</div>
-                {TEMPLATES.filter((t) => t.name.toLowerCase().includes(query.toLowerCase())).map(
-                  (t, i) => (
-                    <button
-                      className="template-card"
-                      key={t.id}
-                      onClick={() => applyTemplate(t.project())}
-                    >
-                      <div className={`template-preview template-${i}`}>
-                        <div />
-                        <div />
-                        <span>
-                          {i === 0
-                            ? 'A blank canvas'
-                            : i === 1
-                              ? 'Your next story.'
-                              : 'Screen + you'}
-                        </span>
-                      </div>
-                      <strong>{t.name}</strong>
-                      <p>{t.description}</p>
-                    </button>
-                  ),
-                )}
-                <p className="helper-copy">
-                  Applying a template replaces the current scene. Undo brings it back.
-                </p>
-              </>
-            )}
-            {tab === 'components' && (
-              <>
-                <div className="section-label">YOUR PERSONAL TOOLKIT</div>
+            <div className="fs-library-folders">
+              {ASSET_FOLDERS.map((item) => (
                 <button
-                  className="secondary wide"
+                  key={item.id}
+                  className="fs-library-folder"
+                  onClick={() => setFolder(item.id)}
+                  aria-label={item.label}
+                >
+                  <img src={item.icon} alt="" draggable={false} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+            <button className="fs-library-import" onClick={importFiles}>
+              <ArrowUpFromLine size={14} />
+              Import files
+            </button>
+            {importedLayers.length > 0 && (
+              <>
+                <div className="fs-library-heading fs-library-heading-spaced">
+                  <span>In this project</span>
+                  <small>{importedLayers.length}</small>
+                </div>
+                <div className="fs-library-file-grid">{importedLayers.map(renderFile)}</div>
+              </>
+            )}
+          </>
+        )}
+
+        {panel === 'files' && activeFolder && (
+          <>
+            <div className="fs-library-folder-heading">
+              <button
+                className="fs-library-back"
+                aria-label="Back to files"
+                title="Back to files"
+                onClick={() => setFolder(null)}
+              >
+                ‹
+              </button>
+              <img src={activeFolder.icon} alt="" />
+              <strong>{activeFolder.label}</strong>
+            </div>
+
+            {folder === 'fonts' ? (
+              <>
+                {[
+                  { label: 'Add a heading', text: 'Your heading', size: 100, weight: 700 },
+                  { label: 'Add a subheading', text: 'Your subheading', size: 56, weight: 500 },
+                  { label: 'Add body text', text: 'Your text', size: 32, weight: 400 },
+                ].map((item, index) => (
+                  <button
+                    className={`fs-library-text fs-library-text-${index}`}
+                    key={item.label}
+                    onClick={() =>
+                      add([
+                        createLayer('text', {
+                          name: item.label.replace('Add a ', '').replace('Add ', ''),
+                          text: item.text,
+                          fontSize: item.size,
+                          fontWeight: item.weight,
+                          width: Math.max(120, Math.min(1100, project.width - 160)),
+                          height: item.size * 2,
+                          x: 80,
+                          y: 160,
+                          duration: project.duration,
+                          fill: '#26352f',
+                        }),
+                      ])
+                    }
+                  >
+                    <span>{item.label}</span>
+                    <Plus size={13} />
+                  </button>
+                ))}
+              </>
+            ) : folder === 'personalised' ? (
+              <>
+                <button
+                  className="fs-library-import"
                   disabled={!selected.length}
                   onClick={saveComponent}
                 >
                   <Plus size={14} />
                   Save selection
                 </button>
-                {project.components
-                  .filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
-                  .map((c) => (
+                <div className="fs-library-components">
+                  {project.components.map((component) => (
                     <button
-                      className="component-card"
-                      key={c.id}
-                      onClick={() => insertComponent(c.id)}
+                      className="fs-library-component"
+                      key={component.id}
+                      onClick={() => insertComponent(component.id)}
                     >
-                      <Component size={24} />
-                      <div>
-                        <strong>{c.name}</strong>
-                        <span>{c.layers.length} editable elements</span>
-                      </div>
-                      <Plus size={14} />
+                      <Component size={19} />
+                      <span>
+                        <strong>{component.name}</strong>
+                        <small>{component.layers.length} elements</small>
+                      </span>
+                      <Plus size={13} />
                     </button>
                   ))}
+                </div>
                 {project.components.length === 0 && (
-                  <div className="empty-library">
-                    <Component size={32} strokeWidth={1} />
-                    <h3>
-                      Make it once.
-                      <br />
-                      Use it everywhere.
-                    </h3>
-                    <p>
-                      Select a title, a shape, or a whole group. Save it here for your next scene.
-                    </p>
+                  <p className="fs-library-empty">Your saved components will appear here.</p>
+                )}
+              </>
+            ) : (
+              <>
+                {folder === 'vectors' && (
+                  <div className="fs-library-shapes">
+                    {(['square', 'circle', 'pill'] as const).map((shape) => (
+                      <button
+                        key={shape}
+                        onClick={() => addShape(shape)}
+                        aria-label={
+                          shape === 'square' ? 'Rectangle' : shape === 'circle' ? 'Circle' : 'Pill'
+                        }
+                      >
+                        <span className={`fs-library-shape ${shape}`} />
+                        <small>
+                          {shape === 'square'
+                            ? 'Rectangle'
+                            : shape === 'circle'
+                              ? 'Circle'
+                              : 'Pill'}
+                        </small>
+                      </button>
+                    ))}
                   </div>
+                )}
+                <button className="fs-library-import" onClick={importFiles}>
+                  <ArrowUpFromLine size={14} />
+                  {folder === 'vectors'
+                    ? 'Import SVG'
+                    : `Import ${activeFolder.label.toLowerCase()}`}
+                </button>
+              </>
+            )}
+
+            {folder !== 'personalised' && (
+              <>
+                {folderLayers.length > 0 && (
+                  <div className="fs-library-file-grid fs-library-file-grid-spaced">
+                    {folderLayers.map(renderFile)}
+                  </div>
+                )}
+                {folderLayers.length === 0 && !['fonts', 'vectors'].includes(folder!) && (
+                  <p className="fs-library-empty">No {activeFolder.label.toLowerCase()} yet.</p>
                 )}
               </>
             )}
-          </div>
-        </>
-      ) : (
-        <div className="sidebar-body layer-list">
-          <div className="section-label">
-            SCENE LAYERS{' '}
-            <button title="Group selection" onClick={group} disabled={selected.length < 2}>
-              <Group size={14} />
-            </button>
-          </div>
-          {[...project.layers].reverse().map((l) => {
-            const Icon = kindIcons[l.kind];
-            return (
+          </>
+        )}
+
+        {panel === 'layers' && (
+          <>
+            <div className="fs-library-heading">
+              <span>Layers</span>
               <button
-                className={`layer-row ${selected.includes(l.id) ? 'active' : ''}`}
-                key={l.id}
-                onClick={(e) =>
-                  select(e.shiftKey ? Array.from(new Set([...selected, l.id])) : [l.id])
-                }
-                style={{ '--layer-color': LAYER_COLORS[l.kind] } as CSSProperties}
+                title="Group selection"
+                aria-label="Group selection"
+                onClick={group}
+                disabled={selected.length < 2}
               >
-                <Icon size={15} />
-                <span>{l.name}</span>
-                {l.groupId && <Group size={12} />} {l.hidden && <EyeOff size={12} />}{' '}
-                {l.locked && <LockKeyhole size={12} />}
+                <Group size={15} />
               </button>
-            );
-          })}
-          <p className="helper-copy">
-            Shift + click to select multiple layers. Group them to move together.
-          </p>
-        </div>
-      )}
-      <div className="sidebar-footer">
-        <div className="project-avatar">F</div>
-        <div>
-          <strong>Your workspace</strong>
-          <span>Local · no uploads</span>
-        </div>
-        <ChevronDown size={13} />
+            </div>
+            <div className="fs-library-layer-list">
+              {[...project.layers].reverse().map((layer) => {
+                const Icon = kindIcons[layer.kind];
+                return (
+                  <button
+                    key={layer.id}
+                    className={`fs-library-layer ${selected.includes(layer.id) ? 'is-selected' : ''}`}
+                    style={{ '--file-color': LAYER_COLORS[layer.kind] } as CSSProperties}
+                    onClick={(event) =>
+                      select(
+                        event.shiftKey ? Array.from(new Set([...selected, layer.id])) : [layer.id],
+                      )
+                    }
+                    title={layer.name}
+                  >
+                    <Icon size={14} />
+                    <span>{layer.name}</span>
+                    {layer.groupId && <Group size={11} />}
+                    {layer.hidden && <EyeOff size={11} />}
+                    {layer.locked && <LockKeyhole size={11} />}
+                  </button>
+                );
+              })}
+            </div>
+            {!project.layers.length && (
+              <p className="fs-library-empty">Your layers will appear here.</p>
+            )}
+          </>
+        )}
+
+        {panel === 'templates' && (
+          <>
+            <div className="fs-library-heading">
+              <span>Start with a layout</span>
+            </div>
+            {TEMPLATES.map((template, index) => (
+              <button
+                className="fs-library-template"
+                key={template.id}
+                onClick={() => applyTemplate(template.project())}
+              >
+                <div className={`fs-library-template-preview fs-library-template-${index}`}>
+                  <span />
+                  <span />
+                </div>
+                <strong>{template.name}</strong>
+              </button>
+            ))}
+            <p className="fs-library-empty">Replaces your scene. Undo brings it back.</p>
+          </>
+        )}
       </div>
     </aside>
   );

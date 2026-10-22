@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { createLayer } from '../core/project';
 import type { Layer, Project } from '../core/types';
 import { MediaCache, renderFrame } from '../engine/renderer';
+import './CanvasStage.css';
 
 const RESIZE_CORNERS = [
   { name: 'nw', label: 'top left', horizontal: -1, vertical: -1 },
@@ -32,8 +33,10 @@ interface Props {
   media: MediaCache;
   time: number;
   selected: string[];
-  tool: 'select' | 'draw';
+  tool: 'select' | 'draw' | 'hand';
   zoom: number;
+  onZoomChange?: (zoom: number) => void;
+  resetViewKey?: number;
   select: (ids: string[]) => void;
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   checkpoint: () => void;
@@ -47,6 +50,8 @@ export default function CanvasStage({
   selected,
   tool,
   zoom,
+  onZoomChange,
+  resetViewKey,
   select,
   change,
   checkpoint,
@@ -58,6 +63,126 @@ export default function CanvasStage({
   const [size, setSize] = useState({ width: 700, height: 450 });
   const [revision, setRevision] = useState(0);
   const [drawing, setDrawing] = useState<{ x: number; y: number }[]>([]);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [panning, setPanning] = useState(false);
+  const pointerInside = useRef(false);
+  const spacePressed = useRef(false);
+  const activePanCleanup = useRef<(() => void) | null>(null);
+  const viewport = useRef({ zoom, pan, size, onZoomChange });
+  viewport.current = { zoom, pan, size, onZoomChange };
+  useEffect(() => {
+    setPan({ x: 0, y: 0 });
+  }, [resetViewKey, project.id]);
+  useEffect(() => {
+    const isEditing = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        !!target.closest('input, textarea, select, button, a, [role="dialog"]'));
+    const keyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || isEditing(event.target)) return;
+      if (!pointerInside.current && !spacePressed.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      spacePressed.current = true;
+      setSpaceHeld(true);
+    };
+    const releaseSpace = () => {
+      spacePressed.current = false;
+      setSpaceHeld(false);
+    };
+    const keyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') releaseSpace();
+    };
+    const blur = () => {
+      releaseSpace();
+      activePanCleanup.current?.();
+    };
+    window.addEventListener('keydown', keyDown, true);
+    window.addEventListener('keyup', keyUp);
+    window.addEventListener('blur', blur);
+    return () => {
+      window.removeEventListener('keydown', keyDown, true);
+      window.removeEventListener('keyup', keyUp);
+      window.removeEventListener('blur', blur);
+      activePanCleanup.current?.();
+    };
+  }, []);
+  useEffect(() => {
+    const node = surface.current;
+    if (!node) return;
+    const wheel = (event: WheelEvent) => {
+      // A non-passive listener keeps trackpad gestures inside the board.
+      event.preventDefault();
+      if (activePanCleanup.current) return;
+      const current = viewport.current;
+      const multiplier =
+        event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? current.size.height : 1;
+      const deltaX = event.deltaX * multiplier;
+      const deltaY = event.deltaY * multiplier;
+      if (event.ctrlKey || event.metaKey) {
+        if (!current.onZoomChange) return;
+        const nextZoom = Math.max(0.15, Math.min(3, current.zoom * Math.exp(-deltaY * 0.008)));
+        const ratio = nextZoom / current.zoom;
+        const bounds = node.getBoundingClientRect();
+        const cursorX = event.clientX - bounds.left - (current.size.width / 2 + 28);
+        const cursorY = event.clientY - bounds.top - current.size.height / 2;
+        const nextPan = {
+          x: cursorX - (cursorX - current.pan.x) * ratio,
+          y: cursorY - (cursorY - current.pan.y) * ratio,
+        };
+        viewport.current = { ...current, zoom: nextZoom, pan: nextPan };
+        setPan(nextPan);
+        current.onZoomChange(nextZoom);
+      } else {
+        const nextPan = { x: current.pan.x - deltaX, y: current.pan.y - deltaY };
+        viewport.current = { ...current, pan: nextPan };
+        setPan(nextPan);
+      }
+    };
+    node.addEventListener('wheel', wheel, { passive: false });
+    return () => node.removeEventListener('wheel', wheel);
+  }, []);
+  const beginPan = (event: PointerEvent<HTMLDivElement>) => {
+    if (
+      (event.button === 0 || event.button === 1) &&
+      !(event.target instanceof Element && event.target.closest('button'))
+    ) {
+      event.currentTarget.focus({ preventScroll: true });
+    }
+    if (event.button !== 1 && !(event.button === 0 && (tool === 'hand' || spacePressed.current)))
+      return;
+    event.preventDefault();
+    event.stopPropagation();
+    activePanCleanup.current?.();
+    const target = event.currentTarget;
+    const origin = { x: event.clientX, y: event.clientY };
+    const initialPan = viewport.current.pan;
+    target.setPointerCapture(event.pointerId);
+    setPanning(true);
+    const move = (next: globalThis.PointerEvent) => {
+      const nextPan = {
+        x: initialPan.x + next.clientX - origin.x,
+        y: initialPan.y + next.clientY - origin.y,
+      };
+      viewport.current = { ...viewport.current, pan: nextPan };
+      setPan(nextPan);
+    };
+    const end = () => {
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', end);
+      target.removeEventListener('pointercancel', end);
+      target.removeEventListener('lostpointercapture', end);
+      if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
+      activePanCleanup.current = null;
+      setPanning(false);
+    };
+    activePanCleanup.current = end;
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', end);
+    target.addEventListener('pointercancel', end);
+    target.addEventListener('lostpointercapture', end);
+  };
   useEffect(() => {
     const node = surface.current;
     if (!node) return;
@@ -67,8 +192,12 @@ export default function CanvasStage({
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
+  const safeZoom = Number.isFinite(zoom) ? Math.max(0.15, Math.min(3, zoom)) : 1;
   const scale =
-    Math.min((size.width - 72) / project.width, (size.height - 65) / project.height) * zoom;
+    Math.max(
+      0.01,
+      Math.min((size.width - 120) / project.width, (size.height - 80) / project.height),
+    ) * safeZoom;
   useEffect(() => {
     let stopped = false;
     void media
@@ -150,7 +279,7 @@ export default function CanvasStage({
     target.addEventListener('lostpointercapture', end);
   };
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || tool === 'hand' || spacePressed.current) return;
     const origin = point(event);
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
@@ -259,18 +388,40 @@ export default function CanvasStage({
     target.addEventListener('pointercancel', end);
   };
   return (
-    <div className={`canvas-surface ${tool === 'draw' ? 'draw-mode' : ''}`} ref={surface}>
-      <div className="artboard-name">
-        {project.name}{' '}
-        <span>
-          {project.width} × {project.height}
-        </span>
-      </div>
+    <div
+      className={`canvas-surface board-surface ${tool === 'draw' ? 'draw-mode' : ''} ${tool === 'hand' || spaceHeld ? 'hand-mode' : ''} ${panning ? 'is-panning' : ''}`}
+      ref={surface}
+      tabIndex={0}
+      role="region"
+      aria-label="Canvas board"
+      onPointerEnter={() => {
+        pointerInside.current = true;
+      }}
+      onPointerLeave={() => {
+        pointerInside.current = false;
+      }}
+      onPointerDownCapture={beginPan}
+      onPointerDown={(event) => {
+        if (event.button === 0 && event.target === event.currentTarget) select([]);
+      }}
+      style={{ backgroundPosition: `${pan.x}px ${pan.y}px` }}
+    >
       <div
         className="artboard"
-        style={{ width: project.width * scale, height: project.height * scale }}
+        style={{
+          width: project.width * scale,
+          height: project.height * scale,
+          left: size.width / 2 + 28 + pan.x,
+          top: size.height / 2 + pan.y,
+        }}
         onPointerDown={onPointerDown}
       >
+        <div className="artboard-name">
+          {project.name}
+          <span>
+            {project.width} × {project.height}
+          </span>
+        </div>
         <canvas
           aria-label="Composition canvas"
           ref={canvas}
@@ -345,11 +496,6 @@ export default function CanvasStage({
             />
           </svg>
         )}
-      </div>
-      <div className="canvas-hint">
-        {tool === 'draw'
-          ? 'Draw directly on your canvas'
-          : 'Shift + click to select more · Drag to move'}
       </div>
     </div>
   );

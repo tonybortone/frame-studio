@@ -29,6 +29,9 @@ import {
   Command,
   Film,
   CheckCheck,
+  Hand,
+  ImagePlus,
+  SlidersHorizontal,
 } from './icons';
 import Sidebar from './components/Sidebar';
 import Inspector from './components/Inspector';
@@ -44,7 +47,7 @@ import {
   changeAspectRatio,
 } from './core/project';
 import { importSvg } from './core/svg';
-import { LAYER_COLORS, LAYER_LABELS, type Layer } from './core/types';
+import { type Layer } from './core/types';
 import { MediaCache, syncMedia, stopMedia } from './engine/renderer';
 import { importMedia } from './engine/assets';
 import { saveBlob } from './engine/export';
@@ -60,8 +63,15 @@ export default function App() {
   const [selected, setSelected] = useState<string[]>([]);
   const [time, setTime] = useState(1.2);
   const [playing, setPlaying] = useState(false);
-  const [tool, setTool] = useState<'select' | 'draw'>('select');
+  const [tool, setTool] = useState<'select' | 'draw' | 'hand'>('select');
   const [canvasZoom, setCanvasZoom] = useState(1);
+  const [resetViewKey, setResetViewKey] = useState(0);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(true);
+  const [libraryRequest, setLibraryRequest] = useState<{
+    tab: 'media' | 'text' | 'elements' | 'templates' | 'components';
+    nonce: number;
+  } | null>(null);
   const [timelineZoom, setTimelineZoom] = useState(66);
   const [exportOpen, setExportOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -73,6 +83,10 @@ export default function App() {
   const projectInput = useRef<HTMLInputElement>(null);
   const media = useRef(new MediaCache()).current;
   const notify = useCallback((message: string) => setToast(message), []);
+  const selectLayers = useCallback((ids: string[]) => {
+    setSelected(ids);
+    setInspectorOpen(ids.length > 0);
+  }, []);
   useEffect(() => {
     if (!toast) return;
     const id = setTimeout(() => setToast(''), 5500);
@@ -141,6 +155,7 @@ export default function App() {
         parseProject(JSON.stringify(next));
         update(() => next);
         setSelected(layers.map((l) => l.id));
+        setInspectorOpen(true);
         setTool('select');
       } catch (e) {
         notify(e instanceof Error ? e.message : 'Could not add elements');
@@ -324,6 +339,7 @@ export default function App() {
   };
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (
         event.target instanceof HTMLElement &&
         (event.target.matches('input,textarea,select') || event.target.isContentEditable)
@@ -355,8 +371,11 @@ export default function App() {
       } else if (event.key === 'Escape') {
         setSelected([]);
         setTool('select');
+        setInspectorOpen(false);
+        setProjectMenu(false);
       } else if (event.key.toLowerCase() === 'v') setTool('select');
       else if (event.key.toLowerCase() === 'p') setTool('draw');
+      else if (event.key.toLowerCase() === 'h') setTool('hand');
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -420,15 +439,16 @@ export default function App() {
           <span>
             frame<span className="brand-light">studio</span>
           </span>
-          <span className="alpha-label">ALPHA</span>
         </div>
         <div className="project-heading">
           <button className="project-toggle" onClick={() => setProjectMenu((p) => !p)}>
             <span>{project.name}</span>
             <ChevronDown size={12} />
           </button>
-          <span className="header-divider" />
-          <span className="save-state">
+          <span
+            className={`save-state ${saveStatus.startsWith('Autosave paused') ? 'save-warning' : ''}`}
+            title={saveStatus}
+          >
             <CheckCheck size={13} />
             {saveStatus}
           </span>
@@ -450,6 +470,7 @@ export default function App() {
               <button
                 onClick={() => {
                   setSelected([]);
+                  setInspectorOpen(true);
                   setProjectMenu(false);
                 }}
               >
@@ -489,105 +510,41 @@ export default function App() {
           </button>
         </div>
       </header>
-      <main className="editor-layout">
-        <Sidebar
-          project={project}
-          selected={selected}
-          select={setSelected}
-          add={add}
-          importFiles={() => fileInput.current?.click()}
-          applyTemplate={(p) => {
-            setPlaying(false);
-            setTime(1.2);
-            update((prev) => ({ ...p, components: prev.components }));
-            setSelected([]);
-            notify('Template applied. All elements are editable. Undo to restore your scene.');
-          }}
-          insertComponent={insertComponent}
-          saveComponent={saveComponent}
-          group={group}
-        />
+      <main
+        className={`editor-layout ${inspectorOpen ? 'with-inspector' : ''} ${libraryOpen ? '' : 'without-library'}`}
+      >
+        {libraryOpen && (
+          <Sidebar
+            project={project}
+            selected={selected}
+            select={selectLayers}
+            add={add}
+            importFiles={() => fileInput.current?.click()}
+            applyTemplate={(p) => {
+              setPlaying(false);
+              setTime(1.2);
+              update((prev) => ({ ...p, components: prev.components }));
+              setSelected([]);
+              notify('Template applied. All elements are editable. Undo to restore your scene.');
+            }}
+            insertComponent={insertComponent}
+            saveComponent={saveComponent}
+            group={group}
+            libraryRequest={libraryRequest}
+          />
+        )}
         <section className="canvas-workspace">
-          <div className="canvas-toolbar">
-            <div className="tool-group">
-              <button
-                title="Select (V)"
-                aria-label="Select tool"
-                className={tool === 'select' ? 'active' : ''}
-                onClick={() => setTool('select')}
-              >
-                <MousePointer2 size={16} />
-              </button>
-              <button
-                title="Pencil (P)"
-                aria-label="Pencil tool"
-                className={tool === 'draw' ? 'active' : ''}
-                onClick={() => setTool('draw')}
-              >
-                <PenTool size={16} />
-              </button>
-              <span className="tool-divider" />
-              <button
-                title="Add text"
-                aria-label="Add text"
-                onClick={() =>
-                  add([
-                    createLayer('text', {
-                      text: 'Your next idea.',
-                      name: 'Your next idea',
-                      x: 200,
-                      y: 240,
-                      width: 1000,
-                      height: 160,
-                      fontSize: 96,
-                      fill: '#28372f',
-                      duration: project.duration,
-                    }),
-                  ])
-                }
-              >
-                <Type size={17} />
-              </button>
-              <button
-                title="Add shape"
-                aria-label="Add shape"
-                onClick={() =>
-                  add([
-                    createLayer('shape', {
-                      name: 'Shape',
-                      x: 600,
-                      y: 360,
-                      width: 360,
-                      height: 240,
-                      fill: '#d5ad80',
-                      radius: 24,
-                      duration: project.duration,
-                    }),
-                  ])
-                }
-              >
-                <Square size={16} />
-              </button>
-              <span className="tool-divider" />
-              <button
-                title="Group (⌘G)"
-                aria-label="Group selection"
-                onClick={group}
-                disabled={selected.length < 2}
-              >
-                <Group size={17} />
-              </button>
-              <button
-                title="Save as component"
-                aria-label="Save component"
-                disabled={!selected.length}
-                onClick={saveComponent}
-              >
-                <Component size={17} />
-              </button>
-            </div>
-            <div className="canvas-format">
-              <span className="format-label">CANVAS</span>
+          <div className="board-topbar">
+            <button
+              className={`board-chip ${libraryOpen ? 'active' : ''}`}
+              title="Show or hide files"
+              aria-label="Toggle files panel"
+              aria-pressed={libraryOpen}
+              onClick={() => setLibraryOpen((v) => !v)}
+            >
+              <FolderOpen size={14} /> Files
+            </button>
+            <div className="board-options">
               <select
                 aria-label="Canvas aspect ratio"
                 value={aspect}
@@ -603,7 +560,124 @@ export default function App() {
                   </option>
                 ))}
               </select>
+              <button
+                className={`board-chip ${inspectorOpen ? 'active' : ''}`}
+                aria-label="Toggle properties"
+                title="Properties"
+                aria-pressed={inspectorOpen}
+                onClick={() => setInspectorOpen((v) => !v)}
+              >
+                <SlidersHorizontal size={15} />
+              </button>
             </div>
+          </div>
+          <div className="creation-toolbar" role="toolbar" aria-label="Canvas tools">
+            <button
+              title="Select (V)"
+              aria-label="Select tool"
+              aria-pressed={tool === 'select'}
+              className={tool === 'select' ? 'active' : ''}
+              onClick={() => setTool('select')}
+            >
+              <MousePointer2 size={19} />
+            </button>
+            <button
+              title="Hand (H) · drag to pan"
+              aria-label="Hand tool"
+              aria-pressed={tool === 'hand'}
+              className={tool === 'hand' ? 'active' : ''}
+              onClick={() => setTool('hand')}
+            >
+              <Hand size={18} />
+            </button>
+            <span className="creation-divider" />
+            <button
+              title="Add shape"
+              aria-label="Add shape"
+              onClick={() =>
+                add([
+                  createLayer('shape', {
+                    name: 'Shape',
+                    x: project.width * 0.35,
+                    y: project.height * 0.35,
+                    width: 360,
+                    height: 240,
+                    fill: '#ffb18b',
+                    radius: 28,
+                    duration: project.duration,
+                  }),
+                ])
+              }
+            >
+              <Square size={18} />
+            </button>
+            <button
+              title="Add text"
+              aria-label="Add text"
+              onClick={() =>
+                add([
+                  createLayer('text', {
+                    text: 'Your next idea.',
+                    name: 'Your next idea',
+                    x: project.width * 0.15,
+                    y: project.height * 0.3,
+                    width: Math.min(1000, project.width * 0.7),
+                    height: 160,
+                    fontSize: 96,
+                    fill: '#29292d',
+                    duration: project.duration,
+                  }),
+                ])
+              }
+            >
+              <Type size={20} />
+            </button>
+            <button
+              title="Pencil (P)"
+              aria-label="Pencil tool"
+              aria-pressed={tool === 'draw'}
+              className={tool === 'draw' ? 'active' : ''}
+              onClick={() => setTool('draw')}
+            >
+              <PenTool size={18} />
+            </button>
+            <button
+              title="Add media"
+              aria-label="Add media"
+              disabled={busy || !ready}
+              onClick={() => fileInput.current?.click()}
+            >
+              <ImagePlus size={19} />
+            </button>
+            <span className="creation-divider" />
+            <button
+              title="Your saved components"
+              aria-label="Saved components"
+              onClick={() => {
+                setLibraryOpen(true);
+                setLibraryRequest({ tab: 'components', nonce: Date.now() });
+              }}
+            >
+              <Component size={19} />
+            </button>
+            {selected.length > 0 && (
+              <button
+                title="Save selection as component"
+                aria-label="Save component"
+                onClick={saveComponent}
+              >
+                <Plus size={18} />
+              </button>
+            )}
+            <button
+              className={`group-tool ${selected.length < 2 ? 'is-unavailable' : ''}`}
+              title="Group (⌘G)"
+              aria-label="Group selection"
+              disabled={selected.length < 2}
+              onClick={group}
+            >
+              <Group size={18} />
+            </button>
           </div>
           <CanvasStage
             project={project}
@@ -612,50 +686,58 @@ export default function App() {
             selected={selected}
             tool={tool}
             zoom={canvasZoom}
-            select={setSelected}
+            onZoomChange={setCanvasZoom}
+            resetViewKey={resetViewKey}
+            select={selectLayers}
             change={change}
             checkpoint={checkpoint}
             add={add}
             error={notify}
           />
           <div className="canvas-bottom">
-            <div className="canvas-breadcrumb">
-              <LayersIcon />
-              Scene 01 <span>/</span> {project.name}
-            </div>
             <div className="canvas-zoom">
               <button
                 aria-label="Zoom canvas out"
-                onClick={() => setCanvasZoom((z) => Math.max(0.25, z - 0.1))}
+                onClick={() => setCanvasZoom((z) => Math.max(0.15, z - 0.1))}
               >
-                <Minus size={12} />
+                <Minus size={13} />
               </button>
               <span>{Math.round(canvasZoom * 100)}%</span>
               <button
                 aria-label="Zoom canvas in"
-                onClick={() => setCanvasZoom((z) => Math.min(2, z + 0.1))}
+                onClick={() => setCanvasZoom((z) => Math.min(3, z + 0.1))}
               >
-                <Plus size={12} />
+                <Plus size={13} />
               </button>
               <span className="tool-divider" />
-              <button aria-label="Fit canvas" onClick={() => setCanvasZoom(1)}>
-                <Maximize size={13} />
+              <button
+                aria-label="Fit canvas"
+                title="Fit canvas"
+                onClick={() => {
+                  setCanvasZoom(1);
+                  setResetViewKey((v) => v + 1);
+                }}
+              >
+                <Maximize size={14} />
               </button>
             </div>
           </div>
         </section>
-        <Inspector
-          project={project}
-          selected={selected}
-          change={change}
-          updateProject={(patch) => update((p) => ({ ...p, ...patch }))}
-          duplicate={duplicate}
-          remove={remove}
-          group={group}
-          saveComponent={saveComponent}
-          reorder={reorder}
-          checkpoint={checkpoint}
-        />
+        {inspectorOpen && (
+          <Inspector
+            close={() => setInspectorOpen(false)}
+            project={project}
+            selected={selected}
+            change={change}
+            updateProject={(patch) => update((p) => ({ ...p, ...patch }))}
+            duplicate={duplicate}
+            remove={remove}
+            group={group}
+            saveComponent={saveComponent}
+            reorder={reorder}
+            checkpoint={checkpoint}
+          />
+        )}
       </main>
       <section className="timeline-section">
         <div className="timeline-toolbar">
@@ -736,27 +818,10 @@ export default function App() {
           time={time}
           zoom={timelineZoom}
           seek={seek}
-          select={setSelected}
+          select={selectLayers}
           change={change}
           checkpoint={checkpoint}
         />
-        <div className="statusbar">
-          <div className="layer-legend">
-            {Object.entries(LAYER_COLORS).map(([kind, color]) => (
-              <span key={kind}>
-                <i style={{ background: color }} />
-                {LAYER_LABELS[kind as keyof typeof LAYER_LABELS]}
-              </span>
-            ))}
-            <span>
-              <i className="component-dot" />
-              Component
-            </span>
-          </div>
-          <span>
-            {project.fps} fps <b>·</b> {project.width} × {project.height} <b>·</b> v0.1 alpha
-          </span>
-        </div>
       </section>
       {toast && (
         <div className="toast" role="status">
@@ -829,7 +894,9 @@ export default function App() {
             </div>
             <h2 id="help-heading">A little faster.</h2>
             {[
-              ['Play / pause', 'Space'],
+              ['Play / pause (outside board)', 'Space'],
+              ['Pan board', 'Space + drag / H'],
+              ['Zoom board', '⌘ / Ctrl + scroll'],
               ['Select tool', 'V'],
               ['Pencil tool', 'P'],
               ['Save project', '⌘ S'],
@@ -850,7 +917,4 @@ export default function App() {
       )}
     </div>
   );
-}
-function LayersIcon() {
-  return <Square size={11} />;
 }

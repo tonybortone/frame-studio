@@ -12,6 +12,9 @@ import {
 } from '../icons';
 import type { CSSProperties, PointerEvent } from 'react';
 import { LAYER_COLORS, type Layer, type Project } from '../core/types';
+import './Timeline.css';
+
+const LABEL_WIDTH = 148;
 export const kindIcons = {
   video: Video,
   audio: Music2,
@@ -49,6 +52,7 @@ export default function Timeline({
 }: Props) {
   const pixels = zoom;
   const width = Math.max(640, project.duration * pixels + 100);
+  const tickInterval = pixels >= 48 ? 1 : pixels >= 24 ? 2 : 5;
   const startDrag = (
     event: PointerEvent<HTMLDivElement>,
     layer: Layer,
@@ -125,11 +129,14 @@ export default function Timeline({
     target.addEventListener('pointercancel', end);
   };
   return (
-    <div className="timeline-scroller" aria-label="Editing timeline">
-      <div className="timeline-content" style={{ width: width + 174 }}>
+    <div className="timeline-scroller timeline-simple" aria-label="Editing timeline">
+      <div
+        className="timeline-content"
+        style={{ width: width + LABEL_WIDTH, '--label-width': `${LABEL_WIDTH}px` } as CSSProperties}
+      >
         <div className="timeline-ruler">
           <div className="track-heading">
-            TRACKS <span>{project.layers.length}</span>
+            Layers <span>{project.layers.length}</span>
           </div>
           <div
             className="ruler-scale"
@@ -139,9 +146,9 @@ export default function Timeline({
               seek(Math.max(0, Math.min(project.duration, (event.clientX - rect.left) / pixels)));
             }}
           >
-            {Array.from({ length: Math.ceil(project.duration) + 1 }, (_, i) => (
-              <div key={i} className="ruler-tick" style={{ left: i * pixels }}>
-                <span>{i === 0 ? '00:00' : `00:${String(i).padStart(2, '0')}`}</span>
+            {Array.from({ length: Math.floor(project.duration / tickInterval) + 1 }, (_, i) => (
+              <div key={i} className="ruler-tick" style={{ left: i * tickInterval * pixels }}>
+                <span>{timecode(i * tickInterval, project.fps).slice(0, -3)}</span>
               </div>
             ))}
           </div>
@@ -154,6 +161,7 @@ export default function Timeline({
               <div
                 className="track-label"
                 onClick={() => select([layer.id])}
+                title={layer.name}
                 style={{ '--track-color': LAYER_COLORS[layer.kind] } as CSSProperties}
               >
                 <Icon size={13} />
@@ -174,7 +182,9 @@ export default function Timeline({
                   role="button"
                   tabIndex={0}
                   aria-label={`Timeline clip ${layer.name}`}
-                  className={`timeline-clip ${active ? 'selected' : ''} ${layer.hidden ? 'is-hidden' : ''}`}
+                  aria-pressed={active}
+                  title={`${layer.name}${layer.locked ? ' · Locked' : ''}`}
+                  className={`timeline-clip ${active ? 'selected' : ''} ${layer.hidden ? 'is-hidden' : ''} ${layer.locked ? 'is-locked' : ''}`}
                   style={
                     {
                       left: layer.start * pixels,
@@ -184,7 +194,11 @@ export default function Timeline({
                   }
                   onPointerDown={(e) => startDrag(e, layer, 'move')}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') select([layer.id]);
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      select([layer.id]);
+                    }
                   }}
                 >
                   <div
@@ -192,15 +206,28 @@ export default function Timeline({
                     title="Trim start"
                     onPointerDown={(e) => startDrag(e, layer, 'left')}
                   />
-                  <Icon size={12} />
-                  <span>{layer.name}</span>
-                  {layer.kind === 'audio' && (
-                    <div className="waveform">
-                      <span>Audio clip</span>
-                    </div>
+                  {layer.kind === 'image' && layer.src ? (
+                    <img
+                      className="clip-thumbnail"
+                      src={layer.src}
+                      alt=""
+                      loading="lazy"
+                      draggable={false}
+                    />
+                  ) : (
+                    <Icon size={12} aria-hidden="true" />
                   )}
-                  {layer.groupId && <span className="group-mark">G</span>}
-                  {layer.animation !== 'none' && <span className="animation-mark">◈</span>}
+                  <span className="clip-name">{layer.name}</span>
+                  {layer.groupId && (
+                    <span className="group-mark" title="Grouped">
+                      G
+                    </span>
+                  )}
+                  {layer.animation !== 'none' && (
+                    <span className="animation-mark" title={`${layer.animation} animation`}>
+                      ◇
+                    </span>
+                  )}
                   <div
                     className="trim-handle right"
                     title="Trim end"
@@ -211,15 +238,13 @@ export default function Timeline({
             </div>
           );
         })}
-        <div className="playhead" style={{ left: 174 + time * pixels }}>
+        <div className="playhead" style={{ left: LABEL_WIDTH + time * pixels }}>
           <div className="playhead-cap" />
         </div>
+        {project.layers.length === 0 && (
+          <div className="timeline-empty">Add something to begin.</div>
+        )}
       </div>
-      {project.layers.length === 0 && (
-        <div className="timeline-empty">
-          Add a video, a shape, or your first words. Your story starts here.
-        </div>
-      )}
     </div>
   );
 }

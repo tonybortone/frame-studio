@@ -53,13 +53,13 @@ export interface Project {
   components: SavedComponent[];
 }
 export const LAYER_COLORS: Record<LayerKind, string> = {
-  video: '#74a5ff',
-  audio: '#66c9a3',
-  image: '#e7ba79',
-  text: '#c7a1f7',
-  shape: '#f498ad',
-  svg: '#7ad1d2',
-  drawing: '#f1cb77',
+  video: '#9985ed',
+  audio: '#bb98ef',
+  image: '#ffa568',
+  text: '#ffb27b',
+  shape: '#ed9bc1',
+  svg: '#b18aef',
+  drawing: '#74d8be',
 };
 export const LAYER_LABELS: Record<LayerKind, string> = {
   video: 'Video',

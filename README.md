@@ -4,6 +4,8 @@ A local-first canvas and video editor for Mac. Arrange video, audio, images, tex
 
 Frame Studio is an early, open-source alpha. The aim is the directness of a design tool with an approachable video-editing workflow: reusable compositions, clear controls, and an interface that feels at home on a Mac.
 
+The workspace keeps the board in focus: a small side tool bar, a folder library for your files, and compact, color-coded timeline tracks. Pan around the board with the hand tool or Space + drag, and open folders for videos, audio, images, vectors, text presets, and saved components.
+
 ![Frame Studio editor](docs/images/editor.png)
 
 ## Run locally

@@ -1,6 +1,6 @@
 # Design language
 
-Frame Studio combines a focused desktop editing workspace with the clarity and tactile controls of an iOS interface. The canvas is the primary workspace; the timeline communicates time, and the inspector reveals controls relevant to the current selection.
+Frame Studio is a simple board for making videos. A spacious, dotted workspace surrounds the editable video frame, a small vertical tool bar puts creation tools beside it, and compact tracks keep the timeline readable. The interface uses neutral charcoal surfaces and a few soft corners. Color belongs primarily to the creator's work and the file categories.
 
 ## Interface principles
 
@@ -14,21 +14,23 @@ Frame Studio combines a focused desktop editing workspace with the clarity and t
 
 The source of truth is `LAYER_COLORS` and `LAYER_LABELS` in `src/core/types.ts`.
 
-| Kind      | Label   | Color     | Intent    |
-| --------- | ------- | --------- | --------- |
-| `video`   | Video   | `#74A5FF` | Blue      |
-| `audio`   | Audio   | `#66C9A3` | Mint      |
-| `image`   | Image   | `#E7BA79` | Warm sand |
-| `text`    | Text    | `#C7A1F7` | Lavender  |
-| `shape`   | Shape   | `#F498AD` | Rose      |
-| `svg`     | Vector  | `#7AD1D2` | Aqua      |
-| `drawing` | Drawing | `#F1CB77` | Gold      |
+| Kind      | Label   | Color     | Intent        |
+| --------- | ------- | --------- | ------------- |
+| `video`   | Video   | `#9985ED` | Violet        |
+| `audio`   | Audio   | `#BB98EF` | Soft lavender |
+| `image`   | Image   | `#FFA568` | Orange        |
+| `text`    | Text    | `#FFB27B` | Peach         |
+| `shape`   | Shape   | `#ED9BC1` | Pink          |
+| `svg`     | Vector  | `#B18AEF` | Purple        |
+| `drawing` | Drawing | `#74D8BE` | Mint          |
 
 These are identification colors, not the object's rendered fill. An image clip stays identifiable as an image even when its content or color adjustment changes. User-assigned layer colors and themes are planned; they should preserve a visible asset-kind indicator.
 
 ## Workspace behavior
 
-- A persistent library holds media, elements, templates, and saved components.
+- The compact library has three tabs: Files, Layers, and Templates. Files opens a two-column folder grid using the creator's supplied artwork in `public/library-icons`. Videos, Audio, Images, Vectors, Fonts, and Personalised lead directly to the relevant files or creation controls.
+- Fonts holds heading, subheading, and body-text presets. Vectors holds shapes and SVG import. Personalised holds reusable saved components. Folder navigation uses a simple back button; there is no second row of categories or promotional content.
+- The board supports direct selection and resizing, hand-tool or Space-drag panning, and pointer-centered zoom. Panning and zooming affect the workspace view, not the video composition.
 - Canvas selection and timeline selection refer to the same objects.
 - The inspector shows shared controls for multiple selection and type-specific controls for a single layer.
 - Timeline edits expose clear clip edges, a visible playhead, and unambiguous active selection.
@@ -45,4 +47,4 @@ Interface animation should explain selection and state changes, and should respe
 
 ## Inspiration and originality
 
-The product brief draws on CapCut's editing accessibility, Figma's object manipulation and reusable compositions, and iOS visual polish. The reference screenshots suggest a spacious dark canvas and differentiated timeline tracks. Use these as interaction references, while designing original controls, assets, code, and templates.
+The product brief draws on CapCut's editing accessibility, Figma's object manipulation and reusable compositions, and iOS visual polish. The reference screenshots guide the spacious dark board, vertical creation tools, and differentiated timeline tracks. The folder artwork was supplied by the creator; all other interface controls, code, and templates are developed for Frame Studio.

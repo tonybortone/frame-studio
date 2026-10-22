@@ -13,6 +13,7 @@ export { default as FileCode2 } from 'lucide-react/dist/esm/icons/file-code-2.js
 export { default as Film } from 'lucide-react/dist/esm/icons/film.js';
 export { default as FolderOpen } from 'lucide-react/dist/esm/icons/folder-open.js';
 export { default as Group } from 'lucide-react/dist/esm/icons/group.js';
+export { default as Hand } from 'lucide-react/dist/esm/icons/hand.js';
 export { default as Image } from 'lucide-react/dist/esm/icons/image.js';
 export { default as ImagePlus } from 'lucide-react/dist/esm/icons/image-plus.js';
 export { default as Keyboard } from 'lucide-react/dist/esm/icons/keyboard.js';

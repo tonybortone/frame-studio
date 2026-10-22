@@ -3,7 +3,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Sliders,
-  ChevronDown,
+  X,
   MoveHorizontal,
   RotateCw,
   Component,
@@ -11,13 +11,13 @@ import {
   UnlockKeyhole,
   Trash2,
   Copy,
-  Layers,
   Volume2,
 } from '../icons';
 import type { Layer, Project, Animation } from '../core/types';
 import { LAYER_COLORS, LAYER_LABELS } from '../core/types';
 import { kindIcons } from './Timeline';
 interface Props {
+  close: () => void;
   project: Project;
   selected: string[];
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
@@ -64,6 +64,7 @@ function NumberField({
   );
 }
 export default function Inspector({
+  close,
   project,
   selected,
   change,
@@ -113,7 +114,9 @@ export default function Inspector({
                   : 'Project settings'}
             </span>
           </div>
-          <ChevronDown size={13} />
+          <button aria-label="Close properties" title="Close properties" onClick={close}>
+            <X size={14} />
+          </button>
         </div>
         {!layer ? (
           <>
@@ -160,11 +163,6 @@ export default function Inspector({
                 <span>100%</span>
               </label>
             </section>
-            <div className="inspector-tip">
-              <Layers size={21} />
-              <strong>Everything has its place.</strong>
-              <p>Select an element to adjust its design, movement, and color.</p>
-            </div>
           </>
         ) : (
           <>
