@@ -1,5 +1,7 @@
 import type { Layer, Project } from '../core/types';
 import { audioEnvelope, easeProgress, getMotionTiming } from '../core/motion';
+import { getMaskGeometry } from '../core/visualEffects';
+import { ProcessedImageCache } from './imageEffects';
 
 type MediaElement = HTMLImageElement | HTMLVideoElement | HTMLAudioElement;
 interface Entry {
@@ -19,6 +21,7 @@ export class MediaCache {
   private audioContext?: AudioContext;
   private monitor?: GainNode;
   private mix?: MediaStreamAudioDestinationNode;
+  private processedImages = new ProcessedImageCache();
   playbackError: Error | null = null;
 
   async prepare(layers: Layer[]): Promise<void> {
@@ -103,6 +106,18 @@ export class MediaCache {
   get(id: string): MediaElement | undefined {
     return this.entries.get(id)?.element;
   }
+  imageSource(layer: Layer): HTMLImageElement | HTMLCanvasElement | undefined {
+    const element = this.get(layer.id);
+    return element instanceof HTMLImageElement
+      ? this.processedImages.get(element, layer)
+      : undefined;
+  }
+  imageDataUrl(layer: Layer): string {
+    const element = this.get(layer.id);
+    if (!(element instanceof HTMLImageElement) || !element.naturalWidth)
+      throw new Error(`Wait for “${layer.name}” to finish loading before exporting SVG.`);
+    return this.processedImages.dataUrl(element, layer);
+  }
   mediaEntries(): Array<[string, Entry]> {
     return [...this.entries].filter(([, entry]) => entry.element instanceof HTMLMediaElement);
   }
@@ -163,13 +178,17 @@ export class MediaCache {
       entry.element.pause();
       entry.element.removeAttribute('src');
       entry.element.load();
-    } else entry.element.src = '';
+    } else {
+      this.processedImages.release(entry.element);
+      entry.element.src = '';
+    }
   }
 
   dispose(): void {
     this.endAudioMix();
     for (const entry of this.entries.values()) this.release(entry);
     this.entries.clear();
+    this.processedImages.clear();
     this.listeners.clear();
     void this.audioContext?.close();
     this.audioContext = undefined;
@@ -227,8 +246,30 @@ export function renderFrame(
       layer.y + layer.height / 2 + animation.y,
     );
     ctx.rotate((layer.rotation * Math.PI) / 180);
-    ctx.scale(animation.scale, animation.scale);
+    ctx.scale(animation.scale * (layer.flipX ? -1 : 1), animation.scale * (layer.flipY ? -1 : 1));
     ctx.translate(-layer.width / 2, -layer.height / 2);
+    const mask = getMaskGeometry(layer);
+    if (mask) {
+      ctx.beginPath();
+      if (mask.kind === 'ellipse') {
+        ctx.ellipse(
+          mask.x + mask.width / 2,
+          mask.y + mask.height / 2,
+          mask.width / 2,
+          mask.height / 2,
+          0,
+          0,
+          Math.PI * 2,
+        );
+      } else if (mask.kind === 'diamond') {
+        ctx.moveTo(mask.x + mask.width / 2, mask.y);
+        ctx.lineTo(mask.x + mask.width, mask.y + mask.height / 2);
+        ctx.lineTo(mask.x + mask.width / 2, mask.y + mask.height);
+        ctx.lineTo(mask.x, mask.y + mask.height / 2);
+        ctx.closePath();
+      } else ctx.roundRect(mask.x, mask.y, mask.width, mask.height, mask.radius);
+      ctx.clip();
+    }
     ctx.globalAlpha = Math.min(1, Math.max(0, animation.opacity));
     ctx.filter = `brightness(${layer.brightness}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
     ctx.fillStyle = layer.fill;
@@ -266,16 +307,21 @@ export function renderFrame(
         const height =
           element instanceof HTMLVideoElement ? element.videoHeight : element.naturalHeight;
         if (width && height) {
-          const scale = Math.max(layer.width / width, layer.height / height);
+          const source = element instanceof HTMLImageElement ? media.imageSource(layer)! : element;
+          const sourcePixelWidth = source instanceof HTMLCanvasElement ? source.width : width;
+          const sourcePixelHeight = source instanceof HTMLCanvasElement ? source.height : height;
+          const scale = Math.max(layer.width / sourcePixelWidth, layer.height / sourcePixelHeight);
           const sourceWidth = layer.width / scale;
           const sourceHeight = layer.height / scale;
-          ctx.beginPath();
-          ctx.roundRect(0, 0, layer.width, layer.height, Math.max(0, layer.radius));
-          ctx.clip();
+          if (layer.mask === undefined) {
+            ctx.beginPath();
+            ctx.roundRect(0, 0, layer.width, layer.height, Math.max(0, layer.radius));
+            ctx.clip();
+          }
           ctx.drawImage(
-            element,
-            (width - sourceWidth) / 2,
-            (height - sourceHeight) / 2,
+            source,
+            (sourcePixelWidth - sourceWidth) / 2,
+            (sourcePixelHeight - sourceHeight) / 2,
             sourceWidth,
             sourceHeight,
             0,

@@ -49,6 +49,7 @@ import { transformSelection as transformLayers, type SelectionTransform } from '
 import { MediaCache, syncMedia, stopMedia } from './engine/renderer';
 import { importMedia } from './engine/assets';
 import { saveBlob } from './engine/export';
+import { sampleBackgroundColor } from './engine/imageEffects';
 
 export default function App() {
   const { project, ready, saveStatus, update, checkpoint, undo, redo } = useEditor();
@@ -152,6 +153,21 @@ export default function App() {
       ),
     [update],
   );
+  const autoRemoveBackground = (layerId: string) => {
+    const layer = project.layers.find((item) => item.id === layerId);
+    if (!layer || layer.kind !== 'image' || layer.locked) return;
+    const image = media.get(layerId);
+    if (!(image instanceof HTMLImageElement) || !image.complete || !image.naturalWidth) {
+      notify('This image is still loading. Try again in a moment.');
+      return;
+    }
+    try {
+      const color = sampleBackgroundColor(image);
+      change(layerId, { backgroundRemoval: { color, tolerance: 18, softness: 10 } });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not read the image background.');
+    }
+  };
   const add = useCallback(
     (layers: Layer[]) => {
       if (!layers.length) return false;
@@ -631,11 +647,6 @@ export default function App() {
             </div>
           </div>
           <div className="creation-toolbar" role="toolbar" aria-label="Canvas tools">
-            <div className="toolbox-grip" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </div>
             <button
               title="Select (V)"
               aria-label="Select tool"
@@ -815,6 +826,7 @@ export default function App() {
             reorder={reorder}
             checkpoint={checkpoint}
             transformSelection={transformSelected}
+            autoRemoveBackground={autoRemoveBackground}
           />
         )}
       </main>

@@ -1301,3 +1301,293 @@ test('component categories and search only filter the library and preserve the p
   await page.getByRole('button', { name: 'Yours', exact: true }).click();
   expect(await saveProject(page)).toEqual(before);
 });
+
+async function imageToolsFixture(page: Page, locked = false): Promise<Project> {
+  const src = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, 128, 128);
+    context.fillStyle = '#ef233c';
+    context.fillRect(16, 32, 32, 64);
+    context.fillStyle = '#8d99ae';
+    context.fillRect(80, 32, 32, 64);
+    return canvas.toDataURL('image/png');
+  });
+  return {
+    ...createProject(),
+    name: 'Image tools study',
+    width: 128,
+    height: 128,
+    duration: 4,
+    background: '#2b2d42',
+    layers: [
+      createLayer('image', {
+        name: 'Two colors',
+        src,
+        x: 0,
+        y: 0,
+        width: 128,
+        height: 128,
+        radius: 0,
+        duration: 4,
+        locked,
+      }),
+    ],
+    components: [],
+  };
+}
+
+async function exportedSvgPixels(page: Page, points: number[][]) {
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export your creation' });
+  await dialog.getByRole('button', { name: 'SVG · editable frame', exact: true }).click();
+  const downloaded = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Export SVG', exact: true }).click();
+  const bytes = await downloadBytes(await downloaded);
+  const pixels = await page.evaluate(
+    async ({ svg, points }) => {
+      const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+      try {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const context = canvas.getContext('2d')!;
+        context.drawImage(image, 0, 0);
+        return points.map(([x, y]) => Array.from(context.getImageData(x, y, 1, 1).data));
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    },
+    { svg: bytes.toString('utf8'), points },
+  );
+  await dialog.getByRole('button', { name: 'Close export', exact: true }).click();
+  return pixels;
+}
+
+test('masks and flips match PNG, SVG, and 3D previews and survive reopening', async ({ page }) => {
+  const fixture = await imageToolsFixture(page);
+  await openProjectFixture(page, fixture);
+  await page.getByRole('button', { name: 'Timeline clip Two colors', exact: true }).click();
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await properties.getByRole('button', { name: 'Ellipse mask', exact: true }).click();
+  expect(await exportedPixel(page, 2, 2)).toEqual([43, 45, 66, 255]);
+  expect(await exportedPixel(page, 32, 64)).toEqual([239, 35, 60, 255]);
+  await properties.getByRole('button', { name: 'Flip horizontally', exact: true }).click();
+  expect(await exportedPixel(page, 32, 64)).toEqual([141, 153, 174, 255]);
+  expect(
+    await exportedSvgPixels(page, [
+      [2, 2],
+      [32, 64],
+      [96, 64],
+    ]),
+  ).toEqual([
+    [43, 45, 66, 255],
+    [141, 153, 174, 255],
+    [239, 35, 60, 255],
+  ]);
+  const saved = await saveProject(page, fixture.name);
+  expect(saved.layers[0]).toMatchObject({
+    mask: 'ellipse',
+    flipX: true,
+    src: fixture.layers[0].src,
+  });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect((await saveProject(page, fixture.name)).layers[0].flipX).toBeFalsy();
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole('banner').getByRole('button', { name: fixture.name, exact: true }),
+  ).toBeVisible();
+  expect(await saveProject(page, fixture.name)).toEqual(saved);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  const plane = page.locator('.depth-plane canvas');
+  await expect(plane).toHaveCount(1);
+  await expect
+    .poll(() =>
+      plane.evaluate((element) => {
+        const canvas = element as HTMLCanvasElement;
+        const context = canvas.getContext('2d')!;
+        return Array.from(
+          context.getImageData(Math.round(canvas.width / 4), Math.round(canvas.height / 2), 1, 1)
+            .data,
+        );
+      }),
+    )
+    .toEqual([141, 153, 174, 255]);
+  expect(
+    await plane.evaluate((element) =>
+      Array.from((element as HTMLCanvasElement).getContext('2d')!.getImageData(1, 1, 1, 1).data),
+    ),
+  ).toEqual([0, 0, 0, 0]);
+});
+
+test('solid background removal is reversible and exports the same keyed image in PNG and SVG', async ({
+  page,
+}) => {
+  const fixture = await imageToolsFixture(page);
+  await openProjectFixture(page, fixture);
+  await page.getByRole('button', { name: 'Timeline clip Two colors', exact: true }).click();
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await properties.getByRole('button', { name: 'Color', exact: true }).click();
+  await properties.getByRole('button', { name: 'Remove solid background', exact: true }).click();
+  const keyed = await saveProject(page, fixture.name);
+  expect(keyed.layers[0]).toMatchObject({
+    src: fixture.layers[0].src,
+    backgroundRemoval: { color: '#ffffff', tolerance: 18, softness: 10 },
+  });
+  expect(await exportedPixel(page, 2, 2)).toEqual([43, 45, 66, 255]);
+  expect(
+    await exportedSvgPixels(page, [
+      [2, 2],
+      [32, 64],
+    ]),
+  ).toEqual([
+    [43, 45, 66, 255],
+    [239, 35, 60, 255],
+  ]);
+  const tolerance = properties.getByRole('slider', { name: 'Background tolerance', exact: true });
+  await tolerance.scrollIntoViewIfNeeded();
+  const slider = (await tolerance.boundingBox())!;
+  await page.mouse.move(slider.x + slider.width * 0.18, slider.y + slider.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(slider.x + slider.width * 0.45, slider.y + slider.height / 2, { steps: 8 });
+  await page.mouse.up();
+  expect(
+    (await saveProject(page, fixture.name)).layers[0].backgroundRemoval!.tolerance,
+  ).toBeGreaterThan(30);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(keyed);
+  await properties.getByRole('button', { name: 'Restore background', exact: true }).click();
+  expect((await saveProject(page, fixture.name)).layers[0].backgroundRemoval).toBeUndefined();
+  expect(await exportedPixel(page, 2, 2)).toEqual([255, 255, 255, 255]);
+});
+
+test('image color replacement preserves source and unrelated pixels with exact hex editing', async ({
+  page,
+}) => {
+  const fixture = await imageToolsFixture(page);
+  await openProjectFixture(page, fixture);
+  await page.getByRole('button', { name: 'Timeline clip Two colors', exact: true }).click();
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await properties.getByRole('button', { name: 'Color', exact: true }).click();
+  await properties.locator('summary[aria-label="Replace color"]').click();
+  await properties.getByRole('button', { name: 'Enable color replacement', exact: true }).click();
+  const target = properties.getByRole('textbox', { name: 'To hex', exact: true });
+  await target.fill('#0088ff');
+  await target.press('Enter');
+  const saved = await saveProject(page, fixture.name);
+  expect(saved.layers[0]).toMatchObject({
+    src: fixture.layers[0].src,
+    colorReplace: { from: '#ef233c', to: '#0088ff', strength: 100 },
+  });
+  expect(await exportedPixel(page, 32, 64)).toEqual([0, 136, 255, 255]);
+  expect(
+    await exportedSvgPixels(page, [
+      [32, 64],
+      [96, 64],
+      [2, 2],
+    ]),
+  ).toEqual([
+    [0, 136, 255, 255],
+    [141, 153, 174, 255],
+    [255, 255, 255, 255],
+  ]);
+  await target.fill('invalid');
+  await target.press('Enter');
+  expect(await saveProject(page, fixture.name)).toEqual(saved);
+  await properties.getByRole('button', { name: 'Restore original colors', exact: true }).click();
+  expect((await saveProject(page, fixture.name)).layers[0].colorReplace).toBeUndefined();
+  expect(await exportedPixel(page, 32, 64)).toEqual([239, 35, 60, 255]);
+});
+
+test('locked image tools cannot modify the image', async ({ page }) => {
+  const fixture = await imageToolsFixture(page, true);
+  await openProjectFixture(page, fixture);
+  await page.getByRole('button', { name: 'Timeline clip Two colors', exact: true }).click();
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await expect(
+    properties.getByRole('button', { name: 'Ellipse mask', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    properties.getByRole('button', { name: 'Flip horizontally', exact: true }),
+  ).toBeDisabled();
+  await properties.getByRole('button', { name: 'Color', exact: true }).click();
+  await expect(
+    properties.getByRole('button', { name: 'Remove solid background', exact: true }),
+  ).toBeDisabled();
+  expect(await saveProject(page, fixture.name)).toEqual(parseProject(JSON.stringify(fixture)));
+});
+
+test('palette recolors shapes and outline strokes together without filling transparent SVGs', async ({
+  page,
+}) => {
+  const groupId = 'palette-group';
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Palette study',
+    width: 256,
+    height: 256,
+    duration: 4,
+    layers: [
+      createLayer('shape', {
+        name: 'Filled square',
+        groupId,
+        x: 20,
+        y: 20,
+        width: 60,
+        height: 60,
+        radius: 0,
+        fill: '#2b2d42',
+        duration: 4,
+      }),
+      createLayer('drawing', {
+        name: 'Pencil line',
+        groupId,
+        x: 100,
+        y: 20,
+        width: 60,
+        height: 60,
+        path: 'M0 0 L60 60',
+        viewBox: '0 0 60 60',
+        fill: 'transparent',
+        stroke: '#2b2d42',
+        strokeWidth: 5,
+        duration: 4,
+      }),
+      createLayer('svg', {
+        name: 'Outline square',
+        groupId,
+        x: 20,
+        y: 100,
+        width: 60,
+        height: 60,
+        path: 'M0 0 H60 V60 H0 Z',
+        viewBox: '0 0 60 60',
+        fill: 'transparent',
+        stroke: '#2b2d42',
+        strokeWidth: 5,
+        duration: 4,
+      }),
+    ],
+    components: [],
+  };
+  await openProjectFixture(page, fixture);
+  await page.getByRole('button', { name: 'Timeline clip Filled square', exact: true }).click();
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await expect(properties.getByRole('button', { name: 'Ellipse mask', exact: true })).toHaveCount(
+    0,
+  );
+  await properties.getByRole('button', { name: 'Set element color #ef233c', exact: true }).click();
+  const after = await saveProject(page, fixture.name);
+  expect(after.layers[0].fill).toBe('#ef233c');
+  for (const layer of after.layers.slice(1))
+    expect(layer).toMatchObject({ fill: 'transparent', stroke: '#ef233c' });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(parseProject(JSON.stringify(fixture)));
+});

@@ -10,6 +10,8 @@ The workspace separates media from creation tools and keeps visuals above a dedi
 
 The inspector now offers **six color looks with adjustable strength** and **five motion choices**, with detailed controls tucked under Adjust and Fine-tune. Looks and motion apply to selected unlocked visual elements; Pop is available for a single element so it does not pull a component apart. The [Resolve workflow analysis](docs/resolve-workflow-analysis.md) documents the public references, exact implemented behavior, and future functions.
 
+**Alpha 7 adds masks and image cleanup.** Select one visual layer and use **Design** for a rectangle, rounded, ellipse, or diamond mask, an adjustable inset, and horizontal/vertical flips. For a still image, **Color** adds local solid-background removal and targeted color replacement. Choose the background automatically from the image border, refine tolerance and edge softness, or restore it at any time. The source image stays intact. Text, shapes, and drawings also have quick palette swatches, and the canvas toolbar uses compact line icons. See the [visual tools guide](docs/visual-tools.md) for controls and limits.
+
 Switch to **3D layers** to inspect the composition's stacking order from the front, back, top, or an orbiting perspective. Select a layer and move it forward or backward to change its actual order in the composition. This is a CSS 3D inspection view of editable 2D layers; camera angle, spacing, and zoom are workspace controls and do not change exported geometry. It does not import 3D models or render a 3D scene into video.
 
 ![Frame Studio editor](docs/images/editor.png)
@@ -48,6 +50,7 @@ Packaging currently targets **Apple Silicon Macs (arm64)** and writes DMG and ZI
 | Media            | Import local video, audio, and images; volume, mute, and audio fade controls                           |
 | Organization     | 12 editable components; saved compositions; group text editing and proportional resize; depth ordering |
 | Motion and color | Motion recipes, timing and easing; six color looks, strength, and basic adjustments                    |
+| Visual tools     | Shape masks and flips; image color replacement and solid-background removal                            |
 | Layout           | Common aspect ratios and starter layouts for screen recordings and presenters                          |
 | Projects         | Device-local autosave; save and reopen projects with embedded media                                    |
 | Export           | PNG/SVG snapshots and real-time video recording using supported runtime formats                        |
@@ -55,6 +58,8 @@ Packaging currently targets **Apple Silicon Macs (arm64)** and writes DMG and ZI
 Video export uses the runtime's `MediaRecorder` capabilities. **WebM is the primary target; MP4 is only available when supported by the current runtime.** Export runs in real time. This is not yet a deterministic frame-by-frame render engine.
 
 Imports are limited to **50 MB per file**, and project loading is limited to **100 MB total**. Media is embedded as data URLs in project files, so saved projects can grow quickly. SVG editing supports a subset of SVG rather than complete Illustrator compatibility. SVG snapshots require hiding visible video layers; use PNG for a complete frame containing video. Saved components are reusable copies, not linked instances with nested overrides.
+
+Background removal targets a chosen solid color; it is not subject segmentation for complex photographs. Color replacement and background removal currently apply to still images. Their processed raster is capped at a 4,096-pixel longest side and 8 megapixels, consistently across preview and export; the original embedded image is preserved. Masks and flips apply to individual visual layers, not whole groups or track mattes.
 
 Keyframe curve editing, camera moves, transitions between clips, playback-speed changes, professional audio processing, advanced color grading, automatic editing/reframing, and a signed public installer are future work. See the [roadmap](docs/roadmap.md) for the intended sequence and acceptance criteria.
 

@@ -28,6 +28,7 @@ import {
 } from '../core/presets';
 import { getSelectionBounds, type SelectionTransform } from '../core/selection';
 import { kindIcons } from './Timeline';
+import { ElementColors, ImageTools, MaskControls, elementColorProperty } from './VisualTools';
 import './Inspector.css';
 interface Props {
   close: () => void;
@@ -42,6 +43,7 @@ interface Props {
   reorder: (direction: number) => void;
   checkpoint: () => void;
   transformSelection: (transform: SelectionTransform) => void;
+  autoRemoveBackground: (layerId: string) => void;
 }
 function NumberField({
   label,
@@ -141,6 +143,7 @@ export default function Inspector({
   reorder,
   checkpoint,
   transformSelection,
+  autoRemoveBackground,
 }: Props) {
   const [tab, setTab] = useState('design');
   const lookStrengthGesture = useRef({ active: false, recorded: false });
@@ -226,6 +229,30 @@ export default function Inspector({
     );
     patchVisual(value, record);
   };
+  const patchOne = (value: Partial<Layer>, record = true) => {
+    if (!layer || layer.locked || layer.kind === 'audio') return;
+    if (record) checkpoint();
+    change(layer.id, value, false);
+  };
+  const colorLayers = visualSelection.filter((item) =>
+    ['shape', 'text', 'svg', 'drawing'].includes(item.kind),
+  );
+  const colorTargets = colorLayers.filter((item) => !item.locked);
+  const colorEditor =
+    colorLayers.length > 0 ? (
+      <fieldset className="inspector-fields" disabled={!colorTargets.length}>
+        <ElementColors
+          layers={colorTargets.length ? colorTargets : colorLayers}
+          apply={(color) => {
+            if (!colorTargets.length) return;
+            checkpoint();
+            colorTargets.forEach((item) =>
+              change(item.id, { [elementColorProperty(item)]: color }, false),
+            );
+          }}
+        />
+      </fieldset>
+    ) : null;
   const Icon = layer ? kindIcons[layer.kind] : SlidersHorizontal;
   return (
     <aside className="inspector" aria-label="Properties">
@@ -497,34 +524,12 @@ export default function Inspector({
                       </div>
                     </section>
                   )}
-                  {['shape', 'text', 'svg', 'drawing'].includes(layer.kind) && (
-                    <section className="property-section">
-                      <h4>{layer.kind === 'drawing' ? 'Stroke' : 'Fill'}</h4>
-                      <label className="color-field">
-                        <input
-                          type="color"
-                          aria-label="Element color"
-                          value={
-                            (layer.kind === 'drawing' ? layer.stroke : layer.fill) === 'transparent'
-                              ? '#2b2d42'
-                              : ((layer.kind === 'drawing' ? layer.stroke : layer.fill) ??
-                                '#2b2d42')
-                          }
-                          onChange={(e) =>
-                            patch(
-                              layer.kind === 'drawing'
-                                ? { stroke: e.target.value }
-                                : { fill: e.target.value },
-                            )
-                          }
-                        />
-                        <span>
-                          {(layer.kind === 'drawing' ? layer.stroke : layer.fill)?.toUpperCase()}
-                        </span>
-                        <span>Solid</span>
-                      </label>
-                    </section>
+                  {visualSelection.length === 1 && (
+                    <fieldset className="inspector-fields" disabled={Boolean(layer.locked)}>
+                      <MaskControls key={layer.id} layer={layer} patch={patchOne} />
+                    </fieldset>
                   )}
+                  {colorEditor}
                   {!isAudio && (
                     <section className="property-section">
                       <h4>Appearance</h4>
@@ -670,98 +675,111 @@ export default function Inspector({
                   </>
                 ))}
               {activeTab === 'color' && (
-                <section className="property-section">
-                  <h4>
-                    Looks{' '}
-                    <span className="recipe-state">
-                      {look.id === 'custom'
-                        ? 'Custom'
-                        : look.id === 'mixed'
-                          ? 'Mixed'
-                          : 'One click'}
-                    </span>
-                  </h4>
-                  <div className="look-grid">
-                    {LOOK_PRESETS.map((recipe) => (
-                      <button
-                        key={recipe.id}
-                        onClick={() => applyLook(recipe.id)}
-                        className={look.id === recipe.id ? 'active' : ''}
-                        aria-pressed={look.id === recipe.id}
-                        aria-label={`${recipe.name} look`}
-                        disabled={!visualTargets.length}
-                      >
-                        <span
-                          className="look-swatch"
-                          style={{
-                            filter: `brightness(${recipe.brightness}) contrast(${recipe.contrast}) saturate(${recipe.saturation})`,
-                          }}
-                          aria-hidden="true"
+                <>
+                  {colorEditor}
+                  {layer.kind === 'image' && visualSelection.length === 1 && (
+                    <fieldset className="inspector-fields" disabled={Boolean(layer.locked)}>
+                      <ImageTools
+                        key={layer.id}
+                        layer={layer}
+                        patch={patchOne}
+                        autoRemoveBackground={() => autoRemoveBackground(layer.id)}
+                      />
+                    </fieldset>
+                  )}
+                  <section className="property-section">
+                    <h4>
+                      Looks{' '}
+                      <span className="recipe-state">
+                        {look.id === 'custom'
+                          ? 'Custom'
+                          : look.id === 'mixed'
+                            ? 'Mixed'
+                            : 'One click'}
+                      </span>
+                    </h4>
+                    <div className="look-grid">
+                      {LOOK_PRESETS.map((recipe) => (
+                        <button
+                          key={recipe.id}
+                          onClick={() => applyLook(recipe.id)}
+                          className={look.id === recipe.id ? 'active' : ''}
+                          aria-pressed={look.id === recipe.id}
+                          aria-label={`${recipe.name} look`}
+                          disabled={!visualTargets.length}
                         >
-                          <i />
-                          <b />
-                        </span>
-                        <span>{recipe.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <label className="range-label look-strength">
-                    Strength <span>{'strength' in look ? `${look.strength}%` : '—'}</span>
-                    <input
-                      aria-label="Look strength"
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      disabled={!('strength' in look) || look.id === 'original'}
-                      value={'strength' in look ? look.strength : 100}
-                      onPointerDown={() => {
-                        lookStrengthGesture.current = { active: true, recorded: false };
-                      }}
-                      onBlur={resetLookStrengthGesture}
-                      onKeyDown={resetLookStrengthGesture}
-                      onChange={(e) => {
-                        if ('strength' in look) {
-                          const strength = Number(e.target.value);
-                          if (strength === look.strength) return;
-                          const gesture = lookStrengthGesture.current;
-                          applyLook(look.id, strength, !gesture.active || !gesture.recorded);
-                          if (gesture.active) gesture.recorded = true;
-                        }
-                      }}
-                    />
-                  </label>
-                  <details className="recipe-details">
-                    <summary>Adjust</summary>
-                    {(['brightness', 'contrast', 'saturation'] as const).map((key) => (
-                      <label className="range-label" key={key}>
-                        {key[0].toUpperCase() + key.slice(1)}
-                        <span>{Math.round(layer[key] * 100)}%</span>
-                        <input
-                          type="range"
-                          aria-label={key}
-                          min="0"
-                          max="2"
-                          step=".01"
-                          value={layer[key]}
-                          onChange={(e) => patchVisual({ [key]: Number(e.target.value) })}
-                        />
-                      </label>
-                    ))}
-                  </details>
-                  <button
-                    className="secondary wide"
-                    title="Reset color"
-                    aria-label="Reset color"
-                    onClick={() => applyLook('original')}
-                  >
-                    <RotateCw size={12} />
-                    Reset color
-                  </button>
-                  <p className="helper-copy">
-                    Looks replace the current adjustments. Preview and export use the same values.
-                  </p>
-                </section>
+                          <span
+                            className="look-swatch"
+                            style={{
+                              filter: `brightness(${recipe.brightness}) contrast(${recipe.contrast}) saturate(${recipe.saturation})`,
+                            }}
+                            aria-hidden="true"
+                          >
+                            <i />
+                            <b />
+                          </span>
+                          <span>{recipe.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <label className="range-label look-strength">
+                      Strength <span>{'strength' in look ? `${look.strength}%` : '—'}</span>
+                      <input
+                        aria-label="Look strength"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        disabled={!('strength' in look) || look.id === 'original'}
+                        value={'strength' in look ? look.strength : 100}
+                        onPointerDown={() => {
+                          lookStrengthGesture.current = { active: true, recorded: false };
+                        }}
+                        onBlur={resetLookStrengthGesture}
+                        onKeyDown={resetLookStrengthGesture}
+                        onChange={(e) => {
+                          if ('strength' in look) {
+                            const strength = Number(e.target.value);
+                            if (strength === look.strength) return;
+                            const gesture = lookStrengthGesture.current;
+                            applyLook(look.id, strength, !gesture.active || !gesture.recorded);
+                            if (gesture.active) gesture.recorded = true;
+                          }
+                        }}
+                      />
+                    </label>
+                    <details className="recipe-details">
+                      <summary>Adjust</summary>
+                      {(['brightness', 'contrast', 'saturation'] as const).map((key) => (
+                        <label className="range-label" key={key}>
+                          {key[0].toUpperCase() + key.slice(1)}
+                          <span>{Math.round(layer[key] * 100)}%</span>
+                          <input
+                            type="range"
+                            aria-label={key}
+                            min="0"
+                            max="2"
+                            step=".01"
+                            value={layer[key]}
+                            onChange={(e) => patchVisual({ [key]: Number(e.target.value) })}
+                          />
+                        </label>
+                      ))}
+                    </details>
+                    <button
+                      className="secondary wide"
+                      title="Reset color"
+                      aria-label="Reset color"
+                      onClick={() => applyLook('original')}
+                    >
+                      <RotateCw size={12} />
+                      Reset color
+                    </button>
+                    <p className="helper-copy">
+                      Looks replace the current adjustments. Preview and export use the same values.
+                    </p>
+                  </section>
+                </>
               )}
             </fieldset>
             <section className="property-section">

@@ -47,6 +47,12 @@ The CSS 3D layer-inspection view projects the active visual layers into separate
 
 ## Module boundaries
 
+Alpha 7 keeps visual-tool geometry and pixel math in `core/visualEffects.ts`. Mask geometry is shared between Canvas clipping and SVG clip paths. Flips are signed scales about the existing layer-center pivot, so they preserve layout and animation timing. A group is still a set of flat layers; the interface only offers masks and flips for one visual layer at a time.
+
+`engine/imageEffects.ts` handles decoded-image sampling and bounded processed-raster caching. Background removal keys the original pixels by color, then color replacement mixes matching colors while preserving alpha. Brightness, contrast, and saturation remain the later rendering adjustments. The source data URL is never overwritten. Cache entries are runtime data, not saved project content; settings survive through the ordinary validated layer schema.
+
+Image cleanup is shared by Canvas previews, depth-view planes, PNG, and real-time video capture. SVG export awaits media decoding and embeds the same processed PNG for affected images; vector masks and flips stay SVG geometry. Processing is limited to a 4,096-pixel longest side and 8 megapixels to bound work on large photos. This limit affects cleaned images consistently across outputs, not the original source or composition dimensions.
+
 | Responsibility               | Owns                                                           | Should avoid                                                    |
 | ---------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------- |
 | Project model and operations | Schema, IDs, time/geometry calculations, validation            | DOM, React state, Electron APIs                                 |

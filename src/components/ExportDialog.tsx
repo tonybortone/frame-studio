@@ -23,12 +23,13 @@ export default function ExportDialog({ project, time, media, close }: Props) {
     setProgress(0);
     controller.current = new AbortController();
     try {
+      if (format === 'svg') await media.prepare(project.layers);
       const video = formats.find((f) => f.id === format);
       const blob = video
         ? await exportVideo(project, media, video, setProgress, controller.current.signal)
         : format === 'png'
           ? await exportPng(project, media, time)
-          : exportSvg(project, time);
+          : exportSvg(project, time, media);
       if (controller.current.signal.aborted) {
         setProgress(null);
         return;

@@ -1,4 +1,6 @@
 import type { Project } from '../core/types';
+import { getMaskGeometry } from '../core/visualEffects';
+import { hasImageEffects } from './imageEffects';
 import {
   animationState,
   isLayerActive,
@@ -217,7 +219,7 @@ function escapeXml(value: string): string {
 }
 
 /** SVG is an editable snapshot. Video needs PNG export; audio has no visual representation. */
-export function exportSvg(project: Project, time: number): Blob {
+export function exportSvg(project: Project, time: number, media?: MediaCache): Blob {
   const active = project.layers.filter(
     (layer) => isLayerActive(layer, time) && layer.kind !== 'audio',
   );
@@ -228,7 +230,11 @@ export function exportSvg(project: Project, time: number): Blob {
   const body = active
     .map((layer, index) => {
       const animation = animationState(layer, time);
-      const transform = `translate(${layer.x + layer.width / 2 + animation.x} ${layer.y + layer.height / 2 + animation.y}) rotate(${layer.rotation}) scale(${animation.scale}) translate(${-layer.width / 2} ${-layer.height / 2})`;
+      const scale =
+        layer.flipX || layer.flipY
+          ? `${animation.scale * (layer.flipX ? -1 : 1)} ${animation.scale * (layer.flipY ? -1 : 1)}`
+          : `${animation.scale}`;
+      const transform = `translate(${layer.x + layer.width / 2 + animation.x} ${layer.y + layer.height / 2 + animation.y}) rotate(${layer.rotation}) scale(${scale}) translate(${-layer.width / 2} ${-layer.height / 2})`;
       const filter = `brightness(${layer.brightness}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
       let content = '';
       if (layer.kind === 'shape')
@@ -246,10 +252,24 @@ export function exportSvg(project: Project, time: number): Blob {
       } else if (layer.kind === 'image') {
         if (!layer.src?.startsWith('data:image/'))
           throw new Error('SVG export requires embedded image files.');
-        content = `<defs><clipPath id="image-${index}"><rect width="${layer.width}" height="${layer.height}" rx="${Math.max(0, layer.radius)}"/></clipPath></defs><image width="${layer.width}" height="${layer.height}" href="${escapeXml(layer.src)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#image-${index})"/>`;
+        if (hasImageEffects(layer) && !media)
+          throw new Error('Image effects require prepared media before exporting SVG.');
+        const source = hasImageEffects(layer) ? media!.imageDataUrl(layer) : layer.src;
+        const legacyClip = layer.mask === undefined;
+        content = `${legacyClip ? `<defs><clipPath id="image-${index}"><rect width="${layer.width}" height="${layer.height}" rx="${Math.max(0, layer.radius)}"/></clipPath></defs>` : ''}<image width="${layer.width}" height="${layer.height}" href="${escapeXml(source)}" preserveAspectRatio="xMidYMid slice"${legacyClip ? ` clip-path="url(#image-${index})"` : ''}/>`;
       } else if (layer.path) {
         const [x, y, width, height] = parseViewBox(layer.viewBox, layer.width, layer.height);
         content = `<g transform="scale(${layer.width / width} ${layer.height / height}) translate(${-x} ${-y})"><path d="${escapeXml(layer.path)}" fill="${layer.kind === 'drawing' ? 'none' : escapeXml(layer.fill)}" stroke="${escapeXml(layer.stroke ?? 'none')}" stroke-width="${layer.strokeWidth ?? 3}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+      }
+      const mask = getMaskGeometry(layer);
+      if (mask) {
+        const geometry =
+          mask.kind === 'ellipse'
+            ? `<ellipse cx="${mask.x + mask.width / 2}" cy="${mask.y + mask.height / 2}" rx="${mask.width / 2}" ry="${mask.height / 2}"/>`
+            : mask.kind === 'diamond'
+              ? `<polygon points="${mask.x + mask.width / 2},${mask.y} ${mask.x + mask.width},${mask.y + mask.height / 2} ${mask.x + mask.width / 2},${mask.y + mask.height} ${mask.x},${mask.y + mask.height / 2}"/>`
+              : `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}"/>`;
+        content = `<defs><clipPath id="mask-${index}" clipPathUnits="userSpaceOnUse">${geometry}</clipPath></defs><g clip-path="url(#mask-${index})">${content}</g>`;
       }
       return `<g transform="${transform}" opacity="${animation.opacity}" style="filter:${filter}">${content}</g>`;
     })

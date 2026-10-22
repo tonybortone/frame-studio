@@ -1,6 +1,19 @@
 export type LayerKind = 'video' | 'audio' | 'image' | 'text' | 'shape' | 'svg' | 'drawing';
 export type Animation = 'none' | 'fade' | 'rise' | 'pop' | 'slide';
 export type AnimationEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+export type LayerMask = 'none' | 'rectangle' | 'rounded' | 'ellipse' | 'diamond';
+export interface BackgroundRemoval {
+  color: string;
+  tolerance: number;
+  softness: number;
+}
+export interface ColorReplace {
+  from: string;
+  to: string;
+  tolerance: number;
+  softness: number;
+  strength: number;
+}
 export interface Layer {
   id: string;
   name: string;
@@ -39,6 +52,15 @@ export interface Layer {
   brightness: number;
   contrast: number;
   saturation: number;
+  /** Local bounds clipping; inset and roundness are percentages. */
+  mask?: LayerMask;
+  maskInset?: number;
+  maskRoundness?: number;
+  flipX?: boolean;
+  flipY?: boolean;
+  /** Non-destructive flat-color image edits; the original src is never replaced. */
+  backgroundRemoval?: BackgroundRemoval;
+  colorReplace?: ColorReplace;
   path?: string;
   stroke?: string;
   strokeWidth?: number;

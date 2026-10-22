@@ -261,6 +261,11 @@ function color(value: unknown, label: string): string {
     throw new Error(`${label} must be a hex color or transparent.`);
   return result;
 }
+function effectColor(value: unknown, label: string): string {
+  const result = string(value, label, 7, 7);
+  if (!/^#[\da-f]{6}$/i.test(result)) throw new Error(`${label} must use #rrggbb.`);
+  return result;
+}
 function optionalBoolean(value: RecordValue, key: string): boolean | undefined {
   if (value[key] === undefined) return undefined;
   if (typeof value[key] !== 'boolean') throw new Error(`${key} must be true or false.`);
@@ -330,6 +335,13 @@ const LAYER_KEYS = [
   'brightness',
   'contrast',
   'saturation',
+  'mask',
+  'maskInset',
+  'maskRoundness',
+  'flipX',
+  'flipY',
+  'backgroundRemoval',
+  'colorReplace',
   'path',
   'stroke',
   'strokeWidth',
@@ -367,6 +379,45 @@ function parseLayer(value: unknown): Layer {
   }
   if (item.animationEasing !== undefined)
     layer.animationEasing = item.animationEasing as Layer['animationEasing'];
+  if (item.mask !== undefined) {
+    if (!['none', 'rectangle', 'rounded', 'ellipse', 'diamond'].includes(item.mask as string))
+      throw new Error('Unsupported layer mask.');
+    layer.mask = item.mask as Layer['mask'];
+  }
+  if (item.maskInset !== undefined) layer.maskInset = number(item.maskInset, 'Mask inset', 0, 45);
+  if (item.maskRoundness !== undefined)
+    layer.maskRoundness = number(item.maskRoundness, 'Mask roundness', 0, 50);
+  for (const key of ['flipX', 'flipY'] as const) {
+    const result = optionalBoolean(item, key);
+    if (result !== undefined) layer[key] = result;
+  }
+  if (
+    layer.kind === 'audio' &&
+    ['mask', 'maskInset', 'maskRoundness', 'flipX', 'flipY'].some((key) => item[key] !== undefined)
+  )
+    throw new Error('Masks and flips require a visual layer.');
+  if (item.backgroundRemoval !== undefined) {
+    if (layer.kind !== 'image') throw new Error('Background removal is available for images only.');
+    const effect = object(item.backgroundRemoval, 'Background removal');
+    knownKeys(effect, ['color', 'tolerance', 'softness'], 'Background removal');
+    layer.backgroundRemoval = {
+      color: effectColor(effect.color, 'Background color'),
+      tolerance: number(effect.tolerance, 'Background tolerance', 0, 100),
+      softness: number(effect.softness, 'Background softness', 0, 100),
+    };
+  }
+  if (item.colorReplace !== undefined) {
+    if (layer.kind !== 'image') throw new Error('Color replacement is available for images only.');
+    const effect = object(item.colorReplace, 'Color replacement');
+    knownKeys(effect, ['from', 'to', 'tolerance', 'softness', 'strength'], 'Color replacement');
+    layer.colorReplace = {
+      from: effectColor(effect.from, 'Original color'),
+      to: effectColor(effect.to, 'Replacement color'),
+      tolerance: number(effect.tolerance, 'Replacement tolerance', 0, 100),
+      softness: number(effect.softness, 'Replacement softness', 0, 100),
+      strength: number(effect.strength, 'Replacement strength', 0, 100),
+    };
+  }
   if (item.text !== undefined) layer.text = string(item.text, 'Layer text', 100_000);
   if (item.fontSize !== undefined) layer.fontSize = number(item.fontSize, 'Font size', 1, 2048);
   if (item.fontWeight !== undefined)

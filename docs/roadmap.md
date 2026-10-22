@@ -36,7 +36,7 @@ Initial scope: a React/TypeScript editor with an Electron shell; semantic layer 
 
 - Add keyframes for position, scale, rotation, opacity, and selected effect properties.
 - Extend preset easing and timing handles with property-keyframe curves, spring-like presets, and editable keyframe handles.
-- Add masks, track mattes, transitions, camera-style framing, and motion paths.
+- Extend the existing static shape masks with animated masks, track mattes, transitions, camera-style framing, and motion paths.
 - Let users save and reuse motion treatments independently of content.
 - Explore simple frame-by-frame/pencil animation with onion-skin previews.
 

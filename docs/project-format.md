@@ -41,6 +41,23 @@ Motion recipe names likewise do not add fields. None, Gentle fade, Float, Slide,
 
 ## Assets and portability
 
+### Optional visual-tool fields (alpha 7)
+
+| Field               | Values / meaning                                                             |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `mask`              | `none`, `rectangle`, `rounded`, `ellipse`, or `diamond`                      |
+| `maskInset`         | Symmetric percentage inset, 0–45; default 0                                  |
+| `maskRoundness`     | Corner radius as a percentage of the shortest masked edge, 0–50; default 12  |
+| `flipX`, `flipY`    | Horizontal/vertical reflection about the layer center; default false         |
+| `backgroundRemoval` | Image-only object with `color`, `tolerance`, and `softness`                  |
+| `colorReplace`      | Image-only object with `from`, `to`, `tolerance`, `softness`, and `strength` |
+
+Effect colors are six-digit hex values. Tolerance, softness, and strength are finite percentages from 0 to 100. An absent image-effect object disables that operation; restoring removes its settings without modifying `src`. Removal and replacement match the original decoded colors before the existing display-space grading filters. Existing transparency is preserved.
+
+An absent `mask` preserves older image/video corner-radius clipping. Explicit `none` removes the mask; an explicit shape replaces that legacy clip. Other visual kinds support the same masks and flips. Audio does not accept visual-effect fields. New fields survive duplication, saved components, and splitting through the ordinary layer model.
+
+Schema version remains 1 because older projects need no migration. Alpha 7 can read older files; older app versions with strict unknown-field validation cannot open projects using these new fields.
+
 Imported media is embedded as data URLs, and the initial import limit is **50 MB per file**. Project loading has a **100 MB total file limit**. This makes a saved project self-contained for the supported media, at the cost of larger JSON files and higher memory use. Base64 encoding adds approximately one-third to binary media size before other project overhead. Duplicate layers and saved components may repeat media data in serialized JSON, so the project limit can be reached with fewer than 100 MB of original media.
 
 The parser also limits the main composition to 1,000 layers and the component library to 200 components, with at most 1,000 layers in each component. It rejects unsupported schema versions, unknown fields, duplicate IDs within a collection, non-finite or out-of-range values, and unsupported media-source schemes.
