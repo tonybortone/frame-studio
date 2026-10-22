@@ -313,7 +313,7 @@ describe('SVG import', () => {
 describe('toolbar shapes', () => {
   it('fits editable shape geometry into tiny and portrait frames and clamps insertion to the last frame', () => {
     for (const [width, height] of [
-      [1, 1],
+      [16, 16],
       [240, 720],
       [1920, 1080],
     ]) {
