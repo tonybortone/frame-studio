@@ -65,6 +65,8 @@ Selecting a plane or its layer-list row shares selection with the editor. Moving
 
 Visual and audio tracks have separate labeled sections. Visual tracks show the frontmost layer at the top, with front/back cues corresponding to the composition's stacking order. Each layer keeps its own editable clip. The ruler displays time against the project frame rate and adjusts label spacing as the timeline zoom changes. Fit timeline makes the full sequence reachable in the available width. Trim edges are visible on interaction, and image clips use their real imported thumbnails. The timeline height can be changed by dragging its separator or using its arrow-key controls.
 
+![Playback controls and the timeline ruler](images/timeline.png)
+
 Expanding a visual track exposes entrance and exit timing. Entrance presets are None, Fade, Rise, Pop, and Slide. Duration, delay, easing, and exit fade are editable through the inline controls and properties. The entrance and exit strips represent those actual timing settings and can be adjusted directly. This is preset-based motion editing, not an arbitrary keyframe graph editor.
 
 Expanding an audio track exposes volume, mute, and fade-in/fade-out duration. Audio-only properties omit visual transforms and opacity. Sound fades affect gain independently of visual opacity. Shared timing calculations keep preview and export consistent; shortening a clip clamps its effective timing without discarding authored values.
