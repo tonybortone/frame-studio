@@ -37,6 +37,12 @@ Time values are seconds. A layer occupies a span beginning at `start` for `durat
 
 The initial model is a flat ordered layer collection. `groupId` associates layers for editing; it is not a nested scene graph or an independent group transform. Saved components contain layer copies. They do not have live instance propagation, override resolution, or dependency graphs.
 
+Alpha 6's ready-made components use that same model. `core/componentPresets.ts` authors 12 original collections of text and shapes, and creates grouped instances with fresh IDs. Insertion fits the design to the current canvas and gives it a clip span at the playhead; it does not replace the project or change its schema. `ComponentLibrary.tsx` separates Ready-made from Yours, filters the catalog by category and search, and renders thumbnails through `TemplatePreview` using ordinary project data.
+
+`core/selection.ts` calculates rotation-aware bounds and applies proportional movement/resizing to selected visual layers. Changing group W or H scales both dimensions, offsets, font sizes, and corner radii; stroke widths scale unless they are already in an SVG viewBox coordinate system. No parent transform is serialized. If any selected visual layer is locked, the group transform is blocked so the arrangement cannot partially move. Group Content fields update each selected text layer separately; locked fields remain disabled.
+
+`core/presets.ts` owns the color and motion recipes and their selection-state detection. Color looks write the existing brightness, contrast, and saturation values, blending from neutral rather than accumulating filters. The inspector derives the active look and strength from those values, or shows Custom/Mixed. A temporary local hint remembers a chosen look at 0% so the slider can move upward again; it is not project data. Motion recipes write existing animation fields and skip audio and locked artwork. Float and Slide use the renderer's shared translation distances; Pop is disabled for a multiple-visual-layer selection because each layer currently scales around its own center.
+
 The CSS 3D layer-inspection view projects the active visual layers into separated planes. Its orbit, pan, zoom, and spacing are temporary view state, not a persistent Z coordinate or a new 3D scene model. Audio stays in the timeline. At most 64 planes are drawn at once, with a bounded preview texture budget; selecting another layer changes the inspected window. These preview limits do not change export resolution. Moving a layer forward or backward updates the shared ordered layer collection, preserving audio slots; the existing Canvas 2D renderer and exports then use that order. This operation participates in the editor's undo history.
 
 ## Module boundaries
@@ -56,7 +62,11 @@ Video and audio elements require asynchronous decoding and playback synchronizat
 
 **A new layer kind:** extend `LayerKind` and its typed data; add a semantic label/color; implement render, import, inspector, serialization validation, and export behavior together. Verify it at timeline boundaries and in saved projects.
 
-**A new animation preset:** extend the animation type and time-based evaluation, then expose it in the UI. Keep animation based on composition time so scrubbing and playback agree. A future keyframe system should replace preset-specific branching with typed property tracks and easing evaluation.
+**A new motion recipe:** add a combination of supported animation fields in `core/presets.ts`. A genuinely new animation behavior also needs an animation type, shared time-based evaluation, validation, and UI support. Keep motion based on composition time so scrubbing and playback agree. A future keyframe system should replace preset-specific branching with typed property tracks and easing evaluation.
+
+**A new color look:** author brightness, contrast, and saturation values in `core/presets.ts`. If a look needs a different visual operation, implement it consistently in rendering, snapshots, exports, and validation before exposing the control. Current looks are display-space adjustments, not LUTs or a color-managed grading pipeline.
+
+**A new ready-made component:** add ordinary text/shape geometry and a category to `core/componentPresets.ts`. Keep each visible piece editable, preserve meaningful names, and check insertion on portrait, square, and minimum-sized canvases. A component is an overlay added to the current scene; a project template is a starting composition.
 
 **A new template:** construct ordinary project layers and reusable compositions. Template content should remain editable after insertion and should not depend on proprietary media.
 

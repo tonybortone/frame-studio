@@ -55,7 +55,7 @@ export const ASSET_FOLDERS: AssetFolder[] = [
   {
     id: 'personalised',
     label: 'Components',
-    description: 'Your reusable designs',
+    description: 'Mockups & reusable designs',
     section: 'create',
     kinds: [],
     color: '#ef233c',

@@ -45,6 +45,7 @@ import {
 import { importSvg } from './core/svg';
 import { type Layer } from './core/types';
 import { reorderVisualLayers } from './core/layerOrder';
+import { transformSelection as transformLayers, type SelectionTransform } from './core/selection';
 import { MediaCache, syncMedia, stopMedia } from './engine/renderer';
 import { importMedia } from './engine/assets';
 import { saveBlob } from './engine/export';
@@ -153,7 +154,7 @@ export default function App() {
   );
   const add = useCallback(
     (layers: Layer[]) => {
-      if (!layers.length) return;
+      if (!layers.length) return false;
       try {
         const next = {
           ...project,
@@ -165,12 +166,27 @@ export default function App() {
         setSelected(layers.map((l) => l.id));
         if (viewMode === 'canvas') setInspectorOpen(true);
         setTool('select');
+        return true;
       } catch (e) {
         notify(e instanceof Error ? e.message : 'Could not add elements');
+        return false;
       }
     },
     [project, update, notify, viewMode],
   );
+  const transformSelected = (transform: SelectionTransform) => {
+    try {
+      const layers = transformLayers(project.layers, selected, transform);
+      if (layers === project.layers) return;
+      const next = { ...project, layers };
+      parseProject(JSON.stringify(next));
+      update(() => next);
+    } catch (error) {
+      notify(
+        `Could not resize or move this selection. ${error instanceof Error ? error.message : 'Choose a different size.'}`,
+      );
+    }
+  };
   const remove = useCallback(() => {
     if (!selected.length) return;
     update((p) => ({ ...p, layers: p.layers.filter((l) => !selected.includes(l.id)) }));
@@ -240,8 +256,8 @@ export default function App() {
     const groupId = crypto.randomUUID();
     const layers = duplicateLayers(component.layers);
     const first = Math.min(...layers.map((l) => l.start));
-    add(layers.map((l) => ({ ...l, groupId, start: l.start - first })));
-    notify(`${component.name} added. Every element is editable.`);
+    if (add(layers.map((l) => ({ ...l, groupId, start: l.start - first + time }))))
+      notify(`${component.name} added. Every element is editable.`);
   };
   const split = () => {
     const targets = project.layers.filter((l) => selected.includes(l.id));
@@ -527,6 +543,7 @@ export default function App() {
         {libraryOpen && (
           <Sidebar
             project={project}
+            time={time}
             selected={selected}
             select={selectLayers}
             add={add}
@@ -797,6 +814,7 @@ export default function App() {
             saveComponent={saveComponent}
             reorder={reorder}
             checkpoint={checkpoint}
+            transformSelection={transformSelected}
           />
         )}
       </main>

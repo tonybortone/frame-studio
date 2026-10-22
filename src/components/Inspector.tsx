@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   SlidersHorizontal,
   Sparkles,
@@ -13,9 +13,20 @@ import {
   Copy,
   Volume2,
 } from '../icons';
-import type { Layer, Project, Animation, AnimationEasing } from '../core/types';
+import type { Layer, Project, AnimationEasing } from '../core/types';
 import { LAYER_COLORS, LAYER_LABELS } from '../core/types';
 import { getAudioTiming, getMotionTiming } from '../core/motion';
+import {
+  LOOK_PRESETS,
+  MOTION_PRESETS,
+  getLookPatch,
+  getMotionPresetPatch,
+  detectSelectionLook,
+  detectSelectionMotion,
+  getEditableVisualLayers,
+  type LookId,
+} from '../core/presets';
+import { getSelectionBounds, type SelectionTransform } from '../core/selection';
 import { kindIcons } from './Timeline';
 import './Inspector.css';
 interface Props {
@@ -30,6 +41,7 @@ interface Props {
   saveComponent: () => void;
   reorder: (direction: number) => void;
   checkpoint: () => void;
+  transformSelection: (transform: SelectionTransform) => void;
 }
 function NumberField({
   label,
@@ -128,10 +140,64 @@ export default function Inspector({
   saveComponent,
   reorder,
   checkpoint,
+  transformSelection,
 }: Props) {
   const [tab, setTab] = useState('design');
-  const layer = project.layers.find((l) => l.id === selected[0]);
+  const lookStrengthGesture = useRef({ active: false, recorded: false });
+  const resetLookStrengthGesture = () => {
+    lookStrengthGesture.current = { active: false, recorded: false };
+  };
+  useEffect(() => {
+    window.addEventListener('pointerup', resetLookStrengthGesture);
+    window.addEventListener('pointercancel', resetLookStrengthGesture);
+    window.addEventListener('blur', resetLookStrengthGesture);
+    return () => {
+      window.removeEventListener('pointerup', resetLookStrengthGesture);
+      window.removeEventListener('pointercancel', resetLookStrengthGesture);
+      window.removeEventListener('blur', resetLookStrengthGesture);
+    };
+  }, []);
+  const [lookHint, setLookHint] = useState<{
+    id: LookId;
+    selection: string;
+    values: string;
+  } | null>(null);
+  const selectedLayers = project.layers.filter((item) => selected.includes(item.id));
+  const visualSelection = selectedLayers.filter((item) => item.kind !== 'audio');
+  const visualTargets = getEditableVisualLayers(project.layers, selected);
+  const firstSelected = project.layers.find((item) => item.id === selected[0]);
+  const layer =
+    firstSelected?.kind === 'audio' && visualSelection.length ? visualSelection[0] : firstSelected;
   const isAudio = layer?.kind === 'audio';
+  const isGroup = visualSelection.length > 1;
+  const bounds = isGroup ? getSelectionBounds(visualSelection) : null;
+  const lockedVisual = visualSelection.some((item) => item.locked);
+  const lockedCount = selectedLayers.filter((item) => item.locked).length;
+  const selectionKey = `${project.id}:${[...selected].sort().join(',')}`;
+  const lookSignature = (layers: Layer[]) =>
+    JSON.stringify(
+      layers.map(({ id, brightness, contrast, saturation }) => [
+        id,
+        brightness,
+        contrast,
+        saturation,
+      ]),
+    );
+  const currentLookValues = lookSignature(visualTargets);
+  const detectedLook = detectSelectionLook(visualTargets);
+  // A neutral blend is identical to Original in the file. Keep only this local
+  // gesture's recipe so the strength slider can move from 0 back up again.
+  const look =
+    detectedLook.id === 'original' &&
+    lookHint?.selection === selectionKey &&
+    lookHint.values === currentLookValues
+      ? { id: lookHint.id, strength: 0 }
+      : detectedLook;
+  useEffect(() => {
+    if (lookHint && (lookHint.selection !== selectionKey || lookHint.values !== currentLookValues))
+      setLookHint(null);
+  }, [lookHint, selectionKey, currentLookValues]);
+  const motionPreset = detectSelectionMotion(visualTargets);
   const activeTab = isAudio && tab === 'color' ? 'design' : tab;
   const motion = layer ? getMotionTiming(layer) : undefined;
   const patch = (value: Partial<Layer>) => {
@@ -141,6 +207,24 @@ export default function Inspector({
     if (!targets.length) return;
     checkpoint();
     targets.forEach((item) => change(item.id, value, false));
+  };
+  const patchVisual = (value: Partial<Layer>, record = true) => {
+    if (!visualTargets.length) return;
+    if (record) checkpoint();
+    visualTargets.forEach((item) => change(item.id, value, false));
+  };
+  const applyLook = (id: LookId, strength = 100, record = true) => {
+    const value = getLookPatch(id, strength);
+    setLookHint(
+      id === 'original'
+        ? null
+        : {
+            id,
+            selection: selectionKey,
+            values: lookSignature(visualTargets.map((item) => ({ ...item, ...value }))),
+          },
+    );
+    patchVisual(value, record);
   };
   const Icon = layer ? kindIcons[layer.kind] : SlidersHorizontal;
   return (
@@ -233,62 +317,154 @@ export default function Inspector({
           </>
         ) : (
           <>
-            {layer.locked && (
+            {lockedCount > 0 && (
               <p className="locked-notice">
-                <LockKeyhole size={12} /> Unlock this layer to edit its properties.
+                <LockKeyhole size={12} />{' '}
+                {selectedLayers.length === 1
+                  ? 'Unlock this layer to edit its properties.'
+                  : `${lockedCount} locked ${lockedCount === 1 ? 'element stays' : 'elements stay'} unchanged.`}
               </p>
             )}
-            <fieldset className="inspector-fields" disabled={Boolean(layer.locked)}>
+            <fieldset
+              className="inspector-fields"
+              disabled={selectedLayers.every((item) => item.locked)}
+            >
               {activeTab === 'design' && (
                 <>
+                  {selected.length > 1 && selectedLayers.some((item) => item.kind === 'text') && (
+                    <section className="property-section component-content">
+                      <h4>
+                        Content <span>Edit each part</span>
+                      </h4>
+                      {selectedLayers
+                        .filter((item) => item.kind === 'text')
+                        .map((item) => (
+                          <label className="field-label" key={item.id}>
+                            {item.name}
+                            <textarea
+                              aria-label={`Content: ${item.name}`}
+                              value={item.text ?? ''}
+                              disabled={Boolean(item.locked)}
+                              rows={2}
+                              onChange={(event) => {
+                                checkpoint();
+                                change(item.id, { text: event.target.value }, false);
+                              }}
+                            />
+                          </label>
+                        ))}
+                    </section>
+                  )}
                   {!isAudio && (
                     <section className="property-section">
                       <h4>
-                        Transform <MoveHorizontal size={13} />
+                        {isGroup ? 'Position & size' : 'Transform'} <MoveHorizontal size={13} />
                       </h4>
-                      <div className="field-grid">
-                        <NumberField label="X" value={layer.x} onChange={(x) => patch({ x })} />
-                        <NumberField label="Y" value={layer.y} onChange={(y) => patch({ y })} />
-                        <NumberField
-                          label="W"
-                          value={layer.width}
-                          min={1}
-                          max={32768}
-                          onChange={(width) => patch({ width })}
-                        />
-                        <NumberField
-                          label="H"
-                          value={layer.height}
-                          min={1}
-                          max={32768}
-                          onChange={(height) => patch({ height })}
-                        />
-                        <NumberField
-                          label="Rotation"
-                          value={layer.rotation}
-                          min={-360}
-                          max={360}
-                          onChange={(rotation) => patch({ rotation })}
-                        />
-                        <NumberField
-                          label="Radius"
-                          value={layer.radius}
-                          min={0}
-                          max={10000}
-                          onChange={(radius) => patch({ radius })}
-                        />
-                      </div>
-                      <div className="align-actions">
-                        <button onClick={() => patch({ x: (project.width - layer.width) / 2 })}>
-                          Center X
-                        </button>
-                        <button onClick={() => patch({ y: (project.height - layer.height) / 2 })}>
-                          Center Y
-                        </button>
-                      </div>
+                      {isGroup && bounds ? (
+                        <>
+                          <fieldset className="group-transform-fields" disabled={lockedVisual}>
+                            <div className="field-grid">
+                              <NumberField
+                                label="X"
+                                value={bounds.x}
+                                onChange={(x) => transformSelection({ x })}
+                              />
+                              <NumberField
+                                label="Y"
+                                value={bounds.y}
+                                onChange={(y) => transformSelection({ y })}
+                              />
+                              <NumberField
+                                label="W"
+                                value={bounds.width}
+                                min={1}
+                                max={32768}
+                                onChange={(width) =>
+                                  transformSelection({ scale: width / bounds.width })
+                                }
+                              />
+                              <NumberField
+                                label="H"
+                                value={bounds.height}
+                                min={1}
+                                max={32768}
+                                onChange={(height) =>
+                                  transformSelection({ scale: height / bounds.height })
+                                }
+                              />
+                            </div>
+                            <div className="align-actions">
+                              <button
+                                onClick={() =>
+                                  transformSelection({ x: (project.width - bounds.width) / 2 })
+                                }
+                              >
+                                Center X
+                              </button>
+                              <button
+                                onClick={() =>
+                                  transformSelection({ y: (project.height - bounds.height) / 2 })
+                                }
+                              >
+                                Center Y
+                              </button>
+                            </div>
+                          </fieldset>
+                          <p className="helper-copy">
+                            {lockedVisual
+                              ? 'Unlock every visual element to move or resize this selection.'
+                              : 'Resize together. Spacing and proportions stay in place.'}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="field-grid">
+                            <NumberField label="X" value={layer.x} onChange={(x) => patch({ x })} />
+                            <NumberField label="Y" value={layer.y} onChange={(y) => patch({ y })} />
+                            <NumberField
+                              label="W"
+                              value={layer.width}
+                              min={1}
+                              max={32768}
+                              onChange={(width) => patch({ width })}
+                            />
+                            <NumberField
+                              label="H"
+                              value={layer.height}
+                              min={1}
+                              max={32768}
+                              onChange={(height) => patch({ height })}
+                            />
+                            <NumberField
+                              label="Rotation"
+                              value={layer.rotation}
+                              min={-360}
+                              max={360}
+                              onChange={(rotation) => patch({ rotation })}
+                            />
+                            <NumberField
+                              label="Radius"
+                              value={layer.radius}
+                              min={0}
+                              max={10000}
+                              onChange={(radius) => patch({ radius })}
+                            />
+                          </div>
+                          <div className="align-actions">
+                            <button onClick={() => patch({ x: (project.width - layer.width) / 2 })}>
+                              Center X
+                            </button>
+                            <button
+                              onClick={() => patch({ y: (project.height - layer.height) / 2 })}
+                            >
+                              Center Y
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </section>
                   )}
-                  {layer.kind === 'text' && (
+                  {layer.kind === 'text' && selected.length === 1 && (
                     <section className="property-section">
                       <h4>Typography</h4>
                       <textarea
@@ -402,25 +578,44 @@ export default function Inspector({
                   <>
                     <section className="property-section">
                       <h4>
-                        Entrance animation <Sparkles size={13} />
+                        Motion{' '}
+                        <span className="recipe-state">
+                          {motionPreset === 'custom'
+                            ? 'Custom'
+                            : motionPreset === 'mixed'
+                              ? 'Mixed'
+                              : 'One click'}
+                        </span>
                       </h4>
                       <div className="motion-grid">
-                        {(['none', 'fade', 'rise', 'pop', 'slide'] as Animation[]).map((a) => (
+                        {MOTION_PRESETS.map((recipe) => (
                           <button
-                            key={a}
-                            onClick={() => patch({ animation: a })}
-                            className={layer.animation === a ? 'active' : ''}
-                            aria-pressed={layer.animation === a}
+                            key={recipe.id}
+                            onClick={() => patchVisual(getMotionPresetPatch(recipe.id))}
+                            className={motionPreset === recipe.id ? 'active' : ''}
+                            aria-pressed={motionPreset === recipe.id}
+                            disabled={!visualTargets.length || (recipe.id === 'pop' && isGroup)}
+                            title={
+                              recipe.id === 'pop' && isGroup
+                                ? 'Pop is for a single element. Choose Float or Slide to keep a component together.'
+                                : undefined
+                            }
                           >
-                            <div className={`motion-preview ${a}`}>
+                            <div className={`motion-preview ${recipe.id}`}>
                               <div />
                             </div>
-                            <span>{a === 'none' ? 'None' : a[0].toUpperCase() + a.slice(1)}</span>
+                            <span>{recipe.name}</span>
                           </button>
                         ))}
                       </div>
-                      {layer.animation !== 'none' && (
-                        <>
+                      <p className="helper-copy">
+                        {isGroup
+                          ? 'Float and Slide move the parts together. Pop is available for a single element.'
+                          : 'Entrance, easing and exit, ready together.'}
+                      </p>
+                      <details className="recipe-details">
+                        <summary>Fine-tune</summary>
+                        {layer.animation !== 'none' && (
                           <div className="field-grid motion-timing">
                             <NumberField
                               label="Delay (s)"
@@ -428,7 +623,7 @@ export default function Inspector({
                               min={0}
                               max={Math.min(3600, layer.duration)}
                               step={0.1}
-                              onChange={(animationDelay) => patch({ animationDelay })}
+                              onChange={(animationDelay) => patchVisual({ animationDelay })}
                             />
                             <NumberField
                               label="Duration (s)"
@@ -436,43 +631,40 @@ export default function Inspector({
                               min={0}
                               max={Math.min(3600, layer.duration - motion!.delay)}
                               step={0.1}
-                              onChange={(animationDuration) => patch({ animationDuration })}
+                              onChange={(animationDuration) => patchVisual({ animationDuration })}
                             />
                           </div>
-                        </>
-                      )}
-                      <label className="property-select">
-                        <span>Easing</span>
-                        <select
-                          aria-label="Animation easing"
-                          value={layer.animationEasing ?? 'ease-out'}
-                          onChange={(e) =>
-                            patch({ animationEasing: e.target.value as AnimationEasing })
-                          }
-                        >
-                          <option value="linear">Linear</option>
-                          <option value="ease-in">Ease in</option>
-                          <option value="ease-out">Ease out</option>
-                          <option value="ease-in-out">Ease in & out</option>
-                        </select>
-                      </label>
-                      <p className="helper-copy">
-                        Edit these same timings directly in the timeline.
-                      </p>
-                    </section>
-                    <section className="property-section">
-                      <h4>Exit fade</h4>
-                      <NumberField
-                        label="Exit fade (s)"
-                        value={motion!.exitDuration}
-                        min={0}
-                        max={Math.min(3600, layer.duration)}
-                        step={0.1}
-                        onChange={(exitDuration) => patch({ exitDuration })}
-                      />
-                      <p className="helper-copy">
-                        Fade at the end of this clip. Set to 0 to turn off.
-                      </p>
+                        )}
+                        <label className="property-select">
+                          <span>Easing</span>
+                          <select
+                            aria-label="Animation easing"
+                            value={layer.animationEasing ?? 'ease-out'}
+                            onChange={(e) =>
+                              patchVisual({ animationEasing: e.target.value as AnimationEasing })
+                            }
+                          >
+                            <option value="linear">Linear</option>
+                            <option value="ease-in">Ease in</option>
+                            <option value="ease-out">Ease out</option>
+                            <option value="ease-in-out">Ease in & out</option>
+                          </select>
+                        </label>
+                        <div className="motion-exit-field">
+                          <NumberField
+                            label="Exit fade (s)"
+                            value={motion!.exitDuration}
+                            min={0}
+                            max={Math.min(3600, layer.duration)}
+                            step={0.1}
+                            onChange={(exitDuration) => patchVisual({ exitDuration })}
+                          />
+                        </div>
+                        <p className="helper-copy">
+                          Timing can also be edited on each timeline track. Set exit fade to 0 to
+                          turn it off.
+                        </p>
+                      </details>
                     </section>
                     {layer.kind === 'video' && <SoundControls layer={layer} patch={patch} />}
                   </>
@@ -480,31 +672,94 @@ export default function Inspector({
               {activeTab === 'color' && (
                 <section className="property-section">
                   <h4>
-                    Color adjustments{' '}
-                    <button
-                      title="Reset color"
-                      onClick={() => patch({ brightness: 1, contrast: 1, saturation: 1 })}
-                    >
-                      <RotateCw size={12} />
-                    </button>
+                    Looks{' '}
+                    <span className="recipe-state">
+                      {look.id === 'custom'
+                        ? 'Custom'
+                        : look.id === 'mixed'
+                          ? 'Mixed'
+                          : 'One click'}
+                    </span>
                   </h4>
-                  {(['brightness', 'contrast', 'saturation'] as const).map((key) => (
-                    <label className="range-label" key={key}>
-                      {key[0].toUpperCase() + key.slice(1)}
-                      <span>{Math.round(layer[key] * 100)}%</span>
-                      <input
-                        type="range"
-                        aria-label={key}
-                        min="0"
-                        max="2"
-                        step=".01"
-                        value={layer[key]}
-                        onChange={(e) => patch({ [key]: Number(e.target.value) })}
-                      />
-                    </label>
-                  ))}
+                  <div className="look-grid">
+                    {LOOK_PRESETS.map((recipe) => (
+                      <button
+                        key={recipe.id}
+                        onClick={() => applyLook(recipe.id)}
+                        className={look.id === recipe.id ? 'active' : ''}
+                        aria-pressed={look.id === recipe.id}
+                        aria-label={`${recipe.name} look`}
+                        disabled={!visualTargets.length}
+                      >
+                        <span
+                          className="look-swatch"
+                          style={{
+                            filter: `brightness(${recipe.brightness}) contrast(${recipe.contrast}) saturate(${recipe.saturation})`,
+                          }}
+                          aria-hidden="true"
+                        >
+                          <i />
+                          <b />
+                        </span>
+                        <span>{recipe.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <label className="range-label look-strength">
+                    Strength <span>{'strength' in look ? `${look.strength}%` : '—'}</span>
+                    <input
+                      aria-label="Look strength"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      disabled={!('strength' in look) || look.id === 'original'}
+                      value={'strength' in look ? look.strength : 100}
+                      onPointerDown={() => {
+                        lookStrengthGesture.current = { active: true, recorded: false };
+                      }}
+                      onBlur={resetLookStrengthGesture}
+                      onKeyDown={resetLookStrengthGesture}
+                      onChange={(e) => {
+                        if ('strength' in look) {
+                          const strength = Number(e.target.value);
+                          if (strength === look.strength) return;
+                          const gesture = lookStrengthGesture.current;
+                          applyLook(look.id, strength, !gesture.active || !gesture.recorded);
+                          if (gesture.active) gesture.recorded = true;
+                        }
+                      }}
+                    />
+                  </label>
+                  <details className="recipe-details">
+                    <summary>Adjust</summary>
+                    {(['brightness', 'contrast', 'saturation'] as const).map((key) => (
+                      <label className="range-label" key={key}>
+                        {key[0].toUpperCase() + key.slice(1)}
+                        <span>{Math.round(layer[key] * 100)}%</span>
+                        <input
+                          type="range"
+                          aria-label={key}
+                          min="0"
+                          max="2"
+                          step=".01"
+                          value={layer[key]}
+                          onChange={(e) => patchVisual({ [key]: Number(e.target.value) })}
+                        />
+                      </label>
+                    ))}
+                  </details>
+                  <button
+                    className="secondary wide"
+                    title="Reset color"
+                    aria-label="Reset color"
+                    onClick={() => applyLook('original')}
+                  >
+                    <RotateCw size={12} />
+                    Reset color
+                  </button>
                   <p className="helper-copy">
-                    These adjustments are included in preview and export.
+                    Looks replace the current adjustments. Preview and export use the same values.
                   </p>
                 </section>
               )}

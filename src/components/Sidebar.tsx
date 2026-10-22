@@ -4,6 +4,8 @@ import { ArrowUpFromLine, Plus, Component, Group, EyeOff, LockKeyhole } from '..
 import { LAYER_COLORS, LAYER_LABELS, type Layer, type Project } from '../core/types';
 import { ASSET_FOLDERS, type AssetFolder, type AssetFolderId } from '../core/libraryAssets';
 import { createLayer } from '../core/project';
+import { COMPONENT_PRESETS } from '../core/componentPresets';
+import ComponentLibrary from './ComponentLibrary';
 import { TEMPLATES } from '../core/templates';
 import { kindIcons } from './Timeline';
 import TemplatePreview from './TemplatePreview';
@@ -12,6 +14,7 @@ import './Sidebar.css';
 export type LibraryTab = 'media' | 'text' | 'elements' | 'templates' | 'components';
 interface Props {
   project: Project;
+  time: number;
   selected: string[];
   select: (ids: string[]) => void;
   add: (layers: Layer[]) => void;
@@ -49,6 +52,7 @@ function ratio(project: Project): string {
 
 export default function Sidebar({
   project,
+  time,
   selected,
   select,
   add,
@@ -87,7 +91,7 @@ export default function Sidebar({
   );
   const count = (item: AssetFolder) =>
     item.id === 'personalised'
-      ? project.components.length
+      ? COMPONENT_PRESETS.length + project.components.length
       : project.layers.filter((layer) => item.kinds.includes(layer.kind)).length;
 
   function addShape(shape: 'square' | 'circle' | 'pill') {
@@ -285,37 +289,14 @@ export default function Sidebar({
                 ))}
               </>
             ) : folder === 'personalised' ? (
-              <>
-                <button
-                  className="fs-library-import"
-                  disabled={!selected.length}
-                  onClick={saveComponent}
-                >
-                  <Plus size={14} />
-                  Save selection
-                </button>
-                <div className="fs-library-components">
-                  {project.components.map((component) => (
-                    <button
-                      className="fs-library-component"
-                      key={component.id}
-                      onClick={() => insertComponent(component.id)}
-                    >
-                      <Component size={18} />
-                      <span>
-                        <strong>{component.name}</strong>
-                        <small>{component.layers.length} elements</small>
-                      </span>
-                      <Plus size={13} />
-                    </button>
-                  ))}
-                </div>
-                {project.components.length === 0 && (
-                  <p className="fs-library-empty">
-                    Select elements on the board and save them here to reuse.
-                  </p>
-                )}
-              </>
+              <ComponentLibrary
+                project={project}
+                time={time}
+                selectedCount={selected.length}
+                add={add}
+                insertComponent={insertComponent}
+                saveComponent={saveComponent}
+              />
             ) : (
               <>
                 {folder === 'vectors' && (

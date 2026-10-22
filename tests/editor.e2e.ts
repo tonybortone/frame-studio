@@ -189,6 +189,7 @@ test('groups separate layers and inserts an independent reusable component', asy
 
   await page.getByRole('tab', { name: 'Files', exact: true }).click();
   await page.getByRole('button', { name: 'Components', exact: true }).click();
+  await page.getByRole('button', { name: 'Yours', exact: true }).click();
   await page.getByRole('button', { name: /Lower third.*2 elements/ }).click();
   await expect(page.getByRole('button', { name: /^Timeline clip / })).toHaveCount(8);
 
@@ -531,7 +532,7 @@ test('organizes media and creation tools with accurate counts without changing t
   for (const [name, count] of [
     ['Text', '4'],
     ['Shapes & SVG', '2'],
-    ['Components', '0'],
+    ['Components', '12'],
   ]) {
     const folder = create.getByRole('button', { name, exact: true });
     await expect(folder).toBeVisible();
@@ -1130,4 +1131,151 @@ test('fits a long timeline into view and seeks its final clip without editing co
     2,
   );
   expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
+test('adds an editable browser component at the playhead and scales its parts together', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  const playhead = Number(
+    await page.getByRole('slider', { name: 'Preview position', exact: true }).inputValue(),
+  );
+  await page.getByRole('button', { name: 'Components', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Search components', exact: true }).fill('browser');
+  await expect(page.getByRole('button', { name: /^Add component:/ })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Add component: Browser window', exact: true }).click();
+  const inserted = await saveProject(page);
+  expect(inserted.layers.slice(0, original.layers.length)).toEqual(original.layers);
+  const parts = inserted.layers.slice(original.layers.length);
+  expect(parts.length).toBeGreaterThan(4);
+  expect(new Set(parts.map((l) => l.groupId)).size).toBe(1);
+  expect(parts.every((l) => Math.abs(l.start - playhead) < 0.001)).toBe(true);
+
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await properties
+    .getByRole('textbox', { name: /^Content:/ })
+    .first()
+    .fill('my-project.example');
+  const edited = await saveProject(page);
+  expect(edited.layers.filter((l) => l.text === 'my-project.example')).toHaveLength(1);
+  expect(edited.layers.slice(0, original.layers.length)).toEqual(original.layers);
+  const width = properties.getByRole('spinbutton', { name: 'W', exact: true });
+  const originalWidth = Number(await width.inputValue());
+  const requestedWidth = Math.round(originalWidth * 0.8);
+  const factor = requestedWidth / originalWidth;
+  await width.fill(String(requestedWidth));
+  const resized = await saveProject(page);
+  const beforeResize = edited.layers.slice(original.layers.length);
+  const afterResize = resized.layers.slice(original.layers.length);
+  afterResize.forEach((layer, index) => {
+    expect(layer.width).toBeCloseTo(beforeResize[index].width * factor, 1);
+    expect(layer.height).toBeCloseTo(beforeResize[index].height * factor, 1);
+    if (layer.fontSize !== undefined)
+      expect(layer.fontSize).toBeCloseTo(beforeResize[index].fontSize! * factor, 1);
+    expect(layer.start).toBe(beforeResize[index].start);
+    expect(layer.duration).toBe(beforeResize[index].duration);
+  });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(edited);
+});
+
+test('applies a group-safe motion recipe in one undo step without changing component geometry', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Components', exact: true }).click();
+  await page.getByRole('button', { name: 'Add component: Notification', exact: true }).click();
+  const before = await saveProject(page);
+  const parts = before.layers.slice(6);
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await properties.getByRole('button', { name: 'Motion', exact: true }).click();
+  await expect(properties.getByRole('button', { name: 'Pop', exact: true })).toBeDisabled();
+  await properties.getByRole('button', { name: 'Float', exact: true }).click();
+  const after = await saveProject(page);
+  after.layers.slice(6).forEach((layer, index) => {
+    expect(layer.animation).toBe('rise');
+    for (const key of ['x', 'y', 'width', 'height', 'start', 'duration', 'groupId'] as const)
+      expect(layer[key]).toBe(parts[index][key]);
+  });
+  expect(after.layers.slice(0, 6)).toEqual(before.layers.slice(0, 6));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(before);
+});
+
+test('color looks persist, render in exports, and recover from zero strength', async ({ page }) => {
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Look study',
+    width: 128,
+    height: 128,
+    duration: 4,
+    layers: [
+      createLayer('shape', {
+        name: 'Color swatch',
+        x: 0,
+        y: 0,
+        width: 128,
+        height: 128,
+        radius: 0,
+        fill: '#ef233c',
+        duration: 4,
+      }),
+    ],
+    components: [],
+  };
+  await openProjectFixture(page, fixture);
+  await page.getByRole('button', { name: 'Timeline clip Color swatch', exact: true }).click();
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await properties.getByRole('button', { name: 'Color', exact: true }).click();
+  await properties.getByRole('button', { name: 'Noir look', exact: true }).click();
+  const noir = await saveProject(page, fixture.name);
+  expect(noir.layers[0].saturation).toBe(0);
+  const pixel = await exportedPixel(page, 64, 64);
+  expect(Math.max(...pixel.slice(0, 3)) - Math.min(...pixel.slice(0, 3))).toBeLessThanOrEqual(1);
+  const strength = properties.getByRole('slider', { name: 'Look strength', exact: true });
+  await strength.focus();
+  await strength.press('Home');
+  const neutral = await saveProject(page, fixture.name);
+  expect(neutral.layers[0]).toMatchObject({ brightness: 1, contrast: 1, saturation: 1 });
+  await strength.focus();
+  await strength.press('End');
+  expect((await saveProject(page, fixture.name)).layers[0]).toEqual(noir.layers[0]);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect((await saveProject(page, fixture.name)).layers[0]).toEqual(neutral.layers[0]);
+  await properties.getByRole('button', { name: 'Vivid look', exact: true }).click();
+  const vivid = await saveProject(page, fixture.name);
+  const slider = (await strength.boundingBox())!;
+  await page.mouse.move(slider.x + slider.width - 8, slider.y + slider.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(slider.x + slider.width * 0.7, slider.y + slider.height / 2, { steps: 8 });
+  await page.mouse.move(slider.x + slider.width * 0.3, slider.y + slider.height / 2, { steps: 8 });
+  await page.mouse.up();
+  expect((await saveProject(page, fixture.name)).layers[0].saturation).toBeLessThan(
+    vivid.layers[0].saturation,
+  );
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect((await saveProject(page, fixture.name)).layers[0]).toEqual(vivid.layers[0]);
+  await properties.getByRole('button', { name: 'Reset color', exact: true }).click();
+  expect((await saveProject(page, fixture.name)).layers[0]).toMatchObject({
+    brightness: 1,
+    contrast: 1,
+    saturation: 1,
+  });
+});
+
+test('component categories and search only filter the library and preserve the project', async ({
+  page,
+}) => {
+  const before = await saveProject(page);
+  await page.getByRole('button', { name: 'Components', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Add component:/ })).toHaveCount(12);
+  await page.getByRole('button', { name: 'Mockups', exact: true }).click();
+  const count = await page.getByRole('button', { name: /^Add component:/ }).count();
+  expect(count).toBeGreaterThan(0);
+  expect(count).toBeLessThan(12);
+  await page
+    .getByRole('searchbox', { name: 'Search components', exact: true })
+    .fill('no-such-component');
+  await expect(page.getByRole('button', { name: /^Add component:/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Yours', exact: true }).click();
+  expect(await saveProject(page)).toEqual(before);
 });
