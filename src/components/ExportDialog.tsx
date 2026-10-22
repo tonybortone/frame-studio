@@ -71,11 +71,9 @@ export default function ExportDialog({ project, time, media, close }: Props) {
             <X size={18} />
           </button>
         </div>
-        <p className="eyebrow">FROM YOUR CANVAS TO THE WORLD</p>
-        <h2 id="export-heading">Ready for its next frame.</h2>
-        <p className="modal-copy">
-          Take your story with you. Everything is rendered on your device.
-        </p>
+        <p className="eyebrow">SAVE A COPY</p>
+        <h2 id="export-heading">Export your creation</h2>
+        <p className="modal-copy">Choose a format. Your export is rendered on this device.</p>
         <div className="export-formats">
           {[
             ...formats.map((f) => ({ id: f.id, label: f.label, icon: Film })),
@@ -86,6 +84,7 @@ export default function ExportDialog({ project, time, media, close }: Props) {
               disabled={exporting}
               key={f.id}
               className={format === f.id ? 'active' : ''}
+              aria-pressed={format === f.id}
               onClick={() => {
                 setFormat(f.id);
                 setDone(false);

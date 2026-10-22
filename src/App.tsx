@@ -6,18 +6,10 @@ import {
   Check,
   Undo2,
   Redo2,
-  MousePointer2,
-  PenTool,
-  Type,
-  Square,
   Group,
   Component,
   Copy,
   Trash2,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
   Scissors,
   Minus,
   Plus,
@@ -29,13 +21,13 @@ import {
   Command,
   Film,
   CheckCheck,
-  Hand,
-  ImagePlus,
   SlidersHorizontal,
 } from './icons';
 import Sidebar from './components/Sidebar';
 import Inspector from './components/Inspector';
-import Timeline, { timecode } from './components/Timeline';
+import Timeline from './components/Timeline';
+import ToolGlyph from './components/ToolGlyph';
+import PlaybackDock from './components/PlaybackDock';
 import CanvasStage from './components/CanvasStage';
 import ExportDialog from './components/ExportDialog';
 import { useEditor } from './hooks/useEditor';
@@ -135,6 +127,10 @@ export default function App() {
     },
     [project.duration, project.fps],
   );
+  const togglePlayback = useCallback(() => {
+    setTime((current) => (current >= project.duration - 1 / project.fps ? 0 : current));
+    setPlaying((current) => !current);
+  }, [project.duration, project.fps]);
   const change = useCallback(
     (id: string, patch: Partial<Layer>, record = true) =>
       update(
@@ -363,8 +359,14 @@ export default function App() {
         event.preventDefault();
         setSelected(project.layers.map((l) => l.id));
       } else if (event.code === 'Space') {
+        if (
+          event.repeat ||
+          (event.target instanceof HTMLElement &&
+            event.target.closest('button, [role="button"], a'))
+        )
+          return;
         event.preventDefault();
-        setPlaying((p) => !p);
+        togglePlayback();
       } else if (event.key === 'Backspace' || event.key === 'Delete') {
         event.preventDefault();
         remove();
@@ -390,6 +392,7 @@ export default function App() {
     exportOpen,
     componentName,
     helpOpen,
+    togglePlayback,
   ]);
   const aspect =
     ASPECTS.find((a) => a.w === project.width && a.h === project.height)?.label ?? 'Custom';
@@ -572,6 +575,11 @@ export default function App() {
             </div>
           </div>
           <div className="creation-toolbar" role="toolbar" aria-label="Canvas tools">
+            <div className="toolbox-grip" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </div>
             <button
               title="Select (V)"
               aria-label="Select tool"
@@ -579,7 +587,7 @@ export default function App() {
               className={tool === 'select' ? 'active' : ''}
               onClick={() => setTool('select')}
             >
-              <MousePointer2 size={19} />
+              <ToolGlyph kind="select" />
             </button>
             <button
               title="Hand (H) · drag to pan"
@@ -588,7 +596,7 @@ export default function App() {
               className={tool === 'hand' ? 'active' : ''}
               onClick={() => setTool('hand')}
             >
-              <Hand size={18} />
+              <ToolGlyph kind="hand" />
             </button>
             <span className="creation-divider" />
             <button
@@ -609,7 +617,7 @@ export default function App() {
                 ])
               }
             >
-              <Square size={18} />
+              <ToolGlyph kind="shape" />
             </button>
             <button
               title="Add text"
@@ -630,7 +638,7 @@ export default function App() {
                 ])
               }
             >
-              <Type size={20} />
+              <ToolGlyph kind="text" />
             </button>
             <button
               title="Pencil (P)"
@@ -639,7 +647,7 @@ export default function App() {
               className={tool === 'draw' ? 'active' : ''}
               onClick={() => setTool('draw')}
             >
-              <PenTool size={18} />
+              <ToolGlyph kind="draw" />
             </button>
             <button
               title="Add media"
@@ -647,7 +655,7 @@ export default function App() {
               disabled={busy || !ready}
               onClick={() => fileInput.current?.click()}
             >
-              <ImagePlus size={19} />
+              <ToolGlyph kind="media" />
             </button>
             <span className="creation-divider" />
             <button
@@ -658,7 +666,7 @@ export default function App() {
                 setLibraryRequest({ tab: 'components', nonce: Date.now() });
               }}
             >
-              <Component size={19} />
+              <ToolGlyph kind="component" />
             </button>
             {selected.length > 0 && (
               <button
@@ -693,6 +701,14 @@ export default function App() {
             checkpoint={checkpoint}
             add={add}
             error={notify}
+          />
+          <PlaybackDock
+            time={time}
+            duration={project.duration}
+            fps={project.fps}
+            playing={playing}
+            onSeek={seek}
+            onPlayPause={togglePlayback}
           />
           <div className="canvas-bottom">
             <div className="canvas-zoom">
@@ -774,32 +790,12 @@ export default function App() {
               <Trash2 size={14} />
             </button>
           </div>
-          <div className="playback-controls">
-            <button title="Go to start" aria-label="Go to start" onClick={() => seek(0)}>
-              <SkipBack size={14} />
-            </button>
-            <button
-              className="play-button"
-              aria-label={playing ? 'Pause' : 'Play'}
-              onClick={() => {
-                if (time >= project.duration - 1 / project.fps) setTime(0);
-                setPlaying((p) => !p);
-              }}
-            >
-              {playing ? (
-                <Pause size={15} fill="currentColor" />
-              ) : (
-                <Play size={15} fill="currentColor" />
-              )}
-            </button>
-            <button title="Go to end" aria-label="Go to end" onClick={() => seek(project.duration)}>
-              <SkipForward size={14} />
-            </button>
-            <span className="current-time">{timecode(time, project.fps)}</span>
-            <span className="total-time">/ {timecode(project.duration, project.fps)}</span>
+          <div className="timeline-caption">
+            <span className="timeline-live-dot" />
+            Timeline <span>{project.layers.length} layers</span>
           </div>
           <div className="timeline-zoom">
-            <span>Timeline</span>
+            <span>Zoom</span>
             <Minus size={12} />
             <input
               aria-label="Timeline zoom"
@@ -857,8 +853,11 @@ export default function App() {
                 <X size={18} />
               </button>
             </div>
-            <h2 id="component-heading">Keep a good thing.</h2>
-            <p>Save these {selected.length} elements to your reusable library.</p>
+            <h2 id="component-heading">Save component</h2>
+            <p>
+              Keep {selected.length} {selected.length === 1 ? 'element' : 'elements'} in your
+              Personalised folder.
+            </p>
             <label className="field-label">
               Component name
               <input
@@ -892,7 +891,7 @@ export default function App() {
                 <X size={18} />
               </button>
             </div>
-            <h2 id="help-heading">A little faster.</h2>
+            <h2 id="help-heading">Keyboard shortcuts</h2>
             {[
               ['Play / pause (outside board)', 'Space'],
               ['Pan board', 'Space + drag / H'],

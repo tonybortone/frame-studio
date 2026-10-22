@@ -3,25 +3,25 @@
   flex: 1;
   min-height: 0;
   position: relative;
-  background: #141416;
-  scrollbar-color: #3d3d43 #141416;
+  background: #111315;
+  scrollbar-color: #34383c #111315;
   scrollbar-width: thin;
 }
 
 .timeline-simple .timeline-content {
   min-height: 100%;
   position: relative;
-  padding-bottom: 12px;
+  padding-bottom: 10px;
 }
 
 .timeline-simple .timeline-ruler {
-  height: 27px;
+  height: 26px;
   display: flex;
   position: sticky;
   top: 0;
   z-index: 5;
-  background: #19191c;
-  border-bottom: 1px solid #303034;
+  background: #17191c;
+  border-bottom: 1px solid #ffffff0b;
 }
 
 .timeline-simple .track-heading {
@@ -34,18 +34,18 @@
   z-index: 6;
   padding: 0 12px;
   gap: 7px;
-  background: #19191c;
-  border-right: 1px solid #303034;
-  color: #a7a7ae;
+  background: #17191c;
+  border-right: 1px solid #ffffff0b;
+  color: #9c9fa5;
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0;
 }
 
 .timeline-simple .track-heading > span {
-  padding: 1px 4px;
-  background: #2b2b30;
-  color: #a7a7ae;
+  padding: 0 4px;
+  border: 1px solid #ffffff12;
+  color: #8a8f97;
   border-radius: 4px;
   font-size: 9px;
   font-variant-numeric: tabular-nums;
@@ -55,19 +55,24 @@
   position: absolute;
   bottom: 0;
   top: 0;
-  border-left: 1px solid #39393f;
-  padding: 4px 0 0 7px;
+  padding: 3px 0 0 7px;
 }
 
 .timeline-simple .ruler-tick span {
-  font-family: ui-monospace, monospace;
-  color: #8e8e98;
-  font-size: 9px;
+  font-family: ui-monospace, 'SFMono-Regular', monospace;
+  color: #a1a5ad;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .timeline-simple .ruler-tick::after {
-  display: none;
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 5px;
+  background: #ffffff26;
 }
 
 .timeline-simple .ruler-scale {
@@ -77,13 +82,13 @@
 }
 
 .timeline-simple .timeline-track {
-  height: 34px;
+  height: 32px;
   display: flex;
-  border-bottom: 1px solid #252528;
+  border-bottom: 1px solid #ffffff04;
 }
 
 .timeline-simple .timeline-track.active {
-  background: #ffffff04;
+  background: #ffffff03;
 }
 
 .timeline-simple .track-label {
@@ -97,8 +102,8 @@
   cursor: pointer;
   padding: 0 9px 0 12px;
   gap: 7px;
-  background: #19191c;
-  border-right: 1px solid #303034;
+  background: #141619;
+  border-right: 1px solid #ffffff0b;
   font-size: 10px;
 }
 
@@ -108,7 +113,7 @@
 }
 
 .timeline-simple .track-label > span {
-  color: #b1b1ba;
+  color: #a7acb3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -117,7 +122,7 @@
 
 .timeline-simple .track-label > button,
 .timeline-simple .track-label > svg:last-child:not(:first-child) {
-  color: #92929c;
+  color: #9399a1;
   flex-shrink: 0;
 }
 
@@ -138,21 +143,37 @@
 .timeline-simple .track-lane {
   position: relative;
   flex-shrink: 0;
-  background-image: linear-gradient(to right, #ffffff05 1px, transparent 1px);
+}
+
+.timeline-simple .track-lane::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--grid-width);
+  background-image: linear-gradient(to right, #ffffff06 1px, transparent 1px);
+  background-size: var(--grid-step) 100%;
+  pointer-events: none;
 }
 
 .timeline-simple .timeline-clip {
   position: absolute;
   top: 4px;
-  height: 26px;
-  border: 1px solid #ffffff18;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--clip-color) 38%, #17191c);
+  border-left: 2px solid var(--clip-color);
   border-radius: 5px;
-  background: var(--clip-color);
-  color: #25202c;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--clip-color) 36%, #17191c),
+    color-mix(in srgb, var(--clip-color) 27%, #121416)
+  );
+  color: color-mix(in srgb, var(--clip-color) 8%, #f0f2f5);
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 8px;
+  gap: 6px;
+  padding: 0 9px;
   font-size: 10px;
   font-weight: 500;
   overflow: hidden;
@@ -160,21 +181,37 @@
   cursor: grab;
   user-select: none;
   touch-action: none;
-  box-shadow: inset 0 1px 0 #ffffff15;
+  box-shadow: inset 0 1px 0 #ffffff0b;
 }
 
 .timeline-simple .timeline-clip > svg {
   flex-shrink: 0;
-  opacity: 0.75;
+  color: var(--clip-color);
+}
+
+.timeline-simple .timeline-clip:hover {
+  border-top-color: color-mix(in srgb, var(--clip-color) 64%, #292c30);
+  border-right-color: color-mix(in srgb, var(--clip-color) 64%, #292c30);
+  border-bottom-color: color-mix(in srgb, var(--clip-color) 64%, #292c30);
 }
 
 .timeline-simple .timeline-clip.selected,
 .timeline-simple .timeline-clip:focus-visible {
-  border-color: #f5f5fc;
-  outline: 1px solid #f5f5fc;
+  border-color: color-mix(in srgb, var(--clip-color) 65%, #f5f6f8);
+  border-left-color: var(--clip-color);
+  outline: 1px solid #e6e9ed80;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 1px #ffffff14;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--clip-color) 48%, #17191c),
+    color-mix(in srgb, var(--clip-color) 36%, #121416)
+  );
+}
+
+.timeline-simple .timeline-clip:focus-visible {
+  outline: 2px solid #e6e9ed;
   outline-offset: 1px;
-  box-shadow: none;
-  background: var(--clip-color);
 }
 
 .timeline-simple .timeline-clip:active {
@@ -197,19 +234,18 @@
 
 .timeline-simple .clip-thumbnail {
   width: 30px;
-  height: 24px;
-  margin-left: -7px;
+  height: 22px;
+  margin-left: -8px;
   object-fit: cover;
   flex-shrink: 0;
-  opacity: 0.95;
   pointer-events: none;
 }
 
 .timeline-simple .trim-handle {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 6px;
+  top: 1px;
+  bottom: 1px;
+  width: 7px;
   z-index: 2;
   cursor: ew-resize;
   opacity: 0;
@@ -228,11 +264,11 @@
 .timeline-simple .trim-handle::after {
   content: '';
   position: absolute;
-  top: 6px;
-  bottom: 6px;
+  top: 4px;
+  bottom: 4px;
   left: 2px;
   width: 2px;
-  background: #25202c80;
+  background: #f4f5f7a6;
   border-radius: 2px;
 }
 
@@ -243,7 +279,7 @@
 }
 
 .timeline-simple .trim-handle:hover {
-  background: #ffffff30;
+  background: #ffffff18;
 }
 
 .timeline-simple .timeline-clip.is-locked .trim-handle {
@@ -251,9 +287,9 @@
 }
 
 .timeline-simple .group-mark {
-  border: 1px solid #25202c44;
+  border: 1px solid #ffffff26;
   border-radius: 3px;
-  color: #25202c;
+  color: #f3f4f6;
   font-size: 7px;
   line-height: 11px;
   padding: 0 3px;
@@ -262,36 +298,49 @@
 }
 
 .timeline-simple .animation-mark {
-  color: #25202c;
+  color: var(--clip-color);
   font-size: 14px;
-  opacity: 0.75;
   flex-shrink: 0;
   margin-left: 3px;
 }
 
 .timeline-simple .playhead {
   position: absolute;
-  top: 15px;
+  top: 18px;
   bottom: 0;
   width: 1px;
   pointer-events: none;
   z-index: 7;
-  background: #e8e8ef;
-  box-shadow: 0 0 2px #0008;
+  background: #e8ecf0dc;
+  box-shadow: 0 0 2px #0009;
 }
 
 .timeline-simple .playhead-cap {
   position: absolute;
-  width: 8px;
+  width: 9px;
   height: 12px;
-  left: -3.5px;
-  top: 0;
-  background: #e8e8ef;
-  clip-path: polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%);
+  left: -4px;
+  top: -12px;
+  border: 1px solid #dce0e5;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #f0f2f5, #afb6c0);
+  box-shadow: 0 1px 3px #0008;
+}
+
+.timeline-simple .playhead-cap::after {
+  content: '';
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  left: 2px;
+  bottom: -2px;
+  border-radius: 1px;
+  transform: rotate(45deg);
+  background: #e99b87;
 }
 
 .timeline-simple .timeline-empty {
-  color: #8e8e98;
+  color: #949aa3;
   font-size: 11px;
   padding: 24px 20px 24px 164px;
 }

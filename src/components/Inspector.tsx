@@ -16,6 +16,7 @@ import {
 import type { Layer, Project, Animation } from '../core/types';
 import { LAYER_COLORS, LAYER_LABELS } from '../core/types';
 import { kindIcons } from './Timeline';
+import './Inspector.css';
 interface Props {
   close: () => void;
   project: Project;
@@ -84,14 +85,19 @@ export default function Inspector({
   };
   const Icon = layer ? kindIcons[layer.kind] : SlidersHorizontal;
   return (
-    <aside className="inspector">
+    <aside className="inspector" aria-label="Properties">
       <div className="inspector-tabs">
         {[
           { id: 'design', label: 'Design', icon: SlidersHorizontal },
           { id: 'motion', label: 'Motion', icon: Sparkles },
           { id: 'color', label: 'Color', icon: Sliders },
         ].map((t) => (
-          <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            className={tab === t.id ? 'active' : ''}
+            aria-pressed={tab === t.id}
+            onClick={() => setTab(t.id)}
+          >
             <t.icon size={13} />
             {t.label}
           </button>
@@ -344,15 +350,14 @@ export default function Inspector({
                 <h4>
                   Entrance animation <Sparkles size={13} />
                 </h4>
-                <p className="helper-copy">
-                  A little movement goes a long way. Plays at the start of this layer.
-                </p>
+                <p className="helper-copy">Plays at the start of this layer.</p>
                 <div className="motion-grid">
                   {(['none', 'fade', 'rise', 'pop', 'slide'] as Animation[]).map((a) => (
                     <button
                       key={a}
                       onClick={() => patch({ animation: a })}
                       className={layer.animation === a ? 'active' : ''}
+                      aria-pressed={layer.animation === a}
                     >
                       <div className={`motion-preview ${a}`}>
                         <div />
@@ -361,10 +366,7 @@ export default function Inspector({
                     </button>
                   ))}
                 </div>
-                <p className="helper-copy">
-                  Each preset runs for 0.6 seconds. Custom keyframes and easing curves are on the
-                  roadmap.
-                </p>
+                <p className="helper-copy">Each preset runs for 0.6 seconds.</p>
               </section>
             )}
             {tab === 'color' && (

@@ -4,6 +4,17 @@ import type { Layer, Project } from '../core/types';
 import { MediaCache, renderFrame } from '../engine/renderer';
 import './CanvasStage.css';
 
+// Keep the floating creation tools and preview transport clear at Fit zoom.
+const BOARD_INSETS = { left: 88, right: 32, top: 50, bottom: 120 } as const;
+function boardGeometry(size: { width: number; height: number }) {
+  return {
+    centerX: (size.width + BOARD_INSETS.left - BOARD_INSETS.right) / 2,
+    centerY: (size.height + BOARD_INSETS.top - BOARD_INSETS.bottom) / 2,
+    width: Math.max(1, size.width - BOARD_INSETS.left - BOARD_INSETS.right),
+    height: Math.max(1, size.height - BOARD_INSETS.top - BOARD_INSETS.bottom),
+  };
+}
+
 const RESIZE_CORNERS = [
   { name: 'nw', label: 'top left', horizontal: -1, vertical: -1 },
   { name: 'ne', label: 'top right', horizontal: 1, vertical: -1 },
@@ -125,8 +136,9 @@ export default function CanvasStage({
         const nextZoom = Math.max(0.15, Math.min(3, current.zoom * Math.exp(-deltaY * 0.008)));
         const ratio = nextZoom / current.zoom;
         const bounds = node.getBoundingClientRect();
-        const cursorX = event.clientX - bounds.left - (current.size.width / 2 + 28);
-        const cursorY = event.clientY - bounds.top - current.size.height / 2;
+        const board = boardGeometry(current.size);
+        const cursorX = event.clientX - bounds.left - board.centerX;
+        const cursorY = event.clientY - bounds.top - board.centerY;
         const nextPan = {
           x: cursorX - (cursorX - current.pan.x) * ratio,
           y: cursorY - (cursorY - current.pan.y) * ratio,
@@ -193,11 +205,10 @@ export default function CanvasStage({
     return () => observer.disconnect();
   }, []);
   const safeZoom = Number.isFinite(zoom) ? Math.max(0.15, Math.min(3, zoom)) : 1;
+  const board = boardGeometry(size);
   const scale =
-    Math.max(
-      0.01,
-      Math.min((size.width - 120) / project.width, (size.height - 80) / project.height),
-    ) * safeZoom;
+    Math.max(0.001, Math.min(board.width / project.width, board.height / project.height)) *
+    safeZoom;
   useEffect(() => {
     let stopped = false;
     void media
@@ -411,8 +422,8 @@ export default function CanvasStage({
         style={{
           width: project.width * scale,
           height: project.height * scale,
-          left: size.width / 2 + 28 + pan.x,
-          top: size.height / 2 + pan.y,
+          left: board.centerX + pan.x,
+          top: board.centerY + pan.y,
         }}
         onPointerDown={onPointerDown}
       >

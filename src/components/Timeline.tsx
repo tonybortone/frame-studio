@@ -177,7 +177,16 @@ export default function Timeline({
                 </button>
                 {layer.locked && <LockKeyhole size={10} />}
               </div>
-              <div className="track-lane" style={{ width, backgroundSize: `${pixels}px 100%` }}>
+              <div
+                className="track-lane"
+                style={
+                  {
+                    width,
+                    '--grid-step': `${pixels}px`,
+                    '--grid-width': `${project.duration * pixels}px`,
+                  } as CSSProperties
+                }
+              >
                 <div
                   role="button"
                   tabIndex={0}
