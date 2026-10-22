@@ -247,7 +247,7 @@ test('imports SVG pieces and edits one without changing the other', async ({ pag
   await page.getByRole('tab', { name: 'Layers', exact: true }).click();
   await page.getByRole('button', { name: 'Badge dot', exact: true }).click();
   await page.getByRole('spinbutton', { name: 'X', exact: true }).fill('500');
-  await page.getByLabel('Element color').fill('#112233');
+  await page.getByLabel('Element color', { exact: true }).fill('#112233');
 
   const saved = await saveProject(page);
   const pieces = saved.layers.filter((layer) => layer.kind === 'svg');
@@ -1509,7 +1509,8 @@ test('image color replacement preserves source and unrelated pixels with exact h
 test('locked image tools cannot modify the image', async ({ page }) => {
   const fixture = await imageToolsFixture(page, true);
   await openProjectFixture(page, fixture);
-  await page.getByRole('button', { name: 'Timeline clip Two colors', exact: true }).click();
+  await page.getByRole('tab', { name: 'Layers', exact: true }).click();
+  await page.getByRole('button', { name: 'Two colors', exact: true }).click();
   const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
   await expect(
     properties.getByRole('button', { name: 'Ellipse mask', exact: true }),

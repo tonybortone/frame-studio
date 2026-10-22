@@ -2,6 +2,8 @@
 
 These tools edit the selected layer and participate in Undo/Redo. They run locally and keep the original imported image intact.
 
+![Background removal and color replacement in Frame Studio](images/image-tools.png)
+
 ## Mask and flip
 
 Select one unlocked visual element, then open **Design**. Choose None, Rectangle, Rounded, Ellipse, or Diamond. Inset brings the mask inward equally from each edge; Roundness adjusts the Rounded mask. These are local bounds, so the mask follows the element when it moves, rotates, or animates. Horizontal and vertical flips use its center and leave its placement and clip timing unchanged.

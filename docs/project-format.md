@@ -39,9 +39,7 @@ The selected preset name and strength are inferred from the stored values. Match
 
 Motion recipe names likewise do not add fields. None, Gentle fade, Float, Slide, and Pop set `animation`, `animationDuration`, `animationDelay`, `animationEasing`, and `exitDuration`. Float is the UI recipe for the existing `rise` animation. A recipe replaces these motion settings without changing layer start, duration, media offset, source, geometry, color, or audio. Pop is restricted to a single selected visual element in the inspector; the flat model has no shared group-scale pivot.
 
-## Assets and portability
-
-### Optional visual-tool fields (alpha 7)
+## Optional visual-tool fields (alpha 7)
 
 | Field               | Values / meaning                                                             |
 | ------------------- | ---------------------------------------------------------------------------- |
@@ -57,6 +55,8 @@ Effect colors are six-digit hex values. Tolerance, softness, and strength are fi
 An absent `mask` preserves older image/video corner-radius clipping. Explicit `none` removes the mask; an explicit shape replaces that legacy clip. Other visual kinds support the same masks and flips. Audio does not accept visual-effect fields. New fields survive duplication, saved components, and splitting through the ordinary layer model.
 
 Schema version remains 1 because older projects need no migration. Alpha 7 can read older files; older app versions with strict unknown-field validation cannot open projects using these new fields.
+
+## Assets and portability
 
 Imported media is embedded as data URLs, and the initial import limit is **50 MB per file**. Project loading has a **100 MB total file limit**. This makes a saved project self-contained for the supported media, at the cost of larger JSON files and higher memory use. Base64 encoding adds approximately one-third to binary media size before other project overhead. Duplicate layers and saved components may repeat media data in serialized JSON, so the project limit can be reached with fewer than 100 MB of original media.
 
