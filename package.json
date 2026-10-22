@@ -1,0 +1,77 @@
+{
+  "name": "frame-studio",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "description": "A local-first canvas and video editor for Mac.",
+  "author": "Antonio Bortone",
+  "license": "MIT",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "desktop": "npm run build && electron .",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run --pool=threads --maxWorkers=2",
+    "test:e2e": "playwright test",
+    "package:mac": "npm run build && electron-builder --mac --publish never",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "vite": "8.3.5",
+    "vitest": "^4.0.0"
+  },
+  "build": {
+    "appId": "studio.designcheer.frame",
+    "productName": "Frame Studio",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "LICENSE",
+      "!node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "hardenedRuntime": true,
+      "icon": "build/icon.icns"
+    },
+    "publish": null
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tonybortone/frame-studio.git"
+  }
+}

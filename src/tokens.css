@@ -1,0 +1,18 @@
+:root {
+  color-scheme: dark;
+  --bg: #171b19;
+  --panel: #202622;
+  --input: #28312b;
+  --text: #d4ded7;
+  --muted: #87968c;
+  --border: #343e36;
+  --hover: #3d4d422e;
+  --accent: #b8d4c2;
+  --video: #74a5ff;
+  --audio: #66c9a3;
+  --image: #e7ba79;
+  --text-layer: #c7a1f7;
+  --shape: #f498ad;
+  --vector: #7ad1d2;
+  --drawing: #f1cb77;
+}
