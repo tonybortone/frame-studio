@@ -830,6 +830,9 @@ export default function App() {
           select={selectLayers}
           change={change}
           checkpoint={checkpoint}
+          onExpand={() =>
+            setTimelineHeight((height) => Math.min(Math.max(height, 380), maxTimelineHeight()))
+          }
         />
       </section>
       {toast && (

@@ -13,7 +13,7 @@ Initial scope: a React/TypeScript editor with an Electron shell; semantic layer 
 ## 1 — Reliable everyday editing
 
 - Improve selection, snapping, alignment, keyboard commands, and discoverability.
-- Add precise numeric clip editing, real audio waveforms and more precise timeline navigation.
+- Extend the existing numeric clip controls with real audio waveforms and more precise timeline navigation.
 - Strengthen undo/redo coverage, validation, error recovery, and project compatibility.
 - Introduce managed assets and missing-media relinking; strengthen existing autosave and recovery.
 - Establish performance budgets with realistic multi-clip projects and long media.
@@ -35,7 +35,7 @@ Initial scope: a React/TypeScript editor with an Electron shell; semantic layer 
 ## 3 — Motion authoring
 
 - Add keyframes for position, scale, rotation, opacity, and selected effect properties.
-- Provide easing controls, a curve editor, spring-like presets, and animation handles.
+- Extend preset easing and timing handles with property-keyframe curves, spring-like presets, and editable keyframe handles.
 - Add masks, track mattes, transitions, camera-style framing, and motion paths.
 - Let users save and reuse motion treatments independently of content.
 - Explore simple frame-by-frame/pencil animation with onion-skin previews.

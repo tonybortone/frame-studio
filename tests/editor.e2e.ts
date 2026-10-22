@@ -725,3 +725,80 @@ test('rejects a frame that would invalidate fitted elements and allows an unscal
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   expect(await saveProject(page)).toEqual(original);
 });
+
+test('keeps locked audio mute unchanged until the layer is unlocked', async ({ page }) => {
+  const chosen = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await (await chosen).setFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: toneWav() });
+  await expect(page.getByRole('status')).toContainText('1 file imported');
+  await page.getByRole('button', { name: 'Edit audio for tone', exact: true }).click();
+  const sound = page.getByRole('group', { name: 'Audio editor for tone', exact: true });
+  const mute = sound.getByRole('button', { name: 'Mute audio for tone', exact: true });
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  const lock = inspector.getByRole('button', { name: 'Lock selection', exact: true });
+  await lock.click();
+  await expect(mute).toBeDisabled();
+  const locked = await saveProject(page);
+  const clip = locked.layers.find((layer) => layer.name === 'tone')!;
+  expect(clip).toMatchObject({ locked: true, muted: false });
+  // Disabled controls must not mutate saved state, including a dispatched click.
+  await mute.dispatchEvent('click');
+  expect(await saveProject(page)).toEqual(locked);
+  await lock.click();
+  await expect(mute).toBeEnabled();
+  await mute.click();
+  expect((await saveProject(page)).layers.find((layer) => layer.id === clip.id)).toMatchObject({
+    locked: false,
+    muted: true,
+  });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect((await saveProject(page)).layers.find((layer) => layer.id === clip.id)).toMatchObject({
+    locked: false,
+    muted: false,
+  });
+});
+
+test('moves a clamped entrance without stretching it and undoes the whole drag once', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Edit motion for Caption', exact: true }).click();
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await inspector.getByRole('spinbutton', { name: 'Length (s)', exact: true }).fill('2');
+  const motion = page.getByRole('group', { name: 'Motion editor for Caption', exact: true });
+  const duration = motion.getByRole('spinbutton', {
+    name: 'Animation duration for Caption',
+    exact: true,
+  });
+  const delay = motion.getByRole('spinbutton', {
+    name: 'Animation delay for Caption',
+    exact: true,
+  });
+  await duration.fill('1');
+  await delay.fill('1.5');
+  await expect(duration).toHaveValue('0.5');
+  const before = await saveProject(page);
+  const original = before.layers.find((layer) => layer.name === 'Caption')!;
+  expect(original.animationDuration).toBe(1);
+  const entrance = motion.getByRole('button', { name: 'Move entrance for Caption', exact: true });
+  await entrance.hover();
+  const bounds = (await entrance.boundingBox())!;
+  const pixels = Number(
+    await page.getByRole('slider', { name: 'Timeline zoom', exact: true }).inputValue(),
+  );
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - pixels * 0.5, y, { steps: 4 });
+  await page.mouse.up();
+  await expect(delay).toHaveValue('1');
+  await expect(duration).toHaveValue('0.5');
+  expect((await entrance.boundingBox())!.width).toBeCloseTo(bounds.width, 1);
+  const moved = await saveProject(page);
+  expect(moved.layers.find((layer) => layer.id === original.id)).toMatchObject({
+    animationDelay: 1,
+    animationDuration: 0.5,
+  });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(before);
+});

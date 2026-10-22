@@ -15,6 +15,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -49,6 +50,7 @@ interface Props {
   select: (ids: string[]) => void;
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   checkpoint: () => void;
+  onExpand?: () => void;
 }
 export default function Timeline({
   project,
@@ -59,12 +61,14 @@ export default function Timeline({
   select,
   change,
   checkpoint,
+  onExpand,
 }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const rulerScroll = useRef<HTMLDivElement>(null);
   const visualScroll = useRef<HTMLDivElement>(null);
   const audioScroll = useRef<HTMLDivElement>(null);
   const horizontalScroll = useRef<HTMLDivElement>(null);
+  const expandedTrack = useRef<HTMLDivElement>(null);
   const horizontalPosition = useRef(0);
   const syncHorizontal = useCallback((left: number) => {
     const master = horizontalScroll.current;
@@ -109,6 +113,23 @@ export default function Timeline({
   useEffect(() => {
     if (expandedId && !project.layers.some((layer) => layer.id === expandedId)) setExpandedId(null);
   }, [expandedId, project.layers]);
+  useLayoutEffect(() => {
+    if (!expandedId) return;
+    const row = expandedTrack.current;
+    const layer = project.layers.find((item) => item.id === expandedId);
+    const viewport = layer?.kind === 'audio' ? audioScroll.current : visualScroll.current;
+    if (!row || !viewport) return;
+    const rowBounds = row.getBoundingClientRect();
+    const viewportBounds = viewport.getBoundingClientRect();
+    const headingHeight =
+      viewport.querySelector('.timeline-section-heading')?.getBoundingClientRect().height ?? 0;
+    const top = viewportBounds.top + headingHeight;
+    const bottom = viewportBounds.bottom;
+    // Scroll only this pane vertically, leaving its synchronized horizontal position intact.
+    if (rowBounds.top < top || rowBounds.height > bottom - top)
+      viewport.scrollTop += rowBounds.top - top;
+    else if (rowBounds.bottom > bottom) viewport.scrollTop += rowBounds.bottom - bottom;
+  }, [expandedId]);
   const pixels = zoom;
   const width = Math.max(640, viewportWidth - LABEL_WIDTH, project.duration * pixels + 100);
   const tickInterval = pixels >= 48 ? 1 : pixels >= 24 ? 2 : 5;
@@ -231,7 +252,11 @@ export default function Timeline({
     const expanded = expandedId === layer.id;
     const audio = layer.kind === 'audio';
     return (
-      <div className={`timeline-track-group ${expanded ? 'is-expanded' : ''}`} key={layer.id}>
+      <div
+        className={`timeline-track-group ${expanded ? 'is-expanded' : ''}`}
+        key={layer.id}
+        ref={expanded ? expandedTrack : undefined}
+      >
         <div className={`timeline-track ${active ? 'active' : ''} ${audio ? 'audio-track' : ''}`}>
           <div
             className="track-label"
@@ -248,6 +273,7 @@ export default function Timeline({
               onClick={(event) => {
                 event.stopPropagation();
                 select([layer.id]);
+                if (!expanded) onExpand?.();
                 setExpandedId(expanded ? null : layer.id);
               }}
             >
