@@ -1177,6 +1177,28 @@ test('adds an editable browser component at the playhead and scales its parts to
   });
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   expect(await saveProject(page)).toEqual(edited);
+  await expect(page.locator('.selection-box')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^Resize selection from / })).toHaveCount(4);
+  const handle = page.getByRole('button', {
+    name: 'Resize selection from bottom right',
+    exact: true,
+  });
+  const corner = (await handle.boundingBox())!;
+  await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(corner.x + 29, corner.y + 21, { steps: 6 });
+  await page.mouse.up();
+  const dragged = (await saveProject(page)).layers.slice(original.layers.length);
+  const gestureScale = dragged[0].width / beforeResize[0].width;
+  expect(gestureScale).toBeGreaterThan(1);
+  dragged.forEach((layer, index) => {
+    expect(layer.width).toBeCloseTo(beforeResize[index].width * gestureScale, 4);
+    expect(layer.height).toBeCloseTo(beforeResize[index].height * gestureScale, 4);
+    if (layer.fontSize !== undefined)
+      expect(layer.fontSize).toBeCloseTo(beforeResize[index].fontSize! * gestureScale, 4);
+  });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(edited);
 });
 
 test('applies a group-safe motion recipe in one undo step without changing component geometry', async ({

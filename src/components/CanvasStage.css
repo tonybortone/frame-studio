@@ -72,6 +72,10 @@
   transform-origin: center;
 }
 
+.board-surface .selection-box-group {
+  z-index: 1;
+}
+
 .board-surface .selection-box > .resize-handle {
   position: absolute;
   width: 10px;

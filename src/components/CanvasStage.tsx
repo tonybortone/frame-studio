@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { createLayer } from '../core/project';
+import { getSelectionBounds, transformSelection, type SelectionBounds } from '../core/selection';
 import type { Layer, Project } from '../core/types';
 import { MediaCache, renderFrame } from '../engine/renderer';
 import './CanvasStage.css';
@@ -80,10 +81,14 @@ export default function CanvasStage({
   const pointerInside = useRef(false);
   const spacePressed = useRef(false);
   const activePanCleanup = useRef<(() => void) | null>(null);
+  const activeGroupResizeCleanup = useRef<(() => void) | null>(null);
+  const keyboardGroupResize = useRef(false);
   const viewport = useRef({ zoom, pan, size, onZoomChange });
   viewport.current = { zoom, pan, size, onZoomChange };
   useEffect(() => {
     setPan({ x: 0, y: 0 });
+    activeGroupResizeCleanup.current?.();
+    keyboardGroupResize.current = false;
   }, [resetViewKey, project.id]);
   useEffect(() => {
     const isEditing = (target: EventTarget | null) =>
@@ -108,6 +113,8 @@ export default function CanvasStage({
     const blur = () => {
       releaseSpace();
       activePanCleanup.current?.();
+      activeGroupResizeCleanup.current?.();
+      keyboardGroupResize.current = false;
     };
     window.addEventListener('keydown', keyDown, true);
     window.addEventListener('keyup', keyUp);
@@ -117,6 +124,7 @@ export default function CanvasStage({
       window.removeEventListener('keyup', keyUp);
       window.removeEventListener('blur', blur);
       activePanCleanup.current?.();
+      activeGroupResizeCleanup.current?.();
     };
   }, []);
   useEffect(() => {
@@ -234,6 +242,82 @@ export default function CanvasStage({
       x: ((event.clientX - r.left) / r.width) * project.width,
       y: ((event.clientY - r.top) / r.height) * project.height,
     };
+  };
+  const visibleSelection = project.layers.filter(
+    (layer) =>
+      selected.includes(layer.id) &&
+      layer.kind !== 'audio' &&
+      !layer.hidden &&
+      time >= layer.start &&
+      time < layer.start + layer.duration,
+  );
+  const groupBounds = visibleSelection.length > 1 ? getSelectionBounds(visibleSelection) : null;
+  const groupLocked = project.layers.some(
+    (layer) => selected.includes(layer.id) && layer.kind !== 'audio' && layer.locked,
+  );
+  const resizedSelection = (
+    layers: Layer[],
+    bounds: SelectionBounds,
+    corner: ResizeCorner,
+    factor: number,
+  ) => {
+    try {
+      return transformSelection(
+        layers,
+        layers.map((layer) => layer.id),
+        {
+          scale: factor,
+          x: bounds.x + (corner.horizontal < 0 ? bounds.width * (1 - factor) : 0),
+          y: bounds.y + (corner.vertical < 0 ? bounds.height * (1 - factor) : 0),
+        },
+      );
+    } catch {
+      // A gesture outside valid project limits leaves the last valid size intact.
+      return layers;
+    }
+  };
+  const startGroupResize = (event: PointerEvent<HTMLButtonElement>, corner: ResizeCorner) => {
+    event.stopPropagation();
+    if (event.button !== 0 || groupLocked || tool !== 'select' || !groupBounds) return;
+    event.preventDefault();
+    activeGroupResizeCleanup.current?.();
+    const origin = point(event);
+    const originals = visibleSelection;
+    const bounds = groupBounds;
+    const target = event.currentTarget;
+    const pointerId = event.pointerId;
+    let resized = false;
+    target.setPointerCapture(pointerId);
+    const move = (next: globalThis.PointerEvent) => {
+      if (next.pointerId !== pointerId) return;
+      const position = point(next);
+      const widthFactor = 1 + (corner.horizontal * (position.x - origin.x)) / bounds.width;
+      const heightFactor = 1 + (corner.vertical * (position.y - origin.y)) / bounds.height;
+      const factor =
+        Math.abs(widthFactor - 1) > Math.abs(heightFactor - 1) ? widthFactor : heightFactor;
+      if (!Number.isFinite(factor) || factor <= 0) return;
+      const layers = resizedSelection(originals, bounds, corner, factor);
+      if (layers === originals && !(resized && factor === 1)) return;
+      if (!resized) {
+        if (Math.abs(factor - 1) * Math.max(bounds.width, bounds.height) < 0.5) return;
+        checkpoint();
+        resized = true;
+      }
+      layers.forEach((layer) => change(layer.id, layer, false));
+    };
+    const end = () => {
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', end);
+      target.removeEventListener('pointercancel', end);
+      target.removeEventListener('lostpointercapture', end);
+      activeGroupResizeCleanup.current = null;
+      if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+    };
+    activeGroupResizeCleanup.current = end;
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', end);
+    target.addEventListener('pointercancel', end);
+    target.addEventListener('lostpointercapture', end);
   };
   const startResize = (
     event: PointerEvent<HTMLButtonElement>,
@@ -439,16 +523,67 @@ export default function CanvasStage({
           width={project.width}
           height={project.height}
         />
-        {project.layers
-          .filter(
-            (l) =>
-              selected.includes(l.id) &&
-              l.kind !== 'audio' &&
-              !l.hidden &&
-              time >= l.start &&
-              time < l.start + l.duration,
-          )
-          .map((l) => (
+        {groupBounds && (
+          <div
+            className="selection-box selection-box-group"
+            style={{
+              left: groupBounds.x * scale,
+              top: groupBounds.y * scale,
+              width: groupBounds.width * scale,
+              height: groupBounds.height * scale,
+            }}
+          >
+            {!groupLocked &&
+              tool === 'select' &&
+              RESIZE_CORNERS.map((corner) => (
+                <button
+                  key={corner.name}
+                  type="button"
+                  className={`resize-handle resize-handle-${corner.name}`}
+                  aria-label={`Resize selection from ${corner.label}`}
+                  title={`Resize all selected pieces from ${corner.label}. Proportions stay together; arrow keys also resize.`}
+                  onPointerDown={(event) => startGroupResize(event, corner)}
+                  onKeyDown={(event) => {
+                    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key))
+                      return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const step = event.shiftKey ? 10 : 1;
+                    const horizontal =
+                      event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0;
+                    const vertical =
+                      event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0;
+                    const factor =
+                      1 +
+                      (horizontal
+                        ? (corner.horizontal * horizontal) / groupBounds.width
+                        : (corner.vertical * vertical) / groupBounds.height);
+                    const layers = resizedSelection(visibleSelection, groupBounds, corner, factor);
+                    if (layers === visibleSelection) return;
+                    if (!keyboardGroupResize.current) {
+                      checkpoint();
+                      keyboardGroupResize.current = true;
+                    }
+                    layers.forEach((layer) => change(layer.id, layer, false));
+                  }}
+                  onKeyUp={(event) => {
+                    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+                      event.stopPropagation();
+                      keyboardGroupResize.current = false;
+                    }
+                  }}
+                  onBlur={() => {
+                    keyboardGroupResize.current = false;
+                  }}
+                />
+              ))}
+            <span>
+              {Math.round(groupBounds.width)} × {Math.round(groupBounds.height)}
+            </span>
+          </div>
+        )}
+        {!groupBounds &&
+          visibleSelection.map((l) => (
             <div
               className="selection-box"
               key={l.id}

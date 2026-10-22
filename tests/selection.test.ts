@@ -78,6 +78,13 @@ describe('editable component transforms', () => {
     const layer = createLayer('text');
     for (const scale of [0, -1, Infinity, NaN])
       expect(() => transformSelection([layer], [layer.id], { scale })).toThrow('positive size');
+    for (const scale of [0.0001, 1000])
+      expect(() => transformSelection([layer], [layer.id], { scale })).toThrow(
+        'too small or too large',
+      );
+    expect(() => transformSelection([layer], [layer.id], { x: 100001 })).toThrow(
+      'too small or too large',
+    );
     expect(layer.fontSize).toBe(56);
   });
 });

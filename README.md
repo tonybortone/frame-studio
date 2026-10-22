@@ -6,7 +6,7 @@ Frame Studio is an early, open-source alpha. The aim is the directness of a desi
 
 The workspace separates media from creation tools and keeps visuals above a dedicated audio area. Expand a timeline layer to edit entrances, easing, exit fades, or sound levels and fades. Resize or fit the timeline, choose a canvas preset or custom dimensions, and start from seven editable templates. Playback and seeking sit together in the timeline toolbar.
 
-**Alpha 6 adds 12 editable components**: browser and terminal windows, a phone, notifications, chat, social cards, titles, and callouts. Open **Components → Ready-made**, search or choose a category, then click to insert at the playhead. Edit the group's text under **Design → Content**, or resize its pieces together with W/H. Your saved compositions stay under **Yours**.
+**Alpha 6 adds 12 editable components**: browser and terminal windows, a phone, notifications, chat, social cards, titles, and callouts. Open **Components → Ready-made**, search or choose a category, then click to insert at the playhead. Edit the group's text under **Design → Content**, or resize its pieces together with the corner handles or W/H. Your saved compositions stay under **Yours**.
 
 The inspector now offers **six color looks with adjustable strength** and **five motion choices**, with detailed controls tucked under Adjust and Fine-tune. Looks and motion apply to selected unlocked visual elements; Pop is available for a single element so it does not pull a component apart. The [Resolve workflow analysis](docs/resolve-workflow-analysis.md) documents the public references, exact implemented behavior, and future functions.
 

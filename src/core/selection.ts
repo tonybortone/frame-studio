@@ -56,7 +56,7 @@ export function transformSelection(
   if (scale === 1 && x === bounds.x && y === bounds.y) return layers;
   return layers.map((layer) => {
     if (!selected.has(layer.id) || layer.kind === 'audio') return layer;
-    return {
+    const next = {
       ...layer,
       x: x + (layer.x - bounds.x) * scale,
       y: y + (layer.y - bounds.y) * scale,
@@ -68,5 +68,18 @@ export function transformSelection(
         ? {}
         : { strokeWidth: layer.strokeWidth * scale }),
     };
+    const valid = (value: number, min: number, max: number) =>
+      Number.isFinite(value) && value >= min && value <= max;
+    if (
+      !valid(next.x, -100000, 100000) ||
+      !valid(next.y, -100000, 100000) ||
+      !valid(next.width, 0.01, 32768) ||
+      !valid(next.height, 0.01, 32768) ||
+      !valid(next.radius, 0, 16384) ||
+      (next.fontSize !== undefined && !valid(next.fontSize, 1, 2048)) ||
+      (next.strokeWidth !== undefined && !valid(next.strokeWidth, 0, 2048))
+    )
+      throw new Error('That size would make a component part too small or too large.');
+    return next;
   });
 }
