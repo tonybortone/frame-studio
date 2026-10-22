@@ -121,12 +121,16 @@ export default function App() {
   }, [playing, project.duration, project.fps, exportOpen]);
   useEffect(() => {
     if (exportOpen) return;
-    syncMedia(project, time, playing, media);
-    if (media.playbackError) {
-      notify(media.playbackError.message);
-      media.playbackError = null;
-      setPlaying(false);
-    }
+    const sync = () => {
+      syncMedia(project, time, playing, media);
+      if (media.playbackError) {
+        notify(media.playbackError.message);
+        media.playbackError = null;
+        setPlaying(false);
+      }
+    };
+    sync();
+    return media.subscribe(sync);
   }, [project, time, playing, media, exportOpen, notify]);
   const seek = useCallback(
     (value: number) => {

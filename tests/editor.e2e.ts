@@ -297,6 +297,57 @@ test('exports a PNG with the actual composition dimensions', async ({ page }) =>
   await expect(dialog.getByRole('status')).toHaveText('Your export is ready.');
 });
 
+test('loads a paused video at its source offset in both canvas and 3D previews', async ({
+  page,
+}) => {
+  // Synthetic VP8 fixture: the first second is red; the second is blue.
+  const video = await readFile(new URL('./fixtures/seek-colors.webm', import.meta.url));
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Paused source offset',
+    width: 64,
+    height: 64,
+    duration: 0.8,
+    layers: [
+      createLayer('video', {
+        name: 'Blue source frame',
+        x: 0,
+        y: 0,
+        width: 64,
+        height: 64,
+        radius: 0,
+        duration: 0.8,
+        mediaOffset: 1,
+        sourceDuration: 2,
+        src: `data:video/webm;base64,${video.toString('base64')}`,
+      }),
+    ],
+    components: [],
+  };
+  await openProjectFixture(page, fixture);
+  const position = page.getByRole('slider', { name: 'Preview position', exact: true });
+  await expect(position).toHaveValue('0');
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+
+  const canvas = page.getByLabel('Composition canvas');
+  await expect(canvas).toHaveAttribute('width', '64');
+  const isBlue = (element: HTMLElement | SVGElement) => {
+    const context = (element as HTMLCanvasElement).getContext('2d')!;
+    const [red, green, blue, alpha] = context.getImageData(32, 32, 1, 1).data;
+    return red < 60 && green < 60 && blue > 180 && alpha === 255;
+  };
+  // Readiness must seek and repaint by itself; do not play or move either playhead.
+  await expect.poll(() => canvas.evaluate(isBlue)).toBe(true);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  const plane = page
+    .getByRole('region', { name: '3D layer view', exact: true })
+    .locator('[data-depth-plane] canvas');
+  await expect(plane).toHaveCount(1);
+  await expect.poll(() => plane.evaluate(isBlue)).toBe(true);
+  await expect(position).toHaveValue('0');
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+});
+
 test('preserves unreadable autosaved work instead of replacing it with the starter scene', async ({
   page,
 }) => {
