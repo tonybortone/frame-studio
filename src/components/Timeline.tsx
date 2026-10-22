@@ -11,6 +11,10 @@ import {
   Spline,
   ChevronDown,
   Volume2,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
 } from '../icons';
 import {
   useCallback,
@@ -46,6 +50,8 @@ interface Props {
   selected: string[];
   time: number;
   zoom: number;
+  playing: boolean;
+  togglePlayback: () => void;
   seek: (time: number) => void;
   select: (ids: string[]) => void;
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
@@ -58,6 +64,8 @@ export default function Timeline({
   selected,
   time,
   zoom,
+  playing,
+  togglePlayback,
   seek,
   select,
   change,
@@ -136,7 +144,7 @@ export default function Timeline({
   }, [expandedId]);
   const pixels = Math.max(0.001, Math.min(140, Number.isFinite(zoom) ? zoom : 66));
   const width = Math.max(640, viewportWidth - LABEL_WIDTH, project.duration * pixels + 24);
-  const minimumTickInterval = Math.max(1, 70 / pixels);
+  const minimumTickInterval = Math.max(1, 56 / pixels);
   const tickMagnitude = 10 ** Math.floor(Math.log10(minimumTickInterval));
   const tickInterval =
     tickMagnitude *
@@ -428,9 +436,54 @@ export default function Timeline({
         onScroll={(event) => syncHorizontal(event.currentTarget.scrollLeft)}
       >
         <div className="timeline-ruler" style={{ width: contentWidth }}>
-          <div className="track-heading">
-            <span>Time</span>
-            <small>{project.fps} fps</small>
+          <div
+            className="track-heading timeline-transport"
+            role="group"
+            aria-label="Timeline playback"
+          >
+            <div className="timeline-transport-buttons">
+              <button
+                type="button"
+                aria-label="Go to start"
+                title="Go to start"
+                onClick={() => seek(0)}
+              >
+                <SkipBack size={12} />
+              </button>
+              <button
+                type="button"
+                className="timeline-play"
+                aria-label={playing ? 'Pause' : 'Play'}
+                title={playing ? 'Pause (Space)' : 'Play (Space)'}
+                aria-pressed={playing}
+                onClick={togglePlayback}
+              >
+                {playing ? (
+                  <Pause size={13} fill="currentColor" />
+                ) : (
+                  <Play size={13} fill="currentColor" />
+                )}
+              </button>
+              <button
+                type="button"
+                aria-label="Go to end"
+                title="Go to end"
+                onClick={() => seek(project.duration)}
+              >
+                <SkipForward size={12} />
+              </button>
+            </div>
+            <div
+              className="timeline-clock"
+              title={`Minutes : seconds : frames · ${project.fps} fps`}
+            >
+              <span role="timer" aria-live="off" aria-label="Current timeline time">
+                {timecode(time, project.fps)}
+              </span>
+              <small aria-label="Composition duration">
+                / {timecode(project.duration, project.fps)}
+              </small>
+            </div>
           </div>
           <div
             className="ruler-scale"
@@ -438,6 +491,7 @@ export default function Timeline({
             role="slider"
             tabIndex={0}
             aria-label="Timeline position"
+            title="Drag to seek · Arrow keys: one frame · Shift + arrow: one second"
             aria-valuemin={0}
             aria-valuemax={Math.max(0, project.duration - 1 / project.fps)}
             aria-valuenow={time}
@@ -477,16 +531,7 @@ export default function Timeline({
                 </span>
               </div>
             ))}
-            <div className="ruler-playhead" style={{ left: time * pixels }} />
-            <span
-              role="timer"
-              aria-live="off"
-              className="ruler-current-time"
-              aria-label="Current timeline time"
-              style={{ left: Math.max(36, Math.min(width - 36, time * pixels)) }}
-            >
-              {timecode(time, project.fps)}
-            </span>
+            <div className="ruler-playhead" aria-hidden="true" style={{ left: time * pixels }} />
           </div>
         </div>
       </div>

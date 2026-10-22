@@ -543,15 +543,15 @@ kbd {
 }
 .timeline-toolbar {
   position: relative;
-  height: 46px;
-  min-height: 46px;
+  height: 36px;
+  min-height: 36px;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 0 12px;
-  background: linear-gradient(180deg, #222535, #1b1e2b);
+  background: #202332;
   border-bottom: 1px solid #edf2f406;
 }
 .timeline-edit-tools {

@@ -326,8 +326,8 @@ test('loads a paused video at its source offset in both canvas and 3D previews',
     components: [],
   };
   await openProjectFixture(page, fixture);
-  const position = page.getByRole('slider', { name: 'Preview position', exact: true });
-  await expect(position).toHaveValue('0');
+  const position = page.getByRole('slider', { name: 'Timeline position', exact: true });
+  await expect(position).toHaveAttribute('aria-valuenow', '0');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 
   const canvas = page.getByLabel('Composition canvas');
@@ -345,7 +345,7 @@ test('loads a paused video at its source offset in both canvas and 3D previews',
     .locator('[data-depth-plane] canvas');
   await expect(plane).toHaveCount(1);
   await expect.poll(() => plane.evaluate(isBlue)).toBe(true);
-  await expect(position).toHaveValue('0');
+  await expect(position).toHaveAttribute('aria-valuenow', '0');
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 });
 
@@ -581,58 +581,61 @@ test('timeline transport seeks, advances during playback, and pauses without edi
   page,
 }) => {
   const original = await saveProject(page);
-  const dock = page
-    .locator('.timeline-toolbar')
-    .getByRole('group', { name: 'Preview playback', exact: true });
-  await expect(dock).toBeVisible();
-  const position = dock.getByRole('slider', { name: 'Preview position', exact: true });
-  const currentTime = async () => Number(await position.inputValue());
+  const transport = page
+    .locator('.timeline-ruler')
+    .getByRole('group', { name: 'Timeline playback', exact: true });
+  await expect(transport).toBeVisible();
+  const position = page.getByRole('slider', { name: 'Timeline position', exact: true });
+  const currentTime = async () => Number(await position.getAttribute('aria-valuenow'));
+  await expect(page.getByRole('slider', { name: 'Preview position', exact: true })).toHaveCount(0);
   const lastFrame = original.duration - 1 / original.fps;
 
-  // Native range keyboard controls exercise the visible timeline transport.
+  // The ruler is the single seek control; Shift steps seconds, arrows step frames.
   await position.focus();
   await position.press('Home');
-  for (let step = 0; step < 5; step++) await position.press('PageUp');
+  for (let step = 0; step < 6; step++) await position.press('Shift+ArrowRight');
   await expect.poll(currentTime).toBeCloseTo(original.duration / 2, 1);
+  await position.press('ArrowRight');
+  await expect.poll(currentTime).toBeCloseTo(original.duration / 2 + 1 / original.fps, 4);
   const seekedTime = await currentTime();
 
-  await dock.getByRole('button', { name: 'Play', exact: true }).click();
-  await expect(dock.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await transport.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(transport.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
   await expect.poll(currentTime).toBeGreaterThan(seekedTime + 0.15);
-  await dock.getByRole('button', { name: 'Pause', exact: true }).click();
-  await expect(dock.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  await transport.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(transport.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
   const pausedTime = await currentTime();
   // Observe several animation frames after pausing to catch a clock that keeps running.
   await page.waitForTimeout(300);
   expect(await currentTime()).toBeCloseTo(pausedTime, 4);
 
   // Space must activate focused transport buttons, rather than the global play shortcut.
-  await dock.getByRole('button', { name: 'Go to start', exact: true }).focus();
+  await transport.getByRole('button', { name: 'Go to start', exact: true }).focus();
   await page.keyboard.press('Space');
   await expect.poll(currentTime).toBe(0);
-  await expect(dock.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
-  await dock.getByRole('button', { name: 'Go to end', exact: true }).focus();
+  await expect(transport.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  await transport.getByRole('button', { name: 'Go to end', exact: true }).focus();
   await page.keyboard.press('Space');
   await expect.poll(currentTime).toBeCloseTo(lastFrame, 2);
-  await expect(dock.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  await expect(transport.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 
   // A global Space press at the last frame must restart playback like the Play button.
   await page.getByRole('region', { name: 'Canvas board', exact: true }).focus();
   await page.mouse.move(10, 10); // Space over the board is reserved for panning.
   await page.keyboard.press('Space');
-  await expect(dock.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await expect(transport.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
   await expect.poll(currentTime).toBeGreaterThan(0.05);
   expect(await currentTime()).toBeLessThan(original.duration / 2);
   await page.keyboard.press('Space');
-  await expect(dock.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  await expect(transport.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
   const keyboardPausedTime = await currentTime();
   await page.waitForTimeout(150);
   expect(await currentTime()).toBeCloseTo(keyboardPausedTime, 4);
 
-  await dock.getByRole('button', { name: 'Go to start', exact: true }).click();
-  const meter = await position.boundingBox();
-  expect(meter).not.toBeNull();
-  await position.click({ position: { x: meter!.width - 2, y: meter!.height / 2 } });
+  await transport.getByRole('button', { name: 'Go to start', exact: true }).click();
+  const rulerBounds = await position.boundingBox();
+  expect(rulerBounds).not.toBeNull();
+  await position.click({ position: { x: rulerBounds!.width - 2, y: rulerBounds!.height / 2 } });
   await expect.poll(currentTime).toBeCloseTo(lastFrame, 2);
   expect(await saveProject(page)).toEqual(original);
 });
@@ -1123,12 +1126,10 @@ test('fits a long timeline into view and seeks its final clip without editing co
     .poll(async () => Number(await ruler.getAttribute('aria-valuenow')))
     .toBeGreaterThanOrEqual(175);
   expect(Number(await ruler.getAttribute('aria-valuenow'))).toBeLessThan(180);
-  const transport = page
-    .locator('.timeline-toolbar')
-    .getByRole('slider', { name: 'Preview position', exact: true });
-  expect(Number(await transport.inputValue())).toBeCloseTo(
-    Number(await ruler.getAttribute('aria-valuenow')),
-    2,
+  const transport = page.getByRole('group', { name: 'Timeline playback', exact: true });
+  await expect(transport).toBeVisible();
+  await expect(transport.getByRole('timer')).toHaveText(
+    (await ruler.getAttribute('aria-valuetext'))!,
   );
   expect(await saveProject(page, fixture.name)).toEqual(original);
 });
@@ -1138,7 +1139,9 @@ test('adds an editable browser component at the playhead and scales its parts to
 }) => {
   const original = await saveProject(page);
   const playhead = Number(
-    await page.getByRole('slider', { name: 'Preview position', exact: true }).inputValue(),
+    await page
+      .getByRole('slider', { name: 'Timeline position', exact: true })
+      .getAttribute('aria-valuenow'),
   );
   await page.getByRole('button', { name: 'Components', exact: true }).click();
   await page.getByRole('searchbox', { name: 'Search components', exact: true }).fill('browser');

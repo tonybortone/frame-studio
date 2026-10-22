@@ -12,7 +12,7 @@
   color: #edf2f4;
 }
 .timeline-simple .timeline-ruler-viewport {
-  flex: 0 0 33px;
+  flex: 0 0 43px;
   overflow: hidden;
   border-bottom: 1px solid var(--timeline-line);
 }
@@ -64,7 +64,7 @@
   padding-bottom: 3px;
 }
 .timeline-simple .timeline-ruler {
-  height: 33px;
+  height: 43px;
   display: flex;
   background: #202332;
 }
@@ -83,31 +83,84 @@
   color: #8d99ae;
   font-size: 10px;
 }
-.timeline-simple .track-heading small {
-  font-size: 9px;
+.timeline-simple .timeline-transport {
+  gap: 8px;
+  padding: 0 8px;
+}
+.timeline-simple .timeline-transport-buttons {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.timeline-simple .timeline-transport-buttons button {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #aeb8c9;
+  cursor: pointer;
+}
+.timeline-simple .timeline-transport-buttons button:hover {
+  background: #8d99ae24;
+  color: #edf2f4;
+}
+.timeline-simple .timeline-transport-buttons .timeline-play {
+  width: 28px;
+  height: 28px;
+  background: #edf2f4;
+  color: #2b2d42;
+}
+.timeline-simple .timeline-transport-buttons .timeline-play:hover {
+  background: #dce3eb;
+  color: #2b2d42;
+}
+.timeline-simple .timeline-transport-buttons .timeline-play[aria-pressed='true'] {
+  background: #ef233c;
+  color: #fff;
+}
+.timeline-simple .timeline-clock {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  align-items: flex-end;
+  white-space: nowrap;
+  font-family: ui-monospace, 'SFMono-Regular', monospace;
   font-variant-numeric: tabular-nums;
-  opacity: 0.7;
+  line-height: 1;
+  color: #edf2f4;
+  font-size: 10px;
+}
+.timeline-simple .timeline-clock small {
+  color: #9ba7ba;
+  font-size: 9px;
 }
 .timeline-simple .ruler-scale {
   position: relative;
-  height: 33px;
+  height: 43px;
   flex-shrink: 0;
   cursor: crosshair;
   touch-action: none;
-  background: linear-gradient(180deg, #161825, #202332);
-  border: 1px solid #8d99ae20;
-  border-radius: 7px;
-  box-shadow: inset 0 1px 4px #0d0e1566;
+  background: #1c1f2c;
+}
+.timeline-simple .ruler-scale:focus-visible {
+  outline-offset: -2px;
 }
 .timeline-simple .ruler-minor-ticks {
   position: absolute;
   inset: 0 auto 0 0;
   pointer-events: none;
-  background-image:
-    repeating-linear-gradient(to right, #8d99ae32 0 1px, transparent 1px var(--minor-step)),
-    repeating-linear-gradient(to right, #8d99ae32 0 1px, transparent 1px var(--minor-step));
-  background-size: 100% 3px;
-  background-position: top, bottom;
+  background-image: repeating-linear-gradient(
+    to right,
+    #8d99ae42 0 1px,
+    transparent 1px var(--minor-step)
+  );
+  background-size: 100% 4px;
+  background-position: bottom;
   background-repeat: no-repeat;
 }
 .timeline-simple .ruler-tick {
@@ -116,56 +169,45 @@
   bottom: 0;
   pointer-events: none;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
 }
 .timeline-simple .ruler-tick span {
-  padding-left: 6px;
+  padding: 8px 0 0 6px;
   font-family: ui-monospace, 'SFMono-Regular', monospace;
-  color: #a7b1c1;
-  font-size: 9px;
+  color: #b3bdcc;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
-.timeline-simple .ruler-tick::before,
 .timeline-simple .ruler-tick::after {
   content: '';
   position: absolute;
   left: 0;
   width: 1px;
-  height: 7px;
+  height: 9px;
   background: #8d99ae80;
-}
-.timeline-simple .ruler-tick::before {
-  top: 0;
 }
 .timeline-simple .ruler-tick::after {
   bottom: 0;
-}
-.timeline-simple .ruler-current-time {
-  position: absolute;
-  top: 7px;
-  transform: translateX(-50%);
-  z-index: 2;
-  height: 18px;
-  padding: 2px 6px;
-  border: 1px solid #edf2f438;
-  border-radius: 4px;
-  background: #d90429;
-  box-shadow: 0 1px 4px #0d0e1580;
-  color: #edf2f4;
-  font:
-    10px/12px ui-monospace,
-    'SFMono-Regular',
-    monospace;
-  pointer-events: none;
-  white-space: nowrap;
 }
 .timeline-simple .ruler-playhead {
   position: absolute;
   bottom: 0;
   width: 1px;
-  height: 33px;
+  height: 18px;
+  z-index: 2;
   background: #ef233c;
   pointer-events: none;
+}
+.timeline-simple .ruler-playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 9px;
+  height: 11px;
+  border-radius: 2px 2px 4px 4px;
+  background: #edf2f4;
+  box-shadow: inset 0 -2px #ef233c;
 }
 .timeline-simple .timeline-section-heading {
   display: flex;

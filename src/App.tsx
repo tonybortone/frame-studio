@@ -28,7 +28,6 @@ import Sidebar from './components/Sidebar';
 import Inspector from './components/Inspector';
 import Timeline from './components/Timeline';
 import ToolGlyph from './components/ToolGlyph';
-import PlaybackDock from './components/PlaybackDock';
 import CanvasStage from './components/CanvasStage';
 import LayerDepthStage from './components/LayerDepthStage';
 import ExportDialog from './components/ExportDialog';
@@ -866,14 +865,6 @@ export default function App() {
               <Trash2 size={14} />
             </button>
           </div>
-          <PlaybackDock
-            time={time}
-            duration={project.duration}
-            fps={project.fps}
-            playing={playing}
-            onSeek={seek}
-            onPlayPause={togglePlayback}
-          />
           <div className="timeline-zoom">
             <span>Timeline zoom</span>
             <Minus size={12} />
@@ -905,6 +896,8 @@ export default function App() {
           selected={selected}
           time={time}
           zoom={timelineZoom}
+          playing={playing}
+          togglePlayback={togglePlayback}
           resetScrollKey={timelineResetKey}
           seek={seek}
           select={selectLayers}
