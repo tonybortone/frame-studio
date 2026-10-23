@@ -1373,6 +1373,8 @@ test('adds an editable browser component at the playhead and scales its parts to
   });
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   expect(await saveProject(page)).toEqual(edited);
+  // Reveal the selection corner beneath the floating inspector before dragging it.
+  await properties.getByRole('button', { name: 'Close properties', exact: true }).click();
   await expect(page.locator('.selection-box')).toHaveCount(1);
   await expect(page.getByRole('button', { name: /^Resize selection from / })).toHaveCount(4);
   const handle = page.getByRole('button', {
@@ -2077,7 +2079,9 @@ test('right-side editing menus open dedicated categories and retain selection an
   await page.keyboard.press('Escape');
   await expect(properties).toHaveCount(0);
   await expect(motion).toBeFocused();
-  await expect(page.getByRole('button', { name: 'Timeline clip Caption', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByRole('button', { name: 'Timeline clip Caption', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await motion.click();
   await properties.getByRole('button', { name: 'Close properties', exact: true }).click();
   await expect(properties).toHaveCount(0);

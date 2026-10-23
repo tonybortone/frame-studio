@@ -55,6 +55,8 @@ The board supports direct selection and resizing, hand-tool or Space-drag pannin
 
 Design holds layout and content controls, Motion holds animation presets and timing, and Color holds colors, looks, and image adjustments. Without a selection, Design shows project settings, Color edits the canvas background, and Motion explains how to select an element. Audio selections use Sound in place of Motion and disable Color. The rail stays out of the 3D workspace and hides with the other panels in focus mode.
 
+![Dedicated Motion menu beside the right-side editing rail](images/inspector-menus.png)
+
 The frame-size picker shows landscape, portrait, square, and social formats as four visual cards with their ratios and exact pixel dimensions. The trigger keeps the current ratio and dimensions visible. Custom width and height have a swap control and can be applied with Enter. Fit contents to frame scales existing objects uniformly; turning it off changes frame dimensions while preserving object coordinates and sizes. Resizing can be undone; choosing the existing size preserves undo and redo history. The menu fits the window and restores focus when closed with Escape.
 
 ![Visual format cards and custom canvas dimensions](images/canvas-size.png)
