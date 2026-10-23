@@ -2,6 +2,7 @@ import {
   Eye,
   EyeOff,
   LockKeyhole,
+  UnlockKeyhole,
   Video,
   Image,
   Type,
@@ -11,10 +12,6 @@ import {
   Spline,
   ChevronDown,
   Volume2,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
 } from '../icons';
 import {
   useCallback,
@@ -45,13 +42,18 @@ export function timecode(time: number, fps = 30) {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}:${String(frames % fps).padStart(2, '0')}`;
 }
 
+function rulerTimeLabel(time: number) {
+  const seconds = Math.floor(time);
+  return seconds < 60
+    ? `${seconds}s`
+    : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 interface Props {
   project: Project;
   selected: string[];
   time: number;
   zoom: number;
-  playing: boolean;
-  togglePlayback: () => void;
   seek: (time: number) => void;
   select: (ids: string[]) => void;
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
@@ -64,8 +66,6 @@ export default function Timeline({
   selected,
   time,
   zoom,
-  playing,
-  togglePlayback,
   seek,
   select,
   change,
@@ -166,15 +166,17 @@ export default function Timeline({
     action: 'move' | 'left' | 'right',
   ) => {
     event.stopPropagation();
-    if (event.button !== 0 || layer.locked) return;
-    activeGesture.current?.();
+    if (event.button !== 0) return;
     const ids =
       action === 'move' && selected.includes(layer.id)
         ? selected
         : layer.groupId && action === 'move'
           ? project.layers.filter((l) => l.groupId === layer.groupId).map((l) => l.id)
           : [layer.id];
-    select(ids);
+    if (action === 'move') select(ids);
+    if (layer.locked) return;
+    if (action !== 'move') select(ids);
+    activeGesture.current?.();
     let moved = false;
     const startX = event.clientX;
     const initial = project.layers.filter((l) => ids.includes(l.id) && !l.locked);
@@ -269,7 +271,7 @@ export default function Timeline({
     activeGesture.current = end;
   };
 
-  const renderTrack = (layer: Layer, stackPosition?: 'Front' | 'Back') => {
+  const renderTrack = (layer: Layer) => {
     const Icon = kindIcons[layer.kind];
     const active = selected.includes(layer.id);
     const expanded = expandedId === layer.id;
@@ -279,14 +281,10 @@ export default function Timeline({
         className={`timeline-track-group ${expanded ? 'is-expanded' : ''}`}
         key={layer.id}
         ref={expanded ? expandedTrack : undefined}
+        style={{ '--track-color': LAYER_COLORS[layer.kind] } as CSSProperties}
       >
         <div className={`timeline-track ${active ? 'active' : ''} ${audio ? 'audio-track' : ''}`}>
-          <div
-            className="track-label"
-            onClick={() => select([layer.id])}
-            title={layer.name}
-            style={{ '--track-color': LAYER_COLORS[layer.kind] } as CSSProperties}
-          >
+          <div className="track-label" onClick={() => select([layer.id])} title={layer.name}>
             <button
               className="track-expand"
               aria-label={`Edit ${audio ? 'audio' : 'motion'} for ${layer.name}`}
@@ -304,16 +302,6 @@ export default function Timeline({
             </button>
             <Icon size={13} className="track-kind" />
             <span>{layer.name}</span>
-            {stackPosition && (
-              <small
-                className="track-order-badge"
-                title={
-                  stackPosition === 'Front' ? 'Frontmost visual layer' : 'Backmost visual layer'
-                }
-              >
-                {stackPosition}
-              </small>
-            )}
             <button
               className={`track-visibility ${audio && layer.muted ? 'is-muted' : ''}`}
               aria-label={
@@ -322,8 +310,10 @@ export default function Timeline({
                   : `${layer.hidden ? 'Show' : 'Hide'} ${layer.name}`
               }
               aria-pressed={audio ? Boolean(layer.muted) : undefined}
+              disabled={audio && layer.locked}
               onClick={(event) => {
                 event.stopPropagation();
+                if (audio && layer.locked) return;
                 change(layer.id, audio ? { muted: !layer.muted } : { hidden: !layer.hidden });
               }}
             >
@@ -335,7 +325,19 @@ export default function Timeline({
                 <Eye size={12} />
               )}
             </button>
-            {layer.locked && <LockKeyhole size={10} className="track-lock" />}
+            <button
+              type="button"
+              className={`track-lock ${layer.locked ? 'is-locked' : ''}`}
+              aria-label={`${layer.locked ? 'Unlock' : 'Lock'} ${layer.name}`}
+              aria-pressed={Boolean(layer.locked)}
+              title={`${layer.locked ? 'Unlock' : 'Lock'} ${layer.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                change(layer.id, { locked: !layer.locked });
+              }}
+            >
+              {layer.locked ? <LockKeyhole size={12} /> : <UnlockKeyhole size={12} />}
+            </button>
           </div>
           <div className="track-lane" style={{ width }}>
             <div
@@ -343,7 +345,7 @@ export default function Timeline({
               tabIndex={0}
               aria-label={`Timeline clip ${layer.name}`}
               aria-pressed={active}
-              title={`${layer.name}${layer.locked ? ' · Locked' : ''}${audio && layer.muted ? ' · Muted' : ''}`}
+              title={`${layer.name}${layer.locked ? ' · Locked' : ''}${audio && layer.muted ? ' · Muted' : ''}${layer.groupId ? ' · Grouped' : ''}${!audio && (layer.animation !== 'none' || (layer.exitDuration ?? 0) > 0) ? ' · Motion applied' : ''}`}
               className={`timeline-clip ${active ? 'selected' : ''} ${layer.hidden ? 'is-hidden' : ''} ${layer.locked ? 'is-locked' : ''} ${audio && layer.muted ? 'is-muted' : ''}`}
               style={
                 {
@@ -379,16 +381,6 @@ export default function Timeline({
               )}
               <span className="clip-name">{layer.name}</span>
               {audio && layer.muted && <span className="clip-status">Muted</span>}
-              {layer.groupId && (
-                <span className="group-mark" title="Grouped">
-                  G
-                </span>
-              )}
-              {!audio && (layer.animation !== 'none' || (layer.exitDuration ?? 0) > 0) && (
-                <span className="animation-mark" title="Motion applied">
-                  ◇
-                </span>
-              )}
               <div
                 className="trim-handle right"
                 title="Trim end"
@@ -424,9 +416,9 @@ export default function Timeline({
         {
           '--label-width': `${LABEL_WIDTH}px`,
           '--timeline-viewport-width': `${viewportWidth}px`,
-          '--grid-step': `${pixels}px`,
+          '--grid-step': `${tickInterval * pixels}px`,
           '--grid-width': `${project.duration * pixels}px`,
-          '--audio-band-height': `${Math.min(2, audioLayers.length) * 32 + 28}px`,
+          '--audio-band-height': `${Math.min(2, audioLayers.length) * 26 + 26}px`,
         } as CSSProperties
       }
     >
@@ -436,54 +428,9 @@ export default function Timeline({
         onScroll={(event) => syncHorizontal(event.currentTarget.scrollLeft)}
       >
         <div className="timeline-ruler" style={{ width: contentWidth }}>
-          <div
-            className="track-heading timeline-transport"
-            role="group"
-            aria-label="Timeline playback"
-          >
-            <div className="timeline-transport-buttons">
-              <button
-                type="button"
-                aria-label="Go to start"
-                title="Go to start"
-                onClick={() => seek(0)}
-              >
-                <SkipBack size={12} />
-              </button>
-              <button
-                type="button"
-                className="timeline-play"
-                aria-label={playing ? 'Pause' : 'Play'}
-                title={playing ? 'Pause (Space)' : 'Play (Space)'}
-                aria-pressed={playing}
-                onClick={togglePlayback}
-              >
-                {playing ? (
-                  <Pause size={13} fill="currentColor" />
-                ) : (
-                  <Play size={13} fill="currentColor" />
-                )}
-              </button>
-              <button
-                type="button"
-                aria-label="Go to end"
-                title="Go to end"
-                onClick={() => seek(project.duration)}
-              >
-                <SkipForward size={12} />
-              </button>
-            </div>
-            <div
-              className="timeline-clock"
-              title={`Minutes : seconds : frames · ${project.fps} fps`}
-            >
-              <span role="timer" aria-live="off" aria-label="Current timeline time">
-                {timecode(time, project.fps)}
-              </span>
-              <small aria-label="Composition duration">
-                / {timecode(project.duration, project.fps)}
-              </small>
-            </div>
+          <div className="track-heading">
+            <span>Layers</span>
+            <small>{project.layers.length}</small>
           </div>
           <div
             className="ruler-scale"
@@ -526,9 +473,7 @@ export default function Timeline({
                 className="ruler-tick"
                 style={{ left: (firstTick + offset) * tickInterval * pixels }}
               >
-                <span>
-                  {timecode((firstTick + offset) * tickInterval, project.fps).slice(0, -3)}
-                </span>
+                <span>{rulerTimeLabel((firstTick + offset) * tickInterval)}</span>
               </div>
             ))}
             <div className="ruler-playhead" aria-hidden="true" style={{ left: time * pixels }} />
@@ -548,12 +493,7 @@ export default function Timeline({
               <small>{visualLayers.length}</small>
               <span className="timeline-stack-hint">Front at top</span>
             </div>
-            {visualLayers.map((layer, index) =>
-              renderTrack(
-                layer,
-                index === 0 ? 'Front' : index === visualLayers.length - 1 ? 'Back' : undefined,
-              ),
-            )}
+            {visualLayers.map((layer) => renderTrack(layer))}
             {visualLayers.length === 0 && (
               <div className="timeline-section-empty">Add a video, image, or element.</div>
             )}

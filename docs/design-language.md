@@ -17,26 +17,26 @@ The base palette is:
 | Token   | Color     | Use                                      |
 | ------- | --------- | ---------------------------------------- |
 | Navy    | `#2B2D42` | Raised surfaces and composition text     |
-| Slate   | `#8D99AE` | Secondary labels, sound, subtle borders  |
+| Slate   | `#8D99AE` | Secondary labels and subtle borders      |
 | Paper   | `#EDF2F4` | Primary text, light compositions, focus  |
 | Red     | `#EF233C` | Active controls and visual accents       |
 | Crimson | `#D90429` | Strong actions and secondary red accents |
 
-Darker navy surfaces and transparent variants provide depth without adding unrelated hues. A fine outline, quiet hover surface, and clear active state are more useful than decorative chrome. Every interactive icon keeps a descriptive accessible name.
+Darker navy surfaces and transparent variants provide depth. The interface stays restrained while clips use distinct category colors for quick scanning. A fine outline, quiet hover surface, and clear active state are more useful than decorative chrome. Every interactive icon keeps a descriptive accessible name.
 
 `LAYER_COLORS` and `LAYER_LABELS` in `src/core/types.ts` define category colors. These identify layers independently of their rendered fill:
 
 | Kind      | Label   | Color     |
 | --------- | ------- | --------- |
-| `video`   | Video   | `#EF233C` |
-| `audio`   | Audio   | `#8D99AE` |
-| `image`   | Image   | `#D90429` |
-| `text`    | Text    | `#EDF2F4` |
-| `shape`   | Shape   | `#8D99AE` |
-| `svg`     | Vector  | `#EF233C` |
-| `drawing` | Drawing | `#EDF2F4` |
+| `video`   | Video   | `#7FB8F6` |
+| `audio`   | Audio   | `#65D5B0` |
+| `image`   | Image   | `#D799E6` |
+| `text`    | Text    | `#E9CC82` |
+| `shape`   | Shape   | `#F0A06D` |
+| `svg`     | Vector  | `#B2A2EF` |
+| `drawing` | Drawing | `#75CDD7` |
 
-Categories share a small palette, so icons and labels always accompany color. The user's imported media retains its original appearance.
+Each category has a stable color, with icons and labels alongside it. Clip text uses dark navy on the light category color. These colors identify the layer type; they do not change the artwork or imported media.
 
 ## Library and templates
 
@@ -61,7 +61,7 @@ The frame-size picker shows landscape, portrait, square, and social formats as f
 
 ![Visual format cards and custom canvas dimensions](images/canvas-size.png)
 
-Playback controls and exact time readouts are fixed at the left of the timeline ruler, alongside the timeline’s only seek control. Second labels sit above the tick marks, with a small playhead handle below them to avoid covering the time labels. Arrow keys step one frame; Shift + arrow steps one second. The canvas remains available for the composition and its editing tools.
+One timeline toolbar groups playback and exact time, editing and selection locking, then zoom and Fit. The ruler underneath is dedicated to seconds and seeking. Second labels sit above the tick marks, with a small playhead handle below them to avoid covering the time labels. Arrow keys step one frame; Shift + arrow steps one second. The canvas remains available for the composition and its editing tools.
 
 The 3D layers view separates the current frame's visible visual layers into CSS 3D planes. Orbit or pan the view, change layer spacing and zoom, or use front, back, top, and perspective presets to inspect overlap. Audio has no visual plane. Hidden layers and clips outside the current time are omitted. These camera controls affect inspection only; the composition and exports remain 2D.
 
@@ -73,7 +73,9 @@ The selected layer's depth slider and forward/back buttons change its saved stac
 
 ## Timeline, motion, and sound
 
-Visual and audio tracks have separate labeled sections. Visual tracks show the frontmost layer at the top, with front/back cues corresponding to the composition's stacking order. Each layer keeps its own editable clip. The ruler displays time against the project frame rate and adjusts label spacing as the timeline zoom changes. Fit timeline makes the full sequence reachable in the available width. Trim edges are visible on interaction, and image clips use their real imported thumbnails. The timeline height can be changed by dragging its separator or using its arrow-key controls.
+Visual and audio tracks have separate labeled sections. Visual tracks show the frontmost layer at the top, explained once in the section header. Each layer keeps its own editable clip in a compact 26-pixel row. Solid category colors, concise names, and a clear selection outline keep the clips readable. The ruler displays seconds and adjusts label spacing as the timeline zoom changes; seeking remains frame-snapped. Fit timeline makes the full sequence reachable in the available width. Trim edges are visible on interaction, and image clips use their real imported thumbnails. The timeline height can be changed by dragging its separator or using its arrow-key controls.
+
+Each row has a lock control, and the toolbar can lock or unlock the selection in one undoable action. A mixed selection locks all selected layers; an entirely locked selection unlocks them. Locked clips can be selected but cannot be moved, trimmed, split, or deleted. A subtle hatch and lock icon reinforce the state without relying on color alone.
 
 ![Playback controls and the timeline ruler](images/timeline.png)
 

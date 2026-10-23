@@ -23,11 +23,14 @@ import {
   Layers3,
   Eye,
   EyeOff,
+  LockKeyhole,
+  UnlockKeyhole,
 } from './icons';
 import Sidebar from './components/Sidebar';
 import Inspector, { type InspectorTab } from './components/Inspector';
 import InspectorRail from './components/InspectorRail';
 import Timeline from './components/Timeline';
+import TimelineTransport from './components/TimelineTransport';
 import CanvasToolbar from './components/CanvasToolbar';
 import { createShapePreset, DEFAULT_DRAWING_STYLE, type CanvasTool } from './core/creation';
 import CanvasStage from './components/CanvasStage';
@@ -66,6 +69,19 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'canvas' | 'depth'>('canvas');
   const [resetViewKey, setResetViewKey] = useState(0);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const selectedLayers = project.layers.filter((layer) => selected.includes(layer.id));
+  const hasEditableSelection = selectedLayers.some((layer) => !layer.locked);
+  const selectionLocked =
+    selectedLayers.length > 0 && selectedLayers.every((layer) => layer.locked);
+  const toggleSelectionLock = () => {
+    if (!selectedLayers.length) return;
+    update((p) => ({
+      ...p,
+      layers: p.layers.map((layer) =>
+        selected.includes(layer.id) ? { ...layer, locked: !selectionLocked } : layer,
+      ),
+    }));
+  };
   const inspectorRailVisible = viewMode === 'canvas' && !panelsHidden;
   const audioSelection =
     project.layers.some((layer) => selected.includes(layer.id) && layer.kind === 'audio') &&
@@ -218,10 +234,15 @@ export default function App() {
     }
   };
   const remove = useCallback(() => {
-    if (!selected.length) return;
-    update((p) => ({ ...p, layers: p.layers.filter((l) => !selected.includes(l.id)) }));
-    setSelected([]);
-  }, [selected, update]);
+    const removable = new Set(
+      project.layers
+        .filter((layer) => selected.includes(layer.id) && !layer.locked)
+        .map((layer) => layer.id),
+    );
+    if (!removable.size) return;
+    update((p) => ({ ...p, layers: p.layers.filter((layer) => !removable.has(layer.id)) }));
+    setSelected((ids) => ids.filter((id) => !removable.has(id)));
+  }, [selected, project.layers, update]);
   const duplicate = useCallback(() => {
     const copies = duplicateLayers(project.layers.filter((l) => selected.includes(l.id))).map(
       (l) => ({ ...l, x: l.x + 24, y: l.y + 24 }),
@@ -290,14 +311,16 @@ export default function App() {
       notify(`${component.name} added. Every element is editable.`);
   };
   const split = () => {
-    const targets = project.layers.filter((l) => selected.includes(l.id));
+    const targets = project.layers.filter((l) => selected.includes(l.id) && !l.locked);
     if (!targets.some((l) => time > l.start && time < l.start + l.duration)) {
       notify('Move the playhead inside a selected clip to split it.');
       return;
     }
     update((p) => ({
       ...p,
-      layers: p.layers.flatMap((l) => (selected.includes(l.id) ? splitLayer(l, time) : [l])),
+      layers: p.layers.flatMap((l) =>
+        selected.includes(l.id) && !l.locked ? splitLayer(l, time) : [l],
+      ),
     }));
   };
   const reorder = (direction: number) => {
@@ -848,8 +871,16 @@ export default function App() {
       </main>
       <section className="timeline-section" ref={timelineSection} aria-label="Timeline">
         <TimelineResizeHandle height={timelineHeight} onChange={setTimelineHeight} />
-        <div className="timeline-toolbar">
-          <div className="timeline-edit-tools">
+        <div className="timeline-toolbar" role="toolbar" aria-label="Timeline controls">
+          <TimelineTransport
+            time={time}
+            duration={project.duration}
+            fps={project.fps}
+            playing={playing}
+            seek={seek}
+            togglePlayback={togglePlayback}
+          />
+          <div className="timeline-edit-tools" role="group" aria-label="Timeline editing">
             <button title="Undo (⌘Z)" aria-label="Undo" onClick={undo}>
               <Undo2 size={16} />
             </button>
@@ -860,7 +891,7 @@ export default function App() {
             <button
               title="Split at playhead"
               aria-label="Split clip"
-              disabled={!selected.length}
+              disabled={!hasEditableSelection}
               onClick={split}
             >
               <Scissors size={16} />
@@ -876,14 +907,24 @@ export default function App() {
             <button
               title="Delete selection"
               aria-label="Delete"
-              disabled={!selected.length}
+              disabled={!hasEditableSelection}
               onClick={remove}
             >
               <Trash2 size={14} />
             </button>
+            <span className="tool-divider" />
+            <button
+              title={selectionLocked ? 'Unlock selected layers' : 'Lock selected layers'}
+              aria-label={selectionLocked ? 'Unlock selected layers' : 'Lock selected layers'}
+              aria-pressed={selectionLocked}
+              disabled={!selectedLayers.length}
+              onClick={toggleSelectionLock}
+            >
+              {selectionLocked ? <LockKeyhole size={14} /> : <UnlockKeyhole size={14} />}
+            </button>
           </div>
           <div className="timeline-zoom">
-            <span>Timeline zoom</span>
+            <span>Zoom</span>
             <Minus size={12} />
             <input
               aria-label="Timeline zoom"
@@ -913,8 +954,6 @@ export default function App() {
           selected={selected}
           time={time}
           zoom={timelineZoom}
-          playing={playing}
-          togglePlayback={togglePlayback}
           resetScrollKey={timelineResetKey}
           seek={seek}
           select={selectLayers}

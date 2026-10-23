@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { createLayer, createProject, parseProject } from '../src/core/project';
-import type { Project } from '../src/core/types';
+import type { LayerKind, Project } from '../src/core/types';
 
 function editingMenu(page: Page, name: 'Design' | 'Motion' | 'Color' | 'Sound') {
   return page
@@ -584,7 +584,7 @@ test('timeline transport seeks, advances during playback, and pauses without edi
 }) => {
   const original = await saveProject(page);
   const transport = page
-    .locator('.timeline-ruler')
+    .getByRole('toolbar', { name: 'Timeline controls', exact: true })
     .getByRole('group', { name: 'Timeline playback', exact: true });
   await expect(transport).toBeVisible();
   const position = page.getByRole('slider', { name: 'Timeline position', exact: true });
@@ -2164,4 +2164,200 @@ test('right-side editing menus leave canvas placement and redo history unchanged
   await expect(properties.getByLabel('Project name', { exact: true })).toHaveValue('A little idea');
   expect(await saveProject(page)).toEqual(original);
   await expect(redo).toBeEnabled();
+});
+
+test('timeline locks mixed selections and individual rows without moving locked clips or adding drag history', async ({
+  page,
+}) => {
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Timeline locks',
+    layers: [
+      createLayer('shape', { name: 'First card', start: 1, duration: 4 }),
+      createLayer('shape', { name: 'Second card', start: 2, duration: 4, locked: true }),
+      createLayer('shape', { name: 'Unrelated card', start: 3, duration: 4 }),
+    ],
+    components: [],
+  };
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  const controls = page.getByRole('toolbar', { name: 'Timeline controls', exact: true });
+  const timeline = page.getByRole('region', { name: 'Timeline', exact: true });
+  const lockSelection = controls.getByRole('button', { name: 'Lock selected layers', exact: true });
+  await expect(lockSelection).toBeDisabled();
+  await page.getByRole('tab', { name: 'Layers', exact: true }).click();
+  const library = page.getByRole('complementary', { name: 'Library', exact: true });
+  await library.getByRole('button', { name: 'First card', exact: true }).click();
+  await library
+    .getByRole('button', { name: 'Second card', exact: true })
+    .click({ modifiers: ['Shift'] });
+  await expect(lockSelection).toBeEnabled();
+  await lockSelection.click();
+  const allLocked = await saveProject(page, fixture.name);
+  expect(allLocked.layers.map((layer) => Boolean(layer.locked))).toEqual([true, true, false]);
+  expect(allLocked.layers[2]).toEqual(original.layers[2]);
+  await controls.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  await controls.getByRole('button', { name: 'Redo', exact: true }).click();
+  const unlockSelection = controls.getByRole('button', {
+    name: 'Unlock selected layers',
+    exact: true,
+  });
+  await expect(unlockSelection).toBeEnabled();
+  await unlockSelection.click();
+  const unlocked = await saveProject(page, fixture.name);
+  expect(unlocked.layers.map((layer) => Boolean(layer.locked))).toEqual([false, false, false]);
+  expect(unlocked.layers[2]).toEqual(original.layers[2]);
+  await controls.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(allLocked);
+
+  await timeline.getByRole('button', { name: 'Unlock First card', exact: true }).click();
+  const rowUnlocked = await saveProject(page, fixture.name);
+  expect(rowUnlocked.layers.map((layer) => Boolean(layer.locked))).toEqual([false, true, false]);
+  expect(rowUnlocked.layers.slice(1)).toEqual(allLocked.layers.slice(1));
+  await controls.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(allLocked);
+  await timeline.getByRole('button', { name: 'Timeline clip Unrelated card', exact: true }).click();
+  const lockedClip = timeline.getByRole('button', {
+    name: 'Timeline clip First card',
+    exact: true,
+  });
+  const bounds = (await lockedClip.boundingBox())!;
+  await page.mouse.move(bounds.x + 40, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 130, bounds.y + bounds.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect(lockedClip).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    timeline.getByRole('button', { name: 'Timeline clip Unrelated card', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false');
+  await expect(controls.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+  await expect(controls.getByRole('button', { name: 'Split clip', exact: true })).toBeDisabled();
+  await lockedClip.focus();
+  await page.keyboard.press('Delete');
+  expect(await saveProject(page, fixture.name)).toEqual(allLocked);
+  // Locked drag and Delete must not insert history before the previous real edit.
+  await controls.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  await timeline.getByRole('button', { name: 'Lock First card', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(allLocked);
+});
+
+test('timeline gives all seven layer kinds distinct readable clip colors', async ({ page }) => {
+  const kinds: LayerKind[] = ['video', 'audio', 'image', 'text', 'shape', 'svg', 'drawing'];
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Timeline colors',
+    layers: kinds.map((kind) =>
+      createLayer(kind, { name: `${kind} track`, start: 1, duration: 4 }),
+    ),
+    components: [],
+  };
+  await openProjectFixture(page, fixture);
+  const backgrounds: string[] = [];
+  for (const kind of kinds) {
+    const clip = page.getByRole('button', { name: `Timeline clip ${kind} track`, exact: true });
+    await clip.scrollIntoViewIfNeeded();
+    await expect(clip).toBeVisible();
+    const colors = await clip.evaluate((node) => {
+      const style = getComputedStyle(node);
+      const label = node.querySelector('.clip-name')!;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext('2d')!;
+      const luminance = (value: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = value;
+        context.fillRect(0, 0, 1, 1);
+        const channels = Array.from(context.getImageData(0, 0, 1, 1).data)
+          .slice(0, 3)
+          .map((channel) => {
+            const normalized = channel / 255;
+            return normalized <= 0.04045
+              ? normalized / 12.92
+              : ((normalized + 0.055) / 1.055) ** 2.4;
+          });
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+      };
+      const stops = style.backgroundImage.match(
+        /color\(srgb [^)]+\)|rgba?\([^)]+\)|#[0-9a-f]{3,8}/gi,
+      ) ?? [style.backgroundColor];
+      const foreground = luminance(getComputedStyle(label).color);
+      return {
+        background:
+          style.backgroundImage === 'none' ? style.backgroundColor : style.backgroundImage,
+        contrast: stops.map((stop) => {
+          const background = luminance(stop);
+          return (
+            (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+          );
+        }),
+      };
+    });
+    backgrounds.push(colors.background);
+    for (const contrast of colors.contrast)
+      expect(contrast, `${kind} label contrast`).toBeGreaterThanOrEqual(4.5);
+  }
+  expect(new Set(backgrounds).size).toBe(kinds.length);
+});
+
+test('timeline controls stay in one toolbar above readable seconds in a small window', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1000, height: 700 });
+  const controls = page.getByRole('toolbar', { name: 'Timeline controls', exact: true });
+  await expect(controls).toBeVisible();
+  const transport = controls.getByRole('group', { name: 'Timeline playback', exact: true });
+  await expect(transport).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Timeline playback', exact: true })).toHaveCount(1);
+  const ruler = page.getByRole('slider', { name: 'Timeline position', exact: true });
+  const toolbarBounds = (await controls.boundingBox())!;
+  const rulerBounds = (await ruler.boundingBox())!;
+  expect(toolbarBounds.y + toolbarBounds.height).toBeLessThanOrEqual(rulerBounds.y);
+  const boxes = await controls.locator('button, input, [role="timer"]').evaluateAll((nodes) =>
+    nodes
+      .map((node) => {
+        const bounds = node.getBoundingClientRect();
+        return {
+          label: node.getAttribute('aria-label') ?? node.textContent,
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+        };
+      })
+      .filter((box) => box.width > 0 && box.height > 0),
+  );
+  for (const box of boxes) {
+    expect(box.x, `${box.label} left edge`).toBeGreaterThanOrEqual(toolbarBounds.x);
+    expect(box.x + box.width, `${box.label} right edge`).toBeLessThanOrEqual(
+      toolbarBounds.x + toolbarBounds.width,
+    );
+    expect(box.y, `${box.label} top edge`).toBeGreaterThanOrEqual(toolbarBounds.y);
+    expect(box.y + box.height, `${box.label} bottom edge`).toBeLessThanOrEqual(
+      toolbarBounds.y + toolbarBounds.height,
+    );
+  }
+  for (let index = 0; index < boxes.length; index++) {
+    for (const next of boxes.slice(index + 1)) {
+      const box = boxes[index];
+      const overlapX = Math.min(box.x + box.width, next.x + next.width) - Math.max(box.x, next.x);
+      const overlapY = Math.min(box.y + box.height, next.y + next.height) - Math.max(box.y, next.y);
+      expect(overlapX > 0 && overlapY > 0, `${box.label} overlaps ${next.label}`).toBe(false);
+    }
+  }
+  const ticks = await ruler.locator('.ruler-tick span').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const bounds = node.getBoundingClientRect();
+      return { x: bounds.x, right: bounds.right };
+    }),
+  );
+  for (let index = 1; index < ticks.length; index++)
+    expect(ticks[index].x).toBeGreaterThanOrEqual(ticks[index - 1].right);
+  await transport.getByRole('button', { name: 'Go to start', exact: true }).click();
+  await transport.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect
+    .poll(async () => Number(await ruler.getAttribute('aria-valuenow')))
+    .toBeGreaterThan(0.1);
+  await transport.getByRole('button', { name: 'Pause', exact: true }).click();
 });

@@ -486,39 +486,102 @@ kbd {
 }
 .timeline-toolbar {
   position: relative;
-  height: 36px;
-  min-height: 36px;
-  display: grid;
-  grid-template-columns: 1fr auto;
+  min-height: 42px;
+  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 12px;
-  background: #202332;
-  border-bottom: 1px solid #edf2f406;
+  gap: 14px;
+  padding: 0 10px;
+  background: #1d202c;
+  border-bottom: 1px solid #8d99ae1f;
+}
+.timeline-toolbar .timeline-transport {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 10px;
+}
+.timeline-toolbar .timeline-transport-buttons {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.timeline-toolbar .timeline-transport-buttons button {
+  width: 24px;
+  height: 26px;
+  padding: 0;
+  color: #aeb8c9;
+  border-radius: 5px;
+}
+.timeline-toolbar .timeline-transport-buttons .timeline-play {
+  width: 28px;
+  height: 28px;
+  background: #edf2f4;
+  color: #2b2d42;
+}
+.timeline-toolbar .timeline-transport-buttons .timeline-play:hover {
+  background: #dce3eb;
+}
+.timeline-toolbar .timeline-transport-buttons .timeline-play[aria-pressed='true'] {
+  background: #ef233c;
+  color: #fff;
+}
+.timeline-toolbar .timeline-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+  color: #edf2f4;
+  font:
+    11px ui-monospace,
+    'SFMono-Regular',
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+.timeline-toolbar .timeline-clock small {
+  color: #8d99ae;
+  font-size: 10px;
+}
+.timeline-toolbar .timeline-fps {
+  border: 1px solid #8d99ae26;
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: #8d99ae;
+  font-size: 9px;
+  white-space: nowrap;
 }
 .timeline-edit-tools {
   display: flex;
   align-items: center;
   gap: 3px;
+  padding-left: 12px;
+  border-left: 1px solid #8d99ae26;
 }
 .timeline-edit-tools button {
-  color: #9e9e9e;
+  color: #aeb8c9;
   width: 27px;
   height: 27px;
-  border-radius: 7px;
+  padding: 0;
+  border-radius: 5px;
+}
+.timeline-edit-tools button[aria-pressed='true'] {
+  color: #e9cc82;
+  background: #e9cc8217;
+}
+.timeline-edit-tools .tool-divider {
+  margin: 0 4px;
 }
 .timeline-zoom {
   display: flex;
   align-items: center;
   gap: 8px;
-  justify-self: end;
+  margin-left: auto;
+  flex-shrink: 0;
   color: var(--muted);
   font-size: 10px;
 }
 .timeline-zoom input {
-  width: 67px;
-  accent-color: #b2b2b2;
+  width: 82px;
+  accent-color: #b3bdcc;
 }
 .timeline-zoom button {
   height: 27px;
@@ -528,6 +591,31 @@ kbd {
   border-radius: 6px;
   color: var(--paper);
   font-size: 10px;
+}
+
+@media (max-width: 900px) {
+  .timeline-toolbar {
+    gap: 8px;
+  }
+  .timeline-toolbar .timeline-fps {
+    display: none;
+  }
+  .timeline-toolbar .timeline-clock small {
+    display: none;
+  }
+  .timeline-edit-tools {
+    padding-left: 8px;
+    gap: 1px;
+  }
+  .timeline-edit-tools button {
+    width: 25px;
+  }
+  .timeline-zoom {
+    gap: 5px;
+  }
+  .timeline-zoom input {
+    width: 60px;
+  }
 }
 
 .toast {
