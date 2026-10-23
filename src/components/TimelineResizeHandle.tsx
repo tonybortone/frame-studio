@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 
 export function maxTimelineHeight() {
-  return Math.max(190, Math.min(window.innerHeight * 0.6, window.innerHeight - 300));
+  return Math.max(190, Math.min(window.innerHeight * 0.6, window.innerHeight - 280));
 }
 
 export default function TimelineResizeHandle({

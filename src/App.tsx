@@ -114,12 +114,13 @@ export default function App() {
   const [timelineHeight, setTimelineHeight] = useState(() =>
     Math.min(window.innerHeight <= 800 ? 246 : 308, maxTimelineHeight()),
   );
-  const timelineAutoSize = useRef<{ rest: number; expanded: number } | null>(null);
+  const timelineAutoSize = useRef<{ rest: number; expanded: number; target: number } | null>(null);
   const expandTimeline = (keyframes = false) => {
     setTimelineHeight((height) => {
       const rest = timelineAutoSize.current?.rest ?? height;
-      const expanded = Math.min(Math.max(rest, keyframes ? 620 : 400), maxTimelineHeight());
-      timelineAutoSize.current = { rest, expanded };
+      const target = keyframes ? 440 : 400;
+      const expanded = Math.min(Math.max(rest, target), maxTimelineHeight());
+      timelineAutoSize.current = { rest, expanded, target };
       return expanded;
     });
   };
@@ -561,7 +562,14 @@ export default function App() {
     togglePlayback,
   ]);
   useEffect(() => {
-    const fit = () => setTimelineHeight((height) => Math.min(height, maxTimelineHeight()));
+    const fit = () =>
+      setTimelineHeight((height) => {
+        const automatic = timelineAutoSize.current;
+        if (!automatic) return Math.min(height, maxTimelineHeight());
+        const expanded = Math.min(Math.max(automatic.rest, automatic.target), maxTimelineHeight());
+        timelineAutoSize.current = { ...automatic, expanded };
+        return expanded;
+      });
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
   }, []);

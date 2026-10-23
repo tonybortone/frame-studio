@@ -421,6 +421,7 @@ export default function Timeline({
         {expanded && (
           <TimelineMotionEditor
             key={layer.id}
+            project={project}
             layer={layer}
             fps={project.fps}
             pixels={pixels}

@@ -1,29 +1,67 @@
 import { useEffect, useRef, type PointerEvent } from 'react';
 import type { PropertyKeyframe } from '../core/types';
-import { getKeyframeCurve } from '../core/keyframes';
+import { evaluateKeyframeProgress, getKeyframeCurve } from '../core/keyframes';
+import './KeyframeCurveEditor.css';
 
 type Curve = [number, number, number, number];
 interface Props {
   frame: PropertyKeyframe;
   name: string;
   disabled: boolean;
+  disabledReason?: string;
+  /** Normalized time within this keyframe's outgoing segment. */
+  progress?: number;
   change: (patch: Pick<PropertyKeyframe, 'easing' | 'curve'>, record?: boolean) => void;
   checkpoint: () => void;
 }
+const CHOICES = [
+  { easing: 'linear', label: 'Steady' },
+  { easing: 'ease-in-out', label: 'Smooth' },
+  { easing: 'ease-in', label: 'Speed up' },
+  { easing: 'ease-out', label: 'Slow down' },
+  { easing: 'hold', label: 'Hold' },
+] as const;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const px = (value: number) => 22 + value * 176;
-const py = (value: number) => 116 - value * 72;
 
-/** An outgoing segment's normalized time/value curve, shared by both paired channels. */
-export default function KeyframeCurveEditor({ frame, name, disabled, change, checkpoint }: Props) {
+/** Presets and directly draggable handles edit the same outgoing curve. */
+export default function KeyframeCurveEditor({
+  frame,
+  name,
+  disabled,
+  disabledReason,
+  progress,
+  change,
+  checkpoint,
+}: Props) {
   const chart = useRef<HTMLDivElement>(null);
   const gesture = useRef<(() => void) | null>(null);
+  const keyboardRecorded = useRef(false);
   const curve = getKeyframeCurve(frame);
-  useEffect(() => () => gesture.current?.(), []);
+  const domain = useRef({ id: frame.id, low: -0.5, high: 1.5 });
+  // Expand the view for imported overshoot without rewriting authored data.
+  // Retain that range while dragging so a control can move away from its edge.
+  if (domain.current.id !== frame.id || frame.easing !== 'custom')
+    domain.current = { id: frame.id, low: -0.5, high: 1.5 };
+  domain.current.low = Math.min(domain.current.low, curve[1], curve[3]);
+  domain.current.high = Math.max(domain.current.high, curve[1], curve[3]);
+  const { low, high } = domain.current;
+  const py = (value: number) => 122 - ((value - low) / (high - low)) * 104;
+  const held = frame.easing === 'hold';
+  const activeProgress =
+    progress === undefined || !Number.isFinite(progress) ? undefined : clamp(progress, 0, 1);
+  useEffect(
+    () => () => {
+      gesture.current?.();
+      keyboardRecorded.current = false;
+    },
+    [frame.id, disabled],
+  );
   const moveHandle = (index: 0 | 2, x: number, y: number): Curve => {
     const next: Curve = [...curve];
-    next[index] = Math.round(clamp(x, 0, 1) * 1000) / 1000;
-    next[index + 1] = Math.round(clamp(y, -0.5, 1.5) * 1000) / 1000;
+    next[index] = x === curve[index] ? curve[index] : Math.round(clamp(x, 0, 1) * 1000) / 1000;
+    next[index + 1] =
+      y === curve[index + 1] ? curve[index + 1] : Math.round(clamp(y, low, high) * 1000) / 1000;
     return next;
   };
   const startDrag = (event: PointerEvent<HTMLButtonElement>, index: 0 | 2) => {
@@ -41,7 +79,7 @@ export default function KeyframeCurveEditor({ frame, name, disabled, change, che
       const nextCurve = moveHandle(
         index,
         curve[index] + (((next.clientX - origin.x) / box.width) * 220) / 176,
-        curve[index + 1] - (((next.clientY - origin.y) / box.height) * 160) / 72,
+        curve[index + 1] - (((next.clientY - origin.y) / box.height) * 160 * (high - low)) / 104,
       );
       if (nextCurve.every((value, i) => value === previous[i])) return;
       if (!recorded) {
@@ -65,40 +103,48 @@ export default function KeyframeCurveEditor({ frame, name, disabled, change, che
     target.addEventListener('lostpointercapture', end);
     gesture.current = end;
   };
-  const held = frame.easing === 'hold';
   return (
     <div className={`keyframe-curve-editor ${disabled ? 'is-disabled' : ''}`}>
       <div className="keyframe-curve-chart" ref={chart}>
         <svg
           viewBox="0 0 220 160"
+          preserveAspectRatio="none"
           role="img"
           aria-label={`${frame.easing} time and progress curve`}
         >
           <path
             className="keyframe-curve-grid"
-            d="M22 44H198M22 80H198M22 116H198M22 44V116M110 44V116M198 44V116"
+            d={`M22 ${py(1)}H198M22 ${py(0.5)}H198M22 ${py(0)}H198M22 ${py(1)}V${py(0)}M110 ${py(1)}V${py(0)}M198 ${py(1)}V${py(0)}`}
           />
           {!held && (
             <path
               className="keyframe-curve-arms"
-              d={`M22 116L${px(curve[0])} ${py(curve[1])}M198 44L${px(curve[2])} ${py(curve[3])}`}
+              d={`M22 ${py(0)}L${px(curve[0])} ${py(curve[1])}M198 ${py(1)}L${px(curve[2])} ${py(curve[3])}`}
             />
           )}
           <path
             className="keyframe-curve-path"
             d={
               held
-                ? 'M22 116H198V44'
-                : `M22 116C${px(curve[0])} ${py(curve[1])} ${px(curve[2])} ${py(curve[3])} 198 44`
+                ? `M22 ${py(0)}H198V${py(1)}`
+                : `M22 ${py(0)}C${px(curve[0])} ${py(curve[1])} ${px(curve[2])} ${py(curve[3])} 198 ${py(1)}`
             }
           />
-          <circle cx="22" cy="116" r="3" />
-          <circle cx="198" cy="44" r="3" />
+          <circle className="keyframe-curve-endpoint" cx="22" cy={py(0)} r="3" />
+          <circle className="keyframe-curve-endpoint" cx="198" cy={py(1)} r="3" />
+          {activeProgress !== undefined && (
+            <circle
+              className="keyframe-curve-progress"
+              cx={px(activeProgress)}
+              cy={py(evaluateKeyframeProgress(frame, activeProgress))}
+              r="5"
+            />
+          )}
           <text x="22" y="148">
             Start
           </text>
           <text x="198" y="148" textAnchor="end">
-            Next keyframe
+            Next point
           </text>
         </svg>
         {!held &&
@@ -115,54 +161,87 @@ export default function KeyframeCurveEditor({ frame, name, disabled, change, che
                 top: `${(py(curve[index + 1]) / 160) * 100}%`,
               }}
               onPointerDown={(event) => startDrag(event, index)}
+              onBlur={() => {
+                keyboardRecorded.current = false;
+              }}
+              onKeyUp={() => {
+                keyboardRecorded.current = false;
+              }}
               onKeyDown={(event) => {
-                if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key))
+                if (
+                  disabled ||
+                  !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)
+                )
                   return;
                 event.preventDefault();
                 event.stopPropagation();
                 const step = event.shiftKey ? 0.1 : 0.02;
-                change({
-                  easing: 'custom',
-                  curve: moveHandle(
-                    index,
-                    curve[index] +
-                      (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0),
-                    curve[index + 1] +
-                      (event.key === 'ArrowUp' ? step : event.key === 'ArrowDown' ? -step : 0),
-                  ),
-                });
+                const next = moveHandle(
+                  index,
+                  curve[index] +
+                    (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0),
+                  curve[index + 1] +
+                    (event.key === 'ArrowUp' ? step : event.key === 'ArrowDown' ? -step : 0),
+                );
+                if (next.every((value, i) => value === curve[i])) return;
+                if (!keyboardRecorded.current) {
+                  checkpoint();
+                  keyboardRecorded.current = true;
+                }
+                change({ easing: 'custom', curve: next }, false);
               }}
             />
           ))}
       </div>
-      <div className="keyframe-curve-copy">
-        <label>
-          <span>Motion curve</span>
-          <select
-            aria-label={`Keyframe curve for ${name}`}
-            value={frame.easing}
-            disabled={disabled}
-            onChange={(event) =>
-              change({
-                easing: event.target.value as PropertyKeyframe['easing'],
-                curve: event.target.value === 'custom' ? curve : undefined,
-              })
-            }
+      <div className="keyframe-curve-choices">
+        <div
+          className="keyframe-curve-presets"
+          role="group"
+          aria-label={`Curve choices for ${name}`}
+        >
+          {CHOICES.map(({ easing, label }) => {
+            const presetCurve = getKeyframeCurve({ easing });
+            const tx = (value: number) => 3 + value * 42;
+            const ty = (value: number) => 21 - value * 18;
+            return (
+              <button
+                key={easing}
+                type="button"
+                className={`keyframe-curve-choice ${frame.easing === easing ? 'is-selected' : ''}`}
+                aria-label={`Use ${label} curve for ${name}`}
+                aria-pressed={frame.easing === easing}
+                disabled={disabled}
+                onClick={() => {
+                  if (!disabled && frame.easing !== easing) change({ easing, curve: undefined });
+                }}
+              >
+                <svg viewBox="0 0 48 24" aria-hidden="true">
+                  <path className="keyframe-curve-choice-guide" d="M3 3V21H45" />
+                  <path
+                    d={
+                      easing === 'hold'
+                        ? 'M3 21H45V3'
+                        : `M3 21C${tx(presetCurve[0])} ${ty(presetCurve[1])} ${tx(presetCurve[2])} ${ty(presetCurve[3])} 45 3`
+                    }
+                  />
+                </svg>
+                <span>{label}</span>
+              </button>
+            );
+          })}
+          <span
+            className={`keyframe-curve-custom ${frame.easing === 'custom' ? 'is-active' : ''}`}
+            aria-live="polite"
           >
-            <option value="linear">Linear</option>
-            <option value="ease-in-out">Smooth</option>
-            <option value="ease-in">Ease in</option>
-            <option value="ease-out">Ease out</option>
-            <option value="hold">Hold</option>
-            <option value="custom">Custom</option>
-          </select>
-        </label>
-        <p>
+            {frame.easing === 'custom' ? 'Custom curve' : 'Or drag a handle'}
+          </span>
+        </div>
+        <p className="keyframe-curve-help">
           {disabled
-            ? 'Add a later keyframe to shape the movement between them.'
+            ? (disabledReason ?? 'Add a later point to shape the movement.')
             : held
-              ? 'Keep this value until the next keyframe.'
-              : 'Drag the handles to adjust how this keyframe moves to the next.'}
+              ? 'Keep still, then jump at the next point.'
+              : 'Drag the dots to fine-tune the movement.'}
         </p>
       </div>
     </div>

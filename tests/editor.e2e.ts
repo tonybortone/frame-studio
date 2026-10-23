@@ -3170,7 +3170,7 @@ test('motion panel restores canvas space on close and respects a manually resize
   const compact = await height();
   expect(compact).toBeGreaterThan(initial);
   await editor.getByRole('tab', { name: 'Keyframes', exact: true }).click();
-  await expect.poll(height).toBeGreaterThan(compact);
+  await expect.poll(height).toBeGreaterThanOrEqual(compact);
   await editor.getByRole('tab', { name: 'Presets', exact: true }).click();
   await expect.poll(height).toBe(compact);
   await editor
@@ -3187,7 +3187,7 @@ test('motion panel restores canvas space on close and respects a manually resize
   await expect.poll(height).toBe(manual);
   await toggle.click();
   await editor.getByRole('tab', { name: 'Keyframes', exact: true }).click();
-  await expect.poll(height).toBeGreaterThan(manual);
+  await expect.poll(height).toBeGreaterThanOrEqual(manual);
   await toggle.click();
   await expect(editor).toHaveCount(0);
   await expect.poll(height).toBe(manual);
@@ -3553,6 +3553,54 @@ async function openKeyframes(page: Page, name = 'Keyframe card') {
   return motion.getByRole('group', { name: `Keyframes for ${name}`, exact: true });
 }
 
+async function showKeyframeProperty(keys: Locator, property: string, name = 'Keyframe card') {
+  const chip = keys.getByRole('button', {
+    name: `Show ${property} keyframes for ${name}`,
+    exact: true,
+  });
+  if ((await chip.getAttribute('aria-pressed')) !== 'true') await chip.click();
+}
+
+async function revealKeyframeValues(keys: Locator, name = 'Keyframe card') {
+  const adjust = keys.getByRole('button', {
+    name: `Adjust keyframe values for ${name}`,
+    exact: true,
+  });
+  if ((await adjust.getAttribute('aria-expanded')) !== 'true') await adjust.click();
+}
+
+async function revealMoreKeyframeProperties(keys: Locator, name = 'Keyframe card') {
+  const more = keys.getByRole('button', {
+    name: `More animated properties for ${name}`,
+    exact: true,
+  });
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+}
+
+async function keyframeValue(keys: Locator, label: string, name = 'Keyframe card') {
+  const property = [
+    'Position',
+    'Size',
+    'Rotation',
+    'Opacity',
+    '3D tilt',
+    'Depth',
+    'Soft blur',
+    'Mask reveal',
+    'Text reveal',
+  ].find((item) => label.startsWith(`${item} `))!;
+  await showKeyframeProperty(keys, property, name);
+  await revealKeyframeValues(keys, name);
+  return keys.getByRole('spinbutton', { name: `${label} for ${name}`, exact: true });
+}
+
+async function addKeyframeProperty(keys: Locator, id: string, name = 'Keyframe card') {
+  await revealMoreKeyframeProperties(keys, name);
+  await keys
+    .getByRole('combobox', { name: `Add animated property for ${name}`, exact: true })
+    .selectOption(id);
+}
+
 test('property keyframes author all four controls at clip-local times and persist without changing sibling layers', async ({
   page,
 }) => {
@@ -3561,10 +3609,12 @@ test('property keyframes author all four controls at clip-local times and persis
   const original = await saveProject(page, fixture.name);
   const keys = await openKeyframes(page);
   await jumpToTime(page, '1.5');
-  for (const property of ['Position', 'Size', 'Rotation', 'Opacity'])
+  for (const property of ['Position', 'Size', 'Rotation', 'Opacity']) {
+    await showKeyframeProperty(keys, property);
     await keys
       .getByRole('button', { name: `Add ${property} keyframe for Keyframe card`, exact: true })
       .click();
+  }
   for (const [label, value] of [
     ['Position X', '80'],
     ['Position Y', '90'],
@@ -3573,9 +3623,7 @@ test('property keyframes author all four controls at clip-local times and persis
     ['Rotation value', '0'],
     ['Opacity value', '100'],
   ])
-    await keys
-      .getByRole('spinbutton', { name: `${label} for Keyframe card`, exact: true })
-      .fill(value);
+    await (await keyframeValue(keys, label)).fill(value);
   await jumpToTime(page, '3.5');
   for (const [label, value] of [
     ['Position X', '240'],
@@ -3585,9 +3633,7 @@ test('property keyframes author all four controls at clip-local times and persis
     ['Rotation value', '90'],
     ['Opacity value', '50'],
   ])
-    await keys
-      .getByRole('spinbutton', { name: `${label} for Keyframe card`, exact: true })
-      .fill(value);
+    await (await keyframeValue(keys, label)).fill(value);
   const authored = await saveProject(page, fixture.name);
   const tracks = authored.layers[0].keyframes!;
   for (const [property, values] of Object.entries({
@@ -3615,9 +3661,7 @@ test('property keyframes author all four controls at clip-local times and persis
     ['Rotation value', '45'],
     ['Opacity value', '75'],
   ])
-    await expect(
-      keys.getByRole('spinbutton', { name: `${label} for Keyframe card`, exact: true }),
-    ).toHaveValue(value);
+    await expect(await keyframeValue(keys, label)).toHaveValue(value);
   await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeEnabled();
@@ -3669,6 +3713,7 @@ test('keyframe diamonds snap paired properties to frames and preserve single ges
   const stepped = await saveProject(page, fixture.name);
   expect(stepped.layers[0].keyframes!.x![1].time).toBeCloseTo(2.5 + 1 / 30, 6);
   expect(stepped.layers[0].keyframes!.y![1].time).toBeCloseTo(2.5 + 1 / 30, 6);
+  await revealKeyframeValues(keys);
   await keys
     .getByRole('spinbutton', { name: 'Selected keyframe time for Keyframe card', exact: true })
     .fill('0');
@@ -3679,23 +3724,68 @@ test('keyframe diamonds snap paired properties to frames and preserve single ges
   expect(await saveProject(page, fixture.name)).toEqual(stepped);
 });
 
+test('a keyframe at time zero exposes its whole drag target and keeps frame timing accurate', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture();
+  fixture.layers[0].start = 0;
+  await openProjectFixture(page, fixture);
+  const keys = await openKeyframes(page);
+  const before = await saveProject(page, fixture.name);
+  const point = keys.getByRole('button', {
+    name: 'Position keyframe at 0.00 seconds for Keyframe card',
+    exact: true,
+  });
+  await point.scrollIntoViewIfNeeded();
+  const box = (await point.boundingBox())!;
+  const reachable = await point.evaluate((node) => {
+    const bounds = node.getBoundingClientRect();
+    return [bounds.left + 4, bounds.right - 4].map(
+      (x) =>
+        document
+          .elementFromPoint(x, bounds.top + bounds.height / 2)
+          ?.closest('.keyframe-diamond') === node,
+    );
+  });
+  expect(reachable, 'Both halves remain above the sticky layer label and can start a drag').toEqual(
+    [true, true],
+  );
+  const pixels = Number(
+    await page.getByRole('slider', { name: 'Timeline zoom', exact: true }).inputValue(),
+  );
+  const x = box.x + 6,
+    y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + pixels * 0.5, y, { steps: 8 });
+  await page.mouse.up();
+  const moved = await saveProject(page, fixture.name);
+  expect(moved.layers[0].keyframes!.x!.map((item) => item.time)).toEqual([0.5, 2]);
+  expect(moved.layers[0].keyframes!.y!.map((item) => item.time)).toEqual([0.5, 2]);
+  expect(moved.layers[0].keyframes!.rotation).toEqual(before.layers[0].keyframes!.rotation);
+  expect(moved.layers.slice(1)).toEqual(before.layers.slice(1));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+});
+
 test('keyframe curves edit the outgoing segment with pointer and keyboard undo while keeping the last key disabled', async ({
   page,
 }) => {
   const fixture = keyframeFixture();
   await openProjectFixture(page, fixture);
   const keys = await openKeyframes(page);
+  await showKeyframeProperty(keys, 'Rotation');
   await keys
     .getByRole('button', {
       name: 'Rotation keyframe at 0.00 seconds for Keyframe card',
       exact: true,
     })
     .click();
-  const curve = keys.getByRole('combobox', {
-    name: 'Keyframe curve for Keyframe card',
+  const speedUp = keys.getByRole('button', {
+    name: 'Use Speed up curve for Keyframe card',
     exact: true,
   });
-  await curve.selectOption('ease-in');
+  await speedUp.click();
   await jumpToTime(page, '2');
   // A selected diamond keeps its authored value editable; the inspector shows the evaluated pose.
   const evaluatedRotation = page
@@ -3710,7 +3800,7 @@ test('keyframe curves edit the outgoing segment with pointer and keyboard undo w
       exact: true,
     })
     .click();
-  await curve.selectOption('hold');
+  await keys.getByRole('button', { name: 'Use Hold curve for Keyframe card', exact: true }).click();
   await jumpToTime(page, '2');
   await expect(evaluatedRotation).toHaveValue('0');
   await keys
@@ -3719,12 +3809,16 @@ test('keyframe curves edit the outgoing segment with pointer and keyboard undo w
       exact: true,
     })
     .click();
-  await curve.selectOption('custom');
-  const custom = await saveProject(page, fixture.name);
+  await keys
+    .getByRole('button', { name: 'Use Smooth curve for Keyframe card', exact: true })
+    .click();
   const start = keys.getByRole('button', {
     name: 'Curve start handle for Keyframe card',
     exact: true,
   });
+  await start.press('ArrowRight');
+  const custom = await saveProject(page, fixture.name);
+  expect(custom.layers[0].keyframes!.rotation![0].easing).toBe('custom');
   await start.press('ArrowRight');
   const keyboard = await saveProject(page, fixture.name);
   expect(keyboard.layers[0].keyframes!.rotation![0].curve![0]).toBeCloseTo(
@@ -3757,7 +3851,12 @@ test('keyframe curves edit the outgoing segment with pointer and keyboard undo w
       exact: true,
     })
     .click();
-  await expect(curve).toBeDisabled();
+  await expect(speedUp).toBeDisabled();
+  await expect(
+    keys.getByText('Incoming curve. Select the previous point to change this move.', {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeEnabled();
@@ -3770,6 +3869,7 @@ test('keyframe delete is isolated from layer deletion and locked or audio layers
   const fixture = keyframeFixture();
   await openProjectFixture(page, fixture);
   const keys = await openKeyframes(page);
+  await showKeyframeProperty(keys, 'Rotation');
   const before = await saveProject(page, fixture.name);
   const key = keys.getByRole('button', {
     name: 'Rotation keyframe at 2.00 seconds for Keyframe card',
@@ -3789,17 +3889,21 @@ test('keyframe delete is isolated from layer deletion and locked or audio layers
       exact: true,
     })
     .click();
+  await revealKeyframeValues(keys);
   await page.getByRole('button', { name: 'Lock Keyframe card', exact: true }).click();
   const locked = await saveProject(page, fixture.name);
   await expect(
-    keys.getByRole('spinbutton', { name: 'Position X for Keyframe card', exact: true }),
+    keys.getByRole('spinbutton', { name: 'Rotation value for Keyframe card', exact: true }),
   ).toBeDisabled();
   await expect(
     keys.getByRole('button', { name: 'Delete selected keyframe for Keyframe card', exact: true }),
   ).toBeDisabled();
   await expect(
-    keys.getByRole('combobox', { name: 'Keyframe curve for Keyframe card', exact: true }),
+    keys.getByRole('button', { name: 'Use Smooth curve for Keyframe card', exact: true }),
   ).toBeDisabled();
+  await expect(
+    keys.getByText('Unlock this element to change its curve.', { exact: true }),
+  ).toBeVisible();
   expect(await saveProject(page, fixture.name)).toEqual(locked);
   await page.getByRole('button', { name: 'Edit audio for Keyframe sound', exact: true }).click();
   const audio = page.getByRole('group', { name: 'Audio editor for Keyframe sound', exact: true });
@@ -3963,12 +4067,13 @@ test('splitting a custom keyed clip retains exact sampled frames on both sides a
   expect(await saveProject(page, fixture.name)).toEqual(original);
 });
 
-test('keyframe lanes and selected curve controls remain reachable in small and large editor windows', async ({
+test('focused keyframe lanes and visual curves stay compact at small and large editor sizes', async ({
   page,
-}) => {
+}, testInfo) => {
   const fixture = keyframeFixture();
   await openProjectFixture(page, fixture);
   const before = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: 'Dismiss notification', exact: true }).click();
   const keys = await openKeyframes(page);
   for (const viewport of [
     { width: 1000, height: 700 },
@@ -3976,44 +4081,196 @@ test('keyframe lanes and selected curve controls remain reachable in small and l
   ]) {
     await page.setViewportSize(viewport);
     for (const property of ['Position', 'Size', 'Rotation', 'Opacity']) {
+      await showKeyframeProperty(keys, property);
+      await expect(keys.locator('.keyframe-row')).toHaveCount(1);
+      await expect(keys.getByRole('spinbutton')).toHaveCount(0);
+      await expect(
+        keys.getByRole('button', { name: 'Adjust keyframe values for Keyframe card', exact: true }),
+      ).toHaveAttribute('aria-expanded', 'false');
       const row = keys.getByRole('group', {
         name: `${property} keyframes for Keyframe card`,
         exact: true,
       });
-      await row
-        .getByRole('button', {
-          name: `${property} keyframe at 0.00 seconds for Keyframe card`,
+      const point = row.getByRole('button', {
+        name: `${property} keyframe at 0.00 seconds for Keyframe card`,
+        exact: true,
+      });
+      await point.click();
+      const pointBox = (await point.boundingBox())!;
+      expect(pointBox.width).toBeGreaterThanOrEqual(22);
+      expect(pointBox.height).toBeGreaterThanOrEqual(22);
+      await expect(keys.getByRole('spinbutton')).toHaveCount(0);
+      const tracksBox = (await page.locator('.timeline-visual-scroll').boundingBox())!;
+      const heading = (await page
+        .getByRole('group', { name: 'Visual tracks', exact: true })
+        .getByRole('heading')
+        .boundingBox())!;
+      const clip = (await page
+        .getByRole('button', { name: 'Timeline clip Keyframe card', exact: true })
+        .boundingBox())!;
+      expect(
+        clip.y,
+        'Selected clip context remains below the section heading',
+      ).toBeGreaterThanOrEqual(heading.y + heading.height);
+      const bounds = (await keys.boundingBox())!;
+      expect(
+        bounds.height,
+        'One active lane and visual curve fit in a compact editor',
+      ).toBeLessThanOrEqual(250);
+      expect(
+        bounds.y + bounds.height,
+        'The complete default editor stays above audio',
+      ).toBeLessThanOrEqual(tracksBox.y + tracksBox.height);
+      for (const label of ['Steady', 'Smooth', 'Speed up', 'Slow down', 'Hold']) {
+        const button = keys.getByRole('button', {
+          name: `Use ${label} curve for Keyframe card`,
           exact: true,
-        })
-        .click();
-      const label = row.locator('.keyframe-row-label');
-      await label.scrollIntoViewIfNeeded();
-      await expect(label).toBeInViewport();
-      for (const input of await row.getByRole('spinbutton').all()) {
-        const box = (await input.boundingBox())!;
-        expect(box.width).toBeGreaterThanOrEqual(45);
+        });
+        await expect(button).toBeInViewport({ ratio: 0.99 });
+        const box = (await button.boundingBox())!;
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
       }
+      for (const label of ['start', 'end'])
+        await expect(
+          keys.getByRole('button', {
+            name: `Curve ${label} handle for Keyframe card`,
+            exact: true,
+          }),
+        ).toBeInViewport({ ratio: 0.99 });
+      await expect(
+        keys.getByLabel('Animation preview for Keyframe card', { exact: true }),
+      ).toBeInViewport({ ratio: 0.99 });
     }
-    const curve = keys.getByRole('combobox', {
-      name: 'Keyframe curve for Keyframe card',
-      exact: true,
-    });
-    await curve.scrollIntoViewIfNeeded();
-    await expect(curve).toBeInViewport();
-    for (const handleName of [
-      'Curve start handle for Keyframe card',
-      'Curve end handle for Keyframe card',
-    ]) {
-      const handle = keys.getByRole('button', { name: handleName, exact: true });
-      await handle.scrollIntoViewIfNeeded();
-      await expect(handle).toBeInViewport();
-      const box = (await handle.boundingBox())!;
-      expect(box.x).toBeGreaterThanOrEqual(0);
+    await page.screenshot({ path: testInfo.outputPath(`compact-keyframes-${viewport.width}.png`) });
+    await revealKeyframeValues(keys);
+    for (const input of await keys.getByRole('spinbutton').all()) {
+      await input.scrollIntoViewIfNeeded();
+      await expect(input).toBeInViewport();
+      const box = (await input.boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(45);
       expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
     }
+    await showKeyframeProperty(keys, 'Position');
   }
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+});
+
+test('keyframe composition preview is isolated and property switching clears point details', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const fixture = keyframeFixture();
+  await openProjectFixture(page, fixture);
+  const keys = await openKeyframes(page);
+  await keys
+    .getByRole('button', {
+      name: 'Edit curve between 0.00 and 2.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  const original = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: 'Dismiss notification', exact: true }).click();
+  const ruler = page.getByRole('slider', { name: 'Timeline position', exact: true });
+  const globalTime = await ruler.getAttribute('aria-valuenow');
+  const canvas = keys.getByLabel('Animation preview for Keyframe card', { exact: true });
+  const pixels = () => canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL());
+  const colors = await canvas.evaluate((node) => {
+    const target = node as HTMLCanvasElement;
+    const bytes = target.getContext('2d')!.getImageData(0, 0, target.width, target.height).data;
+    let red = 0,
+      green = 0;
+    for (let index = 0; index < bytes.length; index += 4) {
+      if (bytes[index] > 200 && bytes[index + 1] < 130 && bytes[index + 2] < 130) red++;
+      if (bytes[index] < 100 && bytes[index + 1] > 200 && bytes[index + 2] < 100) green++;
+    }
+    return { red, green };
+  });
+  expect(colors.red, 'Preview renders the animated fixture element').toBeGreaterThan(0);
+  expect(colors.green, 'Preview also renders the other composition element').toBeGreaterThan(0);
+  const still = await pixels();
+  await page.waitForTimeout(160);
+  expect(await pixels(), 'Reduced motion preview starts still').toBe(still);
+  await keys
+    .getByRole('button', { name: 'Preview animation for Keyframe card', exact: true })
+    .click();
+  await expect.poll(pixels).not.toBe(still);
+  await keys
+    .getByRole('button', { name: 'Pause animation preview for Keyframe card', exact: true })
+    .click();
+  const paused = await pixels();
+  await page.waitForTimeout(160);
+  expect(await pixels()).toBe(paused);
+  await keys.getByRole('button', { name: 'Preview start for Keyframe card', exact: true }).click();
+  await expect(keys.locator('.keyframe-motion-preview')).toHaveAttribute(
+    'data-preview-progress',
+    '0',
+  );
+  const first = await pixels();
+  await keys.getByRole('button', { name: 'Preview end for Keyframe card', exact: true }).click();
+  await expect(keys.locator('.keyframe-motion-preview')).toHaveAttribute(
+    'data-preview-progress',
+    '1',
+  );
+  expect(await pixels()).not.toBe(first);
+  await expect(ruler).toHaveAttribute('aria-valuenow', globalTime!);
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  await revealKeyframeValues(keys);
+  await expect(
+    keys.getByRole('spinbutton', { name: 'Selected keyframe time for Keyframe card', exact: true }),
+  ).toHaveValue('0');
+  await showKeyframeProperty(keys, 'Rotation');
+  await expect(
+    keys.getByRole('button', { name: 'Adjust keyframe values for Keyframe card', exact: true }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await expect(keys.locator('.keyframe-diamond[aria-pressed="true"]')).toHaveCount(0);
+  await expect(keys.getByRole('spinbutton')).toHaveCount(0);
+  await expect(
+    keys.getByRole('group', { name: 'Position keyframes for Keyframe card', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    keys.getByRole('group', { name: 'Rotation keyframes for Keyframe card', exact: true }),
+  ).toBeVisible();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
+test('keyframe preview end respects a held segment at the final visible frame', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture(false);
+  fixture.name = 'Held endpoint preview';
+  fixture.duration = 3;
+  fixture.layers[0].duration = 2;
+  fixture.layers[0].keyframes = {
+    x: [
+      { id: 'held-start', time: 0, value: 80, easing: 'hold' },
+      { id: 'held-end', time: 2, value: 240, easing: 'linear' },
+    ],
+  };
+  fixture.layers[1].duration = 3;
+  fixture.layers[2].duration = 3;
+  await openProjectFixture(page, fixture);
+  const keys = await openKeyframes(page);
+  await keys
+    .getByRole('button', {
+      name: 'Edit curve between 0.00 and 2.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  const before = await saveProject(page, fixture.name);
+  const canvas = keys.getByLabel('Animation preview for Keyframe card', { exact: true });
+  const pixels = () => canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL());
+  const preview = keys.locator('.keyframe-motion-preview');
+  await keys.getByRole('button', { name: 'Preview start for Keyframe card', exact: true }).click();
+  await expect(preview).toHaveAttribute('data-preview-progress', '0');
+  const first = await pixels();
+  await keys.getByRole('button', { name: 'Preview end for Keyframe card', exact: true }).click();
+  await expect
+    .poll(async () => Number(await preview.getAttribute('data-preview-progress')))
+    .toBeCloseTo((2 - 1 / 30) / 2, 6);
+  expect(await pixels(), 'Hold stays on the first pose until the exclusive clip boundary').toBe(
+    first,
+  );
   expect(await saveProject(page, fixture.name)).toEqual(before);
 });
 
@@ -4065,6 +4322,7 @@ test('endpoint keyframe typing edits the selected final key and undoes the whole
     })
     .click();
   const before = await saveProject(page, fixture.name);
+  await revealKeyframeValues(keys);
   const x = keys.getByRole('spinbutton', { name: 'Position X for Keyframe card', exact: true });
   await expect(x).toHaveValue('240');
   await x.focus();
@@ -4295,29 +4553,29 @@ test('motion recipes stagger reversed entries hide earlier frames and preserve l
   expect(await saveProject(page, fixture.name)).toEqual(authored);
 });
 
-test('extra animated properties expose editable effect keys and filtering does not alter the project', async ({
+test('extra animated properties expose one focused effect lane without changing the project', async ({
   page,
 }) => {
   const fixture = keyframeFixture(false);
   await openProjectFixture(page, fixture);
   const before = await saveProject(page, fixture.name);
   const keys = await openKeyframes(page);
-  const property = keys.getByRole('combobox', {
-    name: 'Add animated property for Keyframe card',
-    exact: true,
-  });
-  for (const id of ['tilt', 'depth', 'blur', 'reveal']) await property.selectOption(id);
+  for (const id of ['tilt', 'depth', 'blur', 'reveal']) await addKeyframeProperty(keys, id);
   expect(await saveProject(page, fixture.name)).toEqual(before);
   await jumpToTime(page, '1');
-  for (const name of ['3D tilt', 'Depth', 'Soft blur', 'Mask reveal'])
+  for (const name of ['3D tilt', 'Depth', 'Soft blur', 'Mask reveal']) {
+    await showKeyframeProperty(keys, name);
     await keys
       .getByRole('button', { name: `Add ${name} keyframe for Keyframe card`, exact: true })
       .click();
+  }
   await jumpToTime(page, '3');
-  for (const name of ['3D tilt', 'Depth', 'Soft blur', 'Mask reveal'])
+  for (const name of ['3D tilt', 'Depth', 'Soft blur', 'Mask reveal']) {
+    await showKeyframeProperty(keys, name);
     await keys
       .getByRole('button', { name: `Add ${name} keyframe for Keyframe card`, exact: true })
       .click();
+  }
   for (const [label, value] of [
     ['3D tilt X', '20'],
     ['3D tilt Y', '-25'],
@@ -4325,9 +4583,7 @@ test('extra animated properties expose editable effect keys and filtering does n
     ['Soft blur value', '8'],
     ['Mask reveal value', '50'],
   ])
-    await keys
-      .getByRole('spinbutton', { name: `${label} for Keyframe card`, exact: true })
-      .fill(value);
+    await (await keyframeValue(keys, label)).fill(value);
   await keys
     .getByRole('combobox', { name: 'Mask reveal direction for Keyframe card', exact: true })
     .selectOption('right');
@@ -4344,7 +4600,8 @@ test('extra animated properties expose editable effect keys and filtering does n
       authored.layers[0].keyframes?.[name as keyof NonNullable<Layer['keyframes']>]?.at(-1),
     ).toMatchObject({ time: 2, value });
   expect(authored.layers[0].revealDirection).toBe('right');
-  await keys.getByRole('checkbox', { name: 'Animated only', exact: true }).check();
+  await showKeyframeProperty(keys, 'Soft blur');
+  await expect(keys.locator('.keyframe-row')).toHaveCount(1);
   await expect(
     keys.getByRole('group', { name: 'Position keyframes for Keyframe card', exact: true }),
   ).toHaveCount(0);
@@ -4377,8 +4634,8 @@ test('extra animated properties expose editable effect keys and filtering does n
     })
     .click();
   await keys
-    .getByRole('combobox', { name: 'Keyframe curve for Keyframe card', exact: true })
-    .selectOption('ease-in-out');
+    .getByRole('button', { name: 'Use Smooth curve for Keyframe card', exact: true })
+    .click();
   expect((await saveProject(page, fixture.name)).layers[0].keyframes!.blur![0].easing).toBe(
     'ease-in-out',
   );
@@ -4427,10 +4684,7 @@ test('3D inspector auto keys only the axis changed at the evaluated playhead and
   expect(await saveProject(page, fixture.name)).toEqual(authored);
   const keys = await openKeyframes(page);
   await jumpToTime(page, '1');
-  const timelineX = keys.getByRole('spinbutton', {
-    name: '3D tilt X for Keyframe card',
-    exact: true,
-  });
+  const timelineX = await keyframeValue(keys, '3D tilt X');
   await timelineX.fill('18');
   await timelineX.press('Enter');
   const timelineEdit = await saveProject(page, fixture.name);
@@ -4591,6 +4845,8 @@ test('text reveal by word and character changes visible letters while PNG preser
   expect(count(words)).toBeGreaterThan(200);
   await expectTextPng(words);
   await jumpToTime(page, '1');
+  await showKeyframeProperty(keys, 'Text reveal', 'Revealing words');
+  await revealKeyframeValues(keys, 'Revealing words');
   await keys
     .getByRole('combobox', { name: 'Text reveal mode for Revealing words', exact: true })
     .selectOption('characters');
@@ -4765,12 +5021,16 @@ test('motion recipe options and extra keyframe lanes remain reachable at narrow 
   }
   await panel.getByRole('button', { name: 'Edit keyframes in timeline', exact: true }).click();
   const keys = page.getByRole('group', { name: 'Keyframes for Words', exact: true });
-  const add = keys.getByRole('combobox', { name: 'Add animated property for Words', exact: true });
-  for (const id of ['tilt', 'depth', 'blur', 'reveal', 'text']) await add.selectOption(id);
+  for (const id of ['tilt', 'depth', 'blur', 'reveal', 'text'])
+    await addKeyframeProperty(keys, id, 'Words');
   for (const name of ['3D tilt', 'Depth', 'Soft blur', 'Mask reveal', 'Text reveal']) {
-    const row = keys.getByRole('group', { name: `${name} keyframes for Words`, exact: true });
-    await row.getByRole('spinbutton').first().scrollIntoViewIfNeeded();
-    for (const input of await row.getByRole('spinbutton').all()) {
+    await showKeyframeProperty(keys, name, 'Words');
+    await revealKeyframeValues(keys, 'Words');
+    await expect(
+      keys.getByRole('group', { name: `${name} keyframes for Words`, exact: true }),
+    ).toBeVisible();
+    await keys.getByRole('spinbutton').first().scrollIntoViewIfNeeded();
+    for (const input of await keys.getByRole('spinbutton').all()) {
       await expect(input).toBeInViewport();
       const box = (await input.boundingBox())!;
       expect(box.width).toBeGreaterThan(40);

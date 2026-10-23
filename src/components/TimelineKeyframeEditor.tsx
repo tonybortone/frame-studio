@@ -1,7 +1,15 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import type { KeyframeProperty, Layer, PropertyKeyframe } from '../core/types';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
+import type { KeyframeProperty, Layer, Project, PropertyKeyframe } from '../core/types';
 import {
   evaluateKeyframeProperty,
+  evaluateKeyframeProgress,
   getLocalKeyframeTime,
   upsertKeyframe,
   removeKeyframe,
@@ -9,6 +17,21 @@ import {
   KEYFRAME_LIMITS,
 } from '../core/keyframes';
 import KeyframeCurveEditor from './KeyframeCurveEditor';
+import KeyframeMotionPreview from './KeyframeMotionPreview';
+import {
+  MoveHorizontal,
+  Maximize,
+  RotateCw,
+  Eye,
+  Layers3,
+  Sparkles,
+  Square,
+  Type,
+  Plus,
+  SlidersHorizontal,
+  Trash2,
+  X,
+} from '../icons';
 import './TimelineKeyframeEditor.css';
 
 const GROUPS = [
@@ -38,6 +61,9 @@ interface GroupKey {
   frames: Partial<Record<KeyframeProperty, PropertyKeyframe>>;
 }
 interface Props {
+  project: Project;
+  modeSwitch: ReactNode;
+  onClose: () => void;
   layer: Layer;
   fps: number;
   time: number;
@@ -68,8 +94,11 @@ function groupKeys(layer: Layer, group: Group): GroupKey[] {
 }
 const firstFrame = (key: GroupKey) => Object.values(key.frames)[0]!;
 
-/** Basic lanes stay visible; extra effects appear only when requested or animated. */
+/** One property at a time; the same authored keys power canvas, preview and export. */
 export default function TimelineKeyframeEditor({
+  project,
+  modeSwitch,
+  onClose,
   layer,
   fps,
   time,
@@ -83,9 +112,11 @@ export default function TimelineKeyframeEditor({
   const [selected, setSelected] = useState<{ group: Group['id']; id: string } | null>(null);
   const [error, setError] = useState('');
   const [extraGroups, setExtraGroups] = useState<string[]>([]);
-  const [animatedOnly, setAnimatedOnly] = useState(false);
+  const [activeGroup, setActiveGroup] = useState<Group['id']>('position');
+  const [adjust, setAdjust] = useState(false);
+  const [more, setMore] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState(0.5);
   const gesture = useRef<(() => void) | null>(null);
-  const selectionPanel = useRef<HTMLDivElement>(null);
   const expectedSeek = useRef<number | null>(null);
   const numberGesture = useRef(false);
   const localTime = snap(time - layer.start, fps, layer.duration);
@@ -102,7 +133,9 @@ export default function TimelineKeyframeEditor({
     setSelected(null);
     setError('');
     setExtraGroups([]);
-    setAnimatedOnly(false);
+    setActiveGroup('position');
+    setAdjust(false);
+    setMore(false);
     gesture.current?.();
   }, [layer.id]);
   useEffect(() => {
@@ -188,6 +221,7 @@ export default function TimelineKeyframeEditor({
     seekKeyTime(next);
   };
   const selectKey = (target: Group, entry: GroupKey) => {
+    setActiveGroup(target.id);
     setSelected({ group: target.id, id: entry.id });
     seekKeyTime(entry.time);
   };
@@ -249,13 +283,49 @@ export default function TimelineKeyframeEditor({
         );
     }
   };
+  const target = GROUPS.find((item) => item.id === activeGroup)!;
+  const entries = groupKeys(layer, target);
+  const editingTime = key && selected?.group === target.id ? key.time : localTime;
+  const current = entries.find((entry) => near(entry.time, editingTime));
+  const previous = entries.filter((entry) => entry.time < localTime - 0.000001).at(-1);
+  const next = entries.find((entry) => entry.time > localTime + 0.000001);
+  const beforeSelected = key ? entries.filter((entry) => entry.time < key.time).at(-1) : undefined;
+  const previewFrom = key
+    ? !nextKey && beforeSelected
+      ? beforeSelected.time
+      : key.time
+    : (entries[0]?.time ?? 0);
+  const previewTo = key ? (nextKey?.time ?? key.time) : (entries.at(-1)?.time ?? layer.duration);
+  const icons = {
+    position: MoveHorizontal,
+    size: Maximize,
+    rotation: RotateCw,
+    opacity: Eye,
+    tilt: Layers3,
+    depth: Layers3,
+    blur: Sparkles,
+    reveal: Square,
+    text: Type,
+  };
+  const visibleGroups = GROUPS.filter(
+    (item) =>
+      BASIC_GROUPS.has(item.id) ||
+      extraGroups.includes(item.id) ||
+      item.properties.some((property) => layer.keyframes?.[property]?.length),
+  );
+  const activate = (id: Group['id']) => {
+    setActiveGroup(id);
+    setSelected(null);
+    expectedSeek.current = null;
+    setAdjust(false);
+    setMore(false);
+  };
   return (
     <div
       className="timeline-keyframes"
       role="group"
       aria-label={`Keyframes for ${layer.name}`}
       onKeyDown={(event) => {
-        // Field editing and frame deletion must never fall through to the global layer shortcuts.
         if (event.key === 'Escape') {
           event.stopPropagation();
           setSelected(null);
@@ -263,70 +333,310 @@ export default function TimelineKeyframeEditor({
         if (event.key === 'Delete' || event.key === 'Backspace') event.stopPropagation();
       }}
     >
-      <div className="keyframe-guide">
-        <span>
-          <span className="keyframe-guide-diamond">◇</span> Add a keyframe. Move the playhead.
-          Change a value.
+      <div className="keyframe-property-bar">
+        {modeSwitch}
+        <div
+          className="keyframe-property-chips"
+          role="group"
+          aria-label={`Animated properties for ${layer.name}`}
+        >
+          {visibleGroups.map((item) => {
+            const Icon = icons[item.id];
+            const count = groupKeys(layer, item).length;
+            return (
+              <button
+                type="button"
+                key={item.id}
+                aria-label={`Show ${item.name} keyframes for ${layer.name}`}
+                aria-pressed={activeGroup === item.id}
+                onClick={() => activate(item.id)}
+              >
+                <Icon size={13} />
+                <span>{item.name}</span>
+                {count > 0 && <small>{count}</small>}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="keyframe-more-toggle"
+          aria-label={`More animated properties for ${layer.name}`}
+          aria-expanded={more}
+          onClick={() => setMore(!more)}
+        >
+          <Plus size={12} /> More
+        </button>
+        <span className="keyframe-canvas-hint">
+          Add a point, move time, then edit your element.
         </span>
-        <small role={error ? 'alert' : undefined}>
-          {error ||
-            (inside
-              ? 'Animated properties follow your canvas edits.'
-              : 'Move the playhead inside this clip to add a keyframe.')}
-        </small>
+        <button
+          type="button"
+          className="keyframe-adjust-toggle"
+          aria-label={`Adjust keyframe values for ${layer.name}`}
+          aria-expanded={adjust}
+          aria-controls={`keyframe-values-${layer.id}`}
+          onClick={() => setAdjust(!adjust)}
+        >
+          <SlidersHorizontal size={12} /> Adjust
+        </button>
+        <button
+          type="button"
+          className="keyframe-close"
+          aria-label={`Close motion editor for ${layer.name}`}
+          onClick={onClose}
+        >
+          <X size={15} />
+        </button>
       </div>
-      <div className="keyframe-extra-tools">
-        <label>
-          <span>Add an animated property</span>
-          <select
-            aria-label={`Add animated property for ${layer.name}`}
-            value=""
-            disabled={locked}
-            onChange={(event) => {
-              const id = event.currentTarget.value;
-              if (id) {
-                setExtraGroups((groups) => [...groups, id]);
-                setAnimatedOnly(false);
-              }
-            }}
-          >
-            <option value="">+ Add property</option>
-            {GROUPS.filter(
-              (item) =>
-                !BASIC_GROUPS.has(item.id) &&
-                !extraGroups.includes(item.id) &&
-                !item.properties.some((property) => layer.keyframes?.[property]?.length) &&
-                (item.id !== 'text' || layer.kind === 'text'),
-            ).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {(extraGroups.includes('reveal') || layer.keyframes?.reveal?.length) && (
+      {error && (
+        <div className="keyframe-message" role="alert">
+          {error}
+        </div>
+      )}
+      {!inside && (
+        <div className="keyframe-message">Move the playhead inside this clip to add a point.</div>
+      )}
+      {more && (
+        <div className="keyframe-more-tools">
           <label>
-            <span>Mask direction</span>
+            <span>Add a property</span>
             <select
-              aria-label={`Mask reveal direction for ${layer.name}`}
-              value={layer.revealDirection ?? 'left'}
+              aria-label={`Add animated property for ${layer.name}`}
+              value=""
               disabled={locked}
-              onChange={(event) =>
-                edit({ revealDirection: event.currentTarget.value as Layer['revealDirection'] })
-              }
+              onChange={(event) => {
+                const id = event.currentTarget.value as Group['id'];
+                if (id) {
+                  setExtraGroups((groups) => [...new Set([...groups, id])]);
+                  activate(id);
+                }
+              }}
             >
-              <option value="left">From left</option>
-              <option value="right">From right</option>
-              <option value="up">From top</option>
-              <option value="down">From bottom</option>
-              <option value="center">From center</option>
+              <option value="">Choose a property…</option>
+              {GROUPS.filter(
+                (item) =>
+                  !visibleGroups.includes(item) && (item.id !== 'text' || layer.kind === 'text'),
+              ).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
             </select>
           </label>
-        )}
-        {layer.kind === 'text' &&
-          (extraGroups.includes('text') || layer.keyframes?.textReveal?.length) && (
-            <label>
-              <span>Reveal text by</span>
+          <small>Depth, blur, masks, and text reveals use the same points.</small>
+        </div>
+      )}
+      <div
+        className={`keyframe-row ${key ? 'is-selected' : ''}`}
+        role="group"
+        aria-label={`${target.name} keyframes for ${layer.name}`}
+      >
+        <div className="keyframe-row-label">
+          <div className="keyframe-navigation">
+            <button
+              type="button"
+              aria-label={`Previous ${target.name} keyframe for ${layer.name}`}
+              disabled={!previous}
+              onClick={() => previous && selectKey(target, previous)}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className={`keyframe-add ${current ? 'is-active' : ''}`}
+              aria-label={`${current ? 'Remove' : 'Add'} ${target.name} keyframe for ${layer.name}`}
+              title={current ? 'Remove point at playhead' : 'Add point at playhead'}
+              disabled={locked || !inside}
+              onClick={() => (current ? remove(target, current) : applyGroup(target, editingTime))}
+            >
+              <span aria-hidden="true">{current ? '◆' : '◇'}</span>{' '}
+              {current ? 'Remove point' : 'Add point'}
+            </button>
+            <button
+              type="button"
+              aria-label={`Next ${target.name} keyframe for ${layer.name}`}
+              disabled={!next}
+              onClick={() => next && selectKey(target, next)}
+            >
+              ›
+            </button>
+          </div>
+        </div>
+        <div
+          className="track-lane keyframe-lane"
+          style={{ width: laneWidth }}
+          onDoubleClick={(event) => {
+            if (locked || event.target !== event.currentTarget) return;
+            const at =
+              (event.clientX - event.currentTarget.getBoundingClientRect().left) / pixels -
+              layer.start;
+            if (at >= 0 && at <= layer.duration) applyGroup(target, snap(at, fps, layer.duration));
+          }}
+        >
+          <div
+            className={`keyframe-track-line ${entries.length ? 'is-animated' : ''}`}
+            style={{ left: layer.start * pixels, width: layer.duration * pixels }}
+          />
+          {!entries.length && (
+            <span className="keyframe-empty" style={{ left: layer.start * pixels + 14 }}>
+              Add your first point here
+            </span>
+          )}
+          {entries.slice(0, -1).map((entry, index) => {
+            const end = entries[index + 1];
+            const width = (end.time - entry.time) * pixels;
+            const path = Array.from(
+              { length: 25 },
+              (_, i) =>
+                `${i ? 'L' : 'M'}${(i / 24) * 100},${14 - evaluateKeyframeProgress(firstFrame(entry), i / 24) * 10}`,
+            ).join(' ');
+            return (
+              <button
+                type="button"
+                key={`segment-${entry.id}`}
+                className={`keyframe-segment ${key?.id === entry.id ? 'is-selected' : ''}`}
+                aria-label={`Edit curve between ${entry.time.toFixed(2)} and ${end.time.toFixed(2)} seconds for ${layer.name}`}
+                title="Click the line to shape this move"
+                style={{
+                  left: (layer.start + entry.time) * pixels + 14,
+                  width: Math.max(0, width - 28),
+                }}
+                disabled={width < 36}
+                onClick={() => selectKey(target, entry)}
+              >
+                <svg viewBox="0 0 100 18" preserveAspectRatio="none" aria-hidden="true">
+                  <path d={path} />
+                </svg>
+              </button>
+            );
+          })}
+          {entries.map((entry) => {
+            const chosen = Object.values(entry.frames).some((frame) => frame.id === selected?.id);
+            return (
+              <button
+                type="button"
+                key={chosen ? selected!.id : entry.id}
+                data-keyframe-id={entry.id}
+                className={`keyframe-diamond ${chosen ? 'is-selected' : ''} ${firstFrame(entry).easing === 'hold' ? 'is-hold' : ''}`}
+                aria-label={`${target.name} keyframe at ${entry.time.toFixed(2)} seconds for ${layer.name}`}
+                aria-pressed={chosen}
+                title={`${target.name} · ${entry.time.toFixed(2)}s · Drag to move · Delete to remove`}
+                style={{
+                  // Keep the whole drag target reachable at the timeline boundaries.
+                  left: Math.max(16, Math.min(laneWidth - 16, (layer.start + entry.time) * pixels)),
+                }}
+                onPointerDown={(event) => startDrag(event, target, entry)}
+                onKeyDown={(event) => keyDown(event, target, entry)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (event.detail === 0) selectKey(target, entry);
+                }}
+              >
+                <span />
+                <small>{entry.time.toFixed(2)}s</small>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {adjust && (
+        <div className="keyframe-value-drawer" id={`keyframe-values-${layer.id}`}>
+          <span>{key ? 'Selected point' : 'At playhead'}</span>
+          <div className="keyframe-values">
+            {target.properties.map((property, index) => (
+              <label key={property}>
+                <span>{target.labels[index] === 'value' ? target.unit : target.labels[index]}</span>
+                <input
+                  type="number"
+                  aria-label={`${target.name} ${target.labels[index]} for ${layer.name}`}
+                  value={Number(
+                    (
+                      evaluateKeyframeProperty(layer, property, editingTime) *
+                      displayScale(property)
+                    ).toFixed(2),
+                  )}
+                  step={displayScale(property) === 100 ? 1 : 0.1}
+                  disabled={locked || !inside}
+                  min={KEYFRAME_LIMITS[property][0] * displayScale(property)}
+                  max={KEYFRAME_LIMITS[property][1] * displayScale(property)}
+                  onFocus={() => {
+                    numberGesture.current = false;
+                  }}
+                  onBlur={() => {
+                    numberGesture.current = false;
+                  }}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    const value = event.currentTarget.valueAsNumber;
+                    if (Number.isFinite(value))
+                      applyGroup(
+                        target,
+                        editingTime,
+                        { [property]: value / displayScale(property) },
+                        false,
+                      );
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+          {key && (
+            <label className="keyframe-time-detail">
+              <span>Time</span>
+              <div className="keyframe-time-field">
+                <input
+                  type="number"
+                  aria-label={`Selected keyframe time for ${layer.name}`}
+                  value={Number(key.time.toFixed(3))}
+                  min="0"
+                  max={layer.duration}
+                  step={1 / fps}
+                  disabled={locked}
+                  onFocus={() => {
+                    numberGesture.current = false;
+                  }}
+                  onBlur={() => {
+                    numberGesture.current = false;
+                  }}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    const value = event.currentTarget.valueAsNumber;
+                    if (
+                      Number.isFinite(value) &&
+                      !near(snap(value, fps, layer.duration), key.time)
+                    ) {
+                      beginNumberEdit();
+                      moveTo(target, key, value, false);
+                    }
+                  }}
+                />
+                <small>s</small>
+              </div>
+            </label>
+          )}
+          {target.id === 'reveal' && (
+            <label className="keyframe-effect-detail">
+              <span>Direction</span>
+              <select
+                aria-label={`Mask reveal direction for ${layer.name}`}
+                value={layer.revealDirection ?? 'left'}
+                disabled={locked}
+                onChange={(event) =>
+                  edit({ revealDirection: event.currentTarget.value as Layer['revealDirection'] })
+                }
+              >
+                <option value="left">From left</option>
+                <option value="right">From right</option>
+                <option value="up">From top</option>
+                <option value="down">From bottom</option>
+                <option value="center">From center</option>
+              </select>
+            </label>
+          )}
+          {target.id === 'text' && (
+            <label className="keyframe-effect-detail">
+              <span>Reveal by</span>
               <select
                 aria-label={`Text reveal mode for ${layer.name}`}
                 value={layer.textRevealMode ?? 'characters'}
@@ -340,244 +650,91 @@ export default function TimelineKeyframeEditor({
               </select>
             </label>
           )}
-        <label className="keyframe-animated-only">
-          <input
-            type="checkbox"
-            checked={animatedOnly}
-            onChange={(event) => setAnimatedOnly(event.currentTarget.checked)}
+        </div>
+      )}
+      <div className="keyframe-selection-panel">
+        {key && group ? (
+          <KeyframeCurveEditor
+            key={key.id}
+            frame={firstFrame(!nextKey && beforeSelected ? beforeSelected : key)}
+            name={layer.name}
+            disabled={locked || !nextKey}
+            disabledReason={
+              locked
+                ? 'Unlock this element to change its curve.'
+                : !nextKey
+                  ? beforeSelected
+                    ? 'Incoming curve. Select the previous point to change this move.'
+                    : 'Add another point to create a move.'
+                  : undefined
+            }
+            progress={previewTo > previewFrom ? previewProgress : undefined}
+            checkpoint={checkpoint}
+            change={(patch, record = true) => {
+              let draft = layer;
+              for (const property of group.properties) {
+                const frame = key.frames[property];
+                if (frame)
+                  draft = {
+                    ...draft,
+                    ...upsertKeyframe(draft, property, key.time, frame.value, {
+                      id: frame.id,
+                      ...patch,
+                    }),
+                  };
+              }
+              edit(
+                {
+                  keyframes: draft.keyframes,
+                  keyframeOffset: draft.keyframeOffset,
+                  transform3d: draft.transform3d,
+                },
+                record,
+              );
+            }}
           />
-          Animated only
-        </label>
-      </div>
-      {GROUPS.filter((item) =>
-        animatedOnly
-          ? item.properties.some((property) => layer.keyframes?.[property]?.length)
-          : BASIC_GROUPS.has(item.id) ||
-            extraGroups.includes(item.id) ||
-            item.properties.some((property) => layer.keyframes?.[property]?.length),
-      ).map((target) => {
-        const entries = groupKeys(layer, target);
-        // A selected endpoint may be beyond the last displayable composition frame.
-        const editingTime = key && selected?.group === target.id ? key.time : localTime;
-        const current = entries.find((entry) => near(entry.time, editingTime));
-        const previous = entries.filter((entry) => entry.time < localTime - 0.000001).at(-1);
-        const next = entries.find((entry) => entry.time > localTime + 0.000001);
-        const active = target.properties.some(
-          (property) => (layer.keyframes?.[property]?.length ?? 0) > 0,
-        );
-        return (
-          <div
-            className={`keyframe-row ${selected?.group === target.id ? 'is-selected' : ''}`}
-            key={target.id}
-            role="group"
-            aria-label={`${target.name} keyframes for ${layer.name}`}
-          >
-            <div className="keyframe-row-label">
-              <div className="keyframe-property-title">
-                <span>{target.name}</span>
-                <div className="keyframe-navigation">
-                  <button
-                    type="button"
-                    aria-label={`Previous ${target.name} keyframe for ${layer.name}`}
-                    disabled={!previous}
-                    onClick={() => previous && selectKey(target, previous)}
-                  >
-                    ‹
-                  </button>
-                  <button
-                    type="button"
-                    className={`keyframe-add ${current ? 'is-active' : ''}`}
-                    aria-label={`${current ? 'Remove' : 'Add'} ${target.name} keyframe for ${layer.name}`}
-                    title={current ? 'Remove keyframe at playhead' : 'Add keyframe at playhead'}
-                    disabled={locked || !inside}
-                    onClick={() =>
-                      current ? remove(target, current) : applyGroup(target, editingTime)
-                    }
-                  >
-                    {current ? '◆' : '◇'}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Next ${target.name} keyframe for ${layer.name}`}
-                    disabled={!next}
-                    onClick={() => next && selectKey(target, next)}
-                  >
-                    ›
-                  </button>
-                </div>
-              </div>
-              <div className="keyframe-values">
-                {target.properties.map((property, index) => {
-                  const value =
-                    evaluateKeyframeProperty(layer, property, editingTime) * displayScale(property);
-                  return (
-                    <label key={property}>
-                      <span>
-                        {target.labels[index] === 'value' ? target.unit : target.labels[index]}
-                      </span>
-                      <input
-                        type="number"
-                        aria-label={`${target.name} ${target.labels[index]} for ${layer.name}`}
-                        value={Number(value.toFixed(2))}
-                        step={displayScale(property) === 100 ? 1 : 0.1}
-                        disabled={locked || !inside}
-                        min={KEYFRAME_LIMITS[property][0] * displayScale(property)}
-                        max={KEYFRAME_LIMITS[property][1] * displayScale(property)}
-                        onFocus={() => {
-                          numberGesture.current = false;
-                        }}
-                        onBlur={() => {
-                          numberGesture.current = false;
-                        }}
-                        onChange={(event) => {
-                          const value = event.currentTarget.valueAsNumber;
-                          if (Number.isFinite(value)) {
-                            applyGroup(
-                              target,
-                              editingTime,
-                              {
-                                [property]: value / displayScale(property),
-                              },
-                              false,
-                            );
-                          }
-                        }}
-                      />
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-            <div
-              className="track-lane keyframe-lane"
-              style={{ width: laneWidth }}
-              onDoubleClick={(event) => {
-                if (locked || event.target !== event.currentTarget) return;
-                const bounds = event.currentTarget.getBoundingClientRect();
-                const at = (event.clientX - bounds.left) / pixels - layer.start;
-                if (at >= 0 && at <= layer.duration)
-                  applyGroup(target, snap(at, fps, layer.duration));
-              }}
-            >
-              <div
-                className={`keyframe-track-line ${active ? 'is-animated' : ''}`}
-                style={{ left: layer.start * pixels, width: layer.duration * pixels }}
-              />
-              {!active && (
-                <span className="keyframe-empty" style={{ left: layer.start * pixels + 14 }}>
-                  Add ◇ to animate
-                </span>
-              )}
-              {entries.map((entry) => (
-                <button
-                  type="button"
-                  key={
-                    Object.values(entry.frames).some((frame) => frame.id === selected?.id)
-                      ? selected!.id
-                      : entry.id
-                  }
-                  data-keyframe-id={entry.id}
-                  className={`keyframe-diamond ${Object.values(entry.frames).some((frame) => frame.id === selected?.id) ? 'is-selected' : ''} ${firstFrame(entry).easing === 'hold' ? 'is-hold' : ''}`}
-                  aria-label={`${target.name} keyframe at ${entry.time.toFixed(2)} seconds for ${layer.name}`}
-                  aria-pressed={Object.values(entry.frames).some(
-                    (frame) => frame.id === selected?.id,
-                  )}
-                  title={`${target.name} · ${entry.time.toFixed(2)}s · Drag to move · Delete to remove`}
-                  style={{ left: (layer.start + entry.time) * pixels }}
-                  onPointerDown={(event) => startDrag(event, target, entry)}
-                  onKeyDown={(event) => keyDown(event, target, entry)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (event.detail === 0) selectKey(target, entry);
-                  }}
-                >
-                  <span />
+        ) : (
+          <div className="keyframe-selection-hint">
+            <svg viewBox="0 0 140 50" aria-hidden="true">
+              <path d="M12 36C52 36 60 12 128 12" />
+              <circle cx="12" cy="36" r="5" />
+              <circle cx="128" cy="12" r="5" />
+            </svg>
+            <div>
+              <strong>
+                {entries.length > 1 ? 'Shape the move between points' : 'Two points make a move'}
+              </strong>
+              <p>
+                {entries.length > 1
+                  ? 'Choose a point or the line between them to change the curve.'
+                  : 'Add a point, move the playhead, then move or resize your element on the canvas.'}
+              </p>
+              {entries.length > 1 && (
+                <button type="button" onClick={() => selectKey(target, entries[0])}>
+                  Edit first curve →
                 </button>
-              ))}
+              )}
             </div>
           </div>
-        );
-      })}
-      <div className="keyframe-selection-panel" ref={selectionPanel}>
-        {key && group ? (
-          <>
-            <div className="keyframe-selection-details">
-              <strong>{group.name} keyframe</strong>
-              <label>
-                <span>Time in clip</span>
-                <div className="keyframe-time-field">
-                  <input
-                    type="number"
-                    aria-label={`Selected keyframe time for ${layer.name}`}
-                    value={Number(key.time.toFixed(3))}
-                    min="0"
-                    max={layer.duration}
-                    step={1 / fps}
-                    disabled={locked}
-                    onFocus={() => {
-                      numberGesture.current = false;
-                    }}
-                    onBlur={() => {
-                      numberGesture.current = false;
-                    }}
-                    onChange={(event) => {
-                      const value = event.currentTarget.valueAsNumber;
-                      if (
-                        Number.isFinite(value) &&
-                        !near(snap(value, fps, layer.duration), key.time)
-                      ) {
-                        beginNumberEdit();
-                        moveTo(group, key, value, false);
-                      }
-                    }}
-                  />
-                  <small>s</small>
-                </div>
-              </label>
-              <button
-                type="button"
-                className="keyframe-delete"
-                aria-label={`Delete selected keyframe for ${layer.name}`}
-                disabled={locked}
-                onClick={() => remove(group, key)}
-              >
-                Remove keyframe
-              </button>
-            </div>
-            <KeyframeCurveEditor
-              key={key.id}
-              frame={firstFrame(key)}
-              name={layer.name}
-              disabled={locked || !nextKey}
-              checkpoint={checkpoint}
-              change={(patch, record = true) => {
-                let draft = layer;
-                for (const property of group.properties) {
-                  const frame = key.frames[property];
-                  if (frame)
-                    draft = {
-                      ...draft,
-                      ...upsertKeyframe(draft, property, key.time, frame.value, {
-                        id: frame.id,
-                        ...patch,
-                      }),
-                    };
-                }
-                edit(
-                  {
-                    keyframes: draft.keyframes,
-                    keyframeOffset: draft.keyframeOffset,
-                    transform3d: draft.transform3d,
-                  },
-                  record,
-                );
-              }}
-            />
-          </>
-        ) : (
-          <p className="keyframe-selection-hint">
-            Select a diamond to adjust its time and curve. Drag diamonds to retime your animation.
-          </p>
+        )}
+        <KeyframeMotionPreview
+          project={project}
+          layer={layer}
+          from={previewFrom}
+          to={previewTo}
+          onProgress={setPreviewProgress}
+        />
+        {key && (
+          <button
+            type="button"
+            className="keyframe-delete"
+            aria-label={`Delete selected keyframe for ${layer.name}`}
+            title="Delete this point"
+            disabled={locked}
+            onClick={() => remove(target, key)}
+          >
+            <Trash2 size={14} />
+          </button>
         )}
       </div>
     </div>

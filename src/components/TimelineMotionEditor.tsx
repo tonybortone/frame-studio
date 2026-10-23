@@ -13,13 +13,14 @@ import {
   easeProgress,
   resetMotionPatch,
 } from '../core/motion';
-import type { Layer } from '../core/types';
+import type { Layer, Project } from '../core/types';
 import { LockKeyhole, Play, RotateCw, X } from '../icons';
 import MotionPresetPicker from './MotionPresetPicker';
 import './TimelineMotionEditor.css';
 import TimelineKeyframeEditor from './TimelineKeyframeEditor';
 
 interface Props {
+  project: Project;
   layer: Layer;
   fps: number;
   pixels: number;
@@ -85,6 +86,7 @@ function NumberControl({
 
 /** These strips edit the same clip-relative envelopes used by preview and export. */
 export default function TimelineMotionEditor({
+  project,
   layer,
   fps,
   pixels,
@@ -336,6 +338,37 @@ export default function TimelineMotionEditor({
     );
   };
 
+  const modeSwitch = (
+    <div
+      className="timeline-motion-mode"
+      role="tablist"
+      aria-label={`Motion editing mode for ${layer.name}`}
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={mode === 'presets'}
+        onClick={() => {
+          setMode('presets');
+          onPresetsOpen();
+        }}
+      >
+        Presets
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={mode === 'keyframes'}
+        onClick={() => {
+          setMode('keyframes');
+          onKeyframesOpen();
+        }}
+      >
+        Keyframes <span aria-hidden="true">◇</span>
+      </button>
+    </div>
+  );
+
   return (
     <div
       className="timeline-inline-editor"
@@ -382,77 +415,53 @@ export default function TimelineMotionEditor({
             )}
         </>
       ) : null}
-      <div className="timeline-motion-heading">
-        <div>
-          {audio && <strong>Sound</strong>}
-          <span>{layer.name}</span>
-          {layer.locked && (
-            <small>
-              <LockKeyhole size={12} /> Locked
-            </small>
-          )}
-        </div>
-        {!audio && (
-          <div
-            className="timeline-motion-mode"
-            role="tablist"
-            aria-label={`Motion editing mode for ${layer.name}`}
-          >
+      {(audio || mode === 'presets') && (
+        <div className="timeline-motion-heading">
+          <div>
+            {audio && <strong>Sound</strong>}
+            <span>{layer.name}</span>
+            {layer.locked && (
+              <small>
+                <LockKeyhole size={12} /> Locked
+              </small>
+            )}
+          </div>
+          {!audio && modeSwitch}
+          <div className="timeline-motion-actions">
             <button
               type="button"
-              role="tab"
-              aria-selected={mode === 'presets'}
-              onClick={() => {
-                setMode('presets');
-                onPresetsOpen();
-              }}
+              aria-label={`Preview clip ${layer.name}`}
+              onClick={() => onPreview(layer)}
             >
-              Presets
+              <Play size={13} /> Preview
             </button>
+            {!audio && mode === 'presets' && (
+              <button
+                type="button"
+                aria-label={`Reset motion for ${layer.name}`}
+                disabled={layer.locked || !hasMotion}
+                onClick={() => edit(resetMotionPatch(layer))}
+              >
+                <RotateCw size={13} /> <span>Reset</span>
+              </button>
+            )}
             <button
               type="button"
-              role="tab"
-              aria-selected={mode === 'keyframes'}
-              onClick={() => {
-                setMode('keyframes');
-                onKeyframesOpen();
-              }}
+              className="timeline-motion-close"
+              aria-label={`Close ${audio ? 'audio' : 'motion'} editor for ${layer.name}`}
+              onClick={onClose}
             >
-              Keyframes <span aria-hidden="true">◇</span>
+              <X size={16} />
             </button>
           </div>
-        )}
-        <div className="timeline-motion-actions">
-          <button
-            type="button"
-            aria-label={`Preview clip ${layer.name}`}
-            onClick={() => onPreview(layer)}
-          >
-            <Play size={13} /> Preview
-          </button>
-          {!audio && mode === 'presets' && (
-            <button
-              type="button"
-              aria-label={`Reset motion for ${layer.name}`}
-              disabled={layer.locked || !hasMotion}
-              onClick={() => edit(resetMotionPatch(layer))}
-            >
-              <RotateCw size={13} /> <span>Reset</span>
-            </button>
-          )}
-          <button
-            type="button"
-            className="timeline-motion-close"
-            aria-label={`Close ${audio ? 'audio' : 'motion'} editor for ${layer.name}`}
-            onClick={onClose}
-          >
-            <X size={16} />
-          </button>
         </div>
-      </div>
+      )}
       {!audio && mode === 'keyframes' ? (
         <TimelineKeyframeEditor
           key={layer.id}
+          project={project}
+          modeSwitch={modeSwitch}
+          onClose={onClose}
           layer={layer}
           fps={fps}
           time={time}
