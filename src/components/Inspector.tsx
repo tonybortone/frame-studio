@@ -805,37 +805,39 @@ export default function Inspector({
                 </>
               )}
             </fieldset>
-            <section className="property-section">
-              <h4>Organize</h4>
-              <div className="align-actions">
-                <button onClick={() => reorder(-1)}>Send back</button>
-                <button onClick={() => reorder(1)}>Bring forward</button>
-              </div>
-              {selected.length > 1 && (
-                <button className="secondary wide" onClick={group}>
-                  Group / ungroup selection
+            {activeTab === 'design' && (
+              <section className="property-section">
+                <h4>Organize</h4>
+                <div className="align-actions">
+                  <button onClick={() => reorder(-1)}>Send back</button>
+                  <button onClick={() => reorder(1)}>Bring forward</button>
+                </div>
+                {selected.length > 1 && (
+                  <button className="secondary wide" onClick={group}>
+                    Group / ungroup selection
+                  </button>
+                )}
+                <button className="save-component" onClick={saveComponent}>
+                  <Component size={15} />
+                  Save as component <span>↗</span>
                 </button>
-              )}
-              <button className="save-component" onClick={saveComponent}>
-                <Component size={15} />
-                Save as component <span>↗</span>
-              </button>
-              <div className="object-actions">
-                <button title="Duplicate" aria-label="Duplicate selection" onClick={duplicate}>
-                  <Copy size={14} />
-                </button>
-                <button
-                  title="Lock or unlock"
-                  aria-label="Lock selection"
-                  onClick={() => patch({ locked: !layer.locked })}
-                >
-                  {layer.locked ? <LockKeyhole size={14} /> : <UnlockKeyhole size={14} />}
-                </button>
-                <button title="Delete" aria-label="Delete selection" onClick={remove}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </section>
+                <div className="object-actions">
+                  <button title="Duplicate" aria-label="Duplicate selection" onClick={duplicate}>
+                    <Copy size={14} />
+                  </button>
+                  <button
+                    title="Lock or unlock"
+                    aria-label="Lock selection"
+                    onClick={() => patch({ locked: !layer.locked })}
+                  >
+                    {layer.locked ? <LockKeyhole size={14} /> : <UnlockKeyhole size={14} />}
+                  </button>
+                  <button title="Delete" aria-label="Delete selection" onClick={remove}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </section>
+            )}
           </>
         )}
       </div>
