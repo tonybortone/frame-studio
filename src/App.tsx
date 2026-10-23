@@ -20,13 +20,13 @@ import {
   Command,
   Film,
   CheckCheck,
-  SlidersHorizontal,
   Layers3,
   Eye,
   EyeOff,
 } from './icons';
 import Sidebar from './components/Sidebar';
-import Inspector from './components/Inspector';
+import Inspector, { type InspectorTab } from './components/Inspector';
+import InspectorRail from './components/InspectorRail';
 import Timeline from './components/Timeline';
 import CanvasToolbar from './components/CanvasToolbar';
 import { createShapePreset, DEFAULT_DRAWING_STYLE, type CanvasTool } from './core/creation';
@@ -61,14 +61,20 @@ export default function App() {
   const [drawingStyle, setDrawingStyle] = useState(DEFAULT_DRAWING_STYLE);
   const [panelsHidden, setPanelsHidden] = useState(false);
   const panelsBeforeFocus = useRef({ library: true, inspector: false });
-  const [inspectorRequest, setInspectorRequest] = useState<{
-    tab: 'design' | 'color';
-    nonce: number;
-  } | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('design');
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [viewMode, setViewMode] = useState<'canvas' | 'depth'>('canvas');
   const [resetViewKey, setResetViewKey] = useState(0);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const inspectorRailVisible = viewMode === 'canvas' && !panelsHidden;
+  const audioSelection =
+    project.layers.some((layer) => selected.includes(layer.id) && layer.kind === 'audio') &&
+    !project.layers.some((layer) => selected.includes(layer.id) && layer.kind !== 'audio');
+  const activeInspectorTab = audioSelection && inspectorTab === 'color' ? 'design' : inspectorTab;
+  const closeInspector = () => {
+    setInspectorOpen(false);
+    document.getElementById(`inspector-menu-${activeInspectorTab}`)?.focus();
+  };
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [libraryRequest, setLibraryRequest] = useState<{
     tab: 'media' | 'text' | 'elements' | 'templates' | 'components';
@@ -575,7 +581,7 @@ export default function App() {
         </div>
       </header>
       <main
-        className={`editor-layout ${inspectorOpen ? 'with-inspector' : ''} ${libraryOpen ? '' : 'without-library'}`}
+        className={`editor-layout ${inspectorRailVisible ? 'with-inspector-rail' : ''} ${libraryOpen ? '' : 'without-library'}`}
       >
         {libraryOpen && (
           <Sidebar
@@ -680,18 +686,6 @@ export default function App() {
                   setResetViewKey((value) => value + 1);
                 }}
               />
-              <button
-                className={`board-chip ${inspectorOpen ? 'active' : ''}`}
-                aria-label="Toggle properties"
-                title="Properties"
-                aria-pressed={inspectorOpen}
-                onClick={() => {
-                  setPanelsHidden(false);
-                  setInspectorOpen((v) => !v);
-                }}
-              >
-                <SlidersHorizontal size={15} />
-              </button>
             </div>
           </div>
           <CanvasToolbar
@@ -745,7 +739,7 @@ export default function App() {
               }
               setPanelsHidden(false);
               setInspectorOpen(true);
-              setInspectorRequest({ tab: 'color', nonce: Date.now() });
+              setInspectorTab('color');
             }}
             busy={busy || !ready}
             depthView={viewMode === 'depth'}
@@ -818,10 +812,21 @@ export default function App() {
             </div>
           )}
         </section>
-        {inspectorOpen && (
+        {inspectorRailVisible && (
+          <InspectorRail
+            tab={activeInspectorTab}
+            open={inspectorOpen}
+            audioSelection={audioSelection}
+            onSelect={(tab) => {
+              setInspectorTab(tab);
+              setInspectorOpen(!inspectorOpen || activeInspectorTab !== tab);
+            }}
+          />
+        )}
+        {inspectorOpen && inspectorRailVisible && (
           <Inspector
-            close={() => setInspectorOpen(false)}
-            panelRequest={inspectorRequest}
+            close={closeInspector}
+            tab={activeInspectorTab}
             project={project}
             selected={selected}
             change={change}

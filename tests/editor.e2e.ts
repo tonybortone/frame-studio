@@ -3,6 +3,12 @@ import { expect, test, type Download, type Page } from '@playwright/test';
 import { createLayer, createProject, parseProject } from '../src/core/project';
 import type { Project } from '../src/core/types';
 
+function editingMenu(page: Page, name: 'Design' | 'Motion' | 'Color' | 'Sound') {
+  return page
+    .getByRole('navigation', { name: 'Editing menus', exact: true })
+    .getByRole('button', { name, exact: true });
+}
+
 async function downloadBytes(download: Download): Promise<Buffer> {
   const filename = await download.path();
   expect(filename, 'The browser should finish writing the download').not.toBeNull();
@@ -140,11 +146,9 @@ test('opens a rendered composition with editable timeline layers', async ({ page
   await expect(canvas).toHaveAttribute('width', '1920');
   await expect(canvas).toHaveAttribute('height', '1080');
   await expect(page.getByRole('button', { name: /^Timeline clip / })).toHaveCount(6);
-  await expect(
-    page.getByRole('button', { name: 'Toggle properties', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'false');
+  await expect(editingMenu(page, 'Design')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByLabel('Project name')).not.toBeVisible();
-  await page.getByRole('button', { name: 'Toggle properties', exact: true }).click();
+  await editingMenu(page, 'Design').click();
   await expect(page.getByLabel('Project name')).toHaveValue('A little idea');
   await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
   const alpha = await canvas.evaluate(
@@ -277,7 +281,7 @@ test('rejects an unsupported project version and keeps the current composition',
   });
   await expect(page.getByRole('status')).toContainText('This project version is not supported');
   await expect(page.getByRole('button', { name: /^Timeline clip / })).toHaveCount(6);
-  await page.getByRole('button', { name: 'Toggle properties', exact: true }).click();
+  await editingMenu(page, 'Design').click();
   await expect(page.getByLabel('Project name')).toHaveValue('A little idea');
   expect((await saveProject(page)).version).toBe(1);
 });
@@ -503,9 +507,7 @@ test('pans the board without editing the project and fits it back into view', as
   await expect
     .poll(async () => (await canvas.boundingBox())!.y)
     .toBeCloseTo(originalBounds!.y + 55, 1);
-  await expect(
-    page.getByRole('button', { name: 'Toggle properties', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'false');
+  await expect(editingMenu(page, 'Design')).toHaveAttribute('aria-pressed', 'false');
   expect(await saveProject(page)).toEqual(originalProject);
 
   await page.getByRole('button', { name: 'Fit canvas', exact: true }).click();
@@ -806,6 +808,12 @@ test('separates imported audio from visuals and saves real volume, fade, and mut
   const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
   await expect(inspector.getByRole('spinbutton', { name: 'X', exact: true })).toHaveCount(0);
   await expect(inspector.getByRole('slider', { name: 'Opacity', exact: true })).toHaveCount(0);
+  await expect(editingMenu(page, 'Color')).toBeDisabled();
+  await editingMenu(page, 'Sound').click();
+  await expect(editingMenu(page, 'Sound')).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    inspector.getByRole('heading', { name: 'Sound', exact: true, level: 2 }),
+  ).toBeVisible();
   await expect(inspector.getByRole('slider', { name: 'Volume', exact: true })).toHaveValue('0.35');
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   const unmuted = (await saveProject(page)).layers.find((layer) => layer.id === clip.id)!;
@@ -1397,7 +1405,7 @@ test('applies a group-safe motion recipe in one undo step without changing compo
   const before = await saveProject(page);
   const parts = before.layers.slice(6);
   const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
-  await properties.getByRole('button', { name: 'Motion', exact: true }).click();
+  await editingMenu(page, 'Motion').click();
   await expect(properties.getByRole('button', { name: 'Pop', exact: true })).toBeDisabled();
   await properties.getByRole('button', { name: 'Float', exact: true }).click();
   const after = await saveProject(page);
@@ -1435,7 +1443,7 @@ test('color looks persist, render in exports, and recover from zero strength', a
   await openProjectFixture(page, fixture);
   await page.getByRole('button', { name: 'Timeline clip Color swatch', exact: true }).click();
   const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
-  await properties.getByRole('button', { name: 'Color', exact: true }).click();
+  await editingMenu(page, 'Color').click();
   await properties.getByRole('button', { name: 'Noir look', exact: true }).click();
   const noir = await saveProject(page, fixture.name);
   expect(noir.layers[0].saturation).toBe(0);
@@ -1622,7 +1630,7 @@ test('solid background removal is reversible and exports the same keyed image in
   await openProjectFixture(page, fixture);
   await page.getByRole('button', { name: 'Timeline clip Two colors', exact: true }).click();
   const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
-  await properties.getByRole('button', { name: 'Color', exact: true }).click();
+  await editingMenu(page, 'Color').click();
   await properties.getByRole('button', { name: 'Remove solid background', exact: true }).click();
   const keyed = await saveProject(page, fixture.name);
   expect(keyed.layers[0]).toMatchObject({
@@ -1663,7 +1671,7 @@ test('image color replacement preserves source and unrelated pixels with exact h
   await openProjectFixture(page, fixture);
   await page.getByRole('button', { name: 'Timeline clip Two colors', exact: true }).click();
   const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
-  await properties.getByRole('button', { name: 'Color', exact: true }).click();
+  await editingMenu(page, 'Color').click();
   await properties.locator('summary[aria-label="Replace color"]').click();
   await properties.getByRole('button', { name: 'Enable color replacement', exact: true }).click();
   const target = properties.getByRole('textbox', { name: 'To hex', exact: true });
@@ -1706,7 +1714,7 @@ test('locked image tools cannot modify the image', async ({ page }) => {
   await expect(
     properties.getByRole('button', { name: 'Flip horizontally', exact: true }),
   ).toBeDisabled();
-  await properties.getByRole('button', { name: 'Color', exact: true }).click();
+  await editingMenu(page, 'Color').click();
   await expect(
     properties.getByRole('button', { name: 'Remove solid background', exact: true }),
   ).toBeDisabled();
@@ -2014,4 +2022,118 @@ test('canvas size menu fits a short window and discards swapped dimensions when 
   await expect(height).toHaveValue('1080');
   await page.keyboard.press('Escape');
   expect(await saveProject(page)).toEqual(original);
+});
+
+test('right-side editing menus open dedicated categories and retain selection and focus when closed', async ({
+  page,
+}) => {
+  const rail = page.getByRole('navigation', { name: 'Editing menus', exact: true });
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  const design = editingMenu(page, 'Design');
+  const motion = editingMenu(page, 'Motion');
+  const color = editingMenu(page, 'Color');
+  await expect(rail).toBeVisible();
+  await expect(properties).toHaveCount(0);
+  for (const button of [design, motion, color]) {
+    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await expect(button).not.toHaveAttribute('aria-controls');
+  }
+
+  await motion.click();
+  await expect(motion).toHaveAttribute('aria-pressed', 'true');
+  await expect(motion).toHaveAttribute('aria-expanded', 'true');
+  await expect(motion).toHaveAttribute('aria-controls', 'inspector-panel');
+  await expect(
+    properties.getByRole('heading', { name: 'Motion', exact: true, level: 2 }),
+  ).toBeVisible();
+  await expect(
+    properties.getByRole('heading', { name: 'Select an element to animate', exact: true }),
+  ).toBeVisible();
+  await expect(properties.getByLabel('Project name', { exact: true })).toHaveCount(0);
+  await expect(properties.getByLabel('Canvas color', { exact: true })).toHaveCount(0);
+
+  await color.click();
+  await expect(
+    properties.getByRole('heading', { name: 'Color', exact: true, level: 2 }),
+  ).toBeVisible();
+  await expect(properties.getByLabel('Canvas color', { exact: true })).toBeVisible();
+  await expect(properties.getByLabel('Project name', { exact: true })).toHaveCount(0);
+  await expect(motion).toHaveAttribute('aria-pressed', 'false');
+  await design.click();
+  await expect(
+    properties.getByRole('heading', { name: 'Design', exact: true, level: 2 }),
+  ).toBeVisible();
+  await expect(properties.getByLabel('Project name', { exact: true })).toHaveValue('A little idea');
+  await design.click();
+  await expect(properties).toHaveCount(0);
+  await expect(design).toHaveAttribute('aria-expanded', 'false');
+
+  await motion.click();
+  await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
+  await expect(motion).toHaveAttribute('aria-pressed', 'true');
+  await expect(properties.getByRole('button', { name: 'Float', exact: true })).toBeVisible();
+  await properties.getByRole('button', { name: 'Close properties', exact: true }).click();
+  await expect(properties).toHaveCount(0);
+  await expect(motion).toBeFocused();
+  await expect(motion).toHaveAttribute('aria-pressed', 'false');
+  // Selecting another layer recalls the category, rather than silently returning to Design.
+  await page.getByRole('button', { name: 'Timeline clip Edition', exact: true }).click();
+  await expect(
+    properties.getByRole('heading', { name: 'Motion', exact: true, level: 2 }),
+  ).toBeVisible();
+  await properties.getByRole('button', { name: 'Float', exact: true }).focus();
+  await page.keyboard.press('Escape');
+  await expect(properties).toHaveCount(0);
+  await expect(motion).toBeFocused();
+  await expect(
+    page.getByRole('button', { name: 'Timeline clip Edition', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await motion.click();
+  await expect(
+    properties.getByRole('heading', { name: 'Motion', exact: true, level: 2 }),
+  ).toBeVisible();
+});
+
+test('right-side editing menus leave canvas placement and redo history unchanged and hide in focused views', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  await page.getByRole('button', { name: 'Add text', exact: true }).click();
+  const added = await saveProject(page);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  const canvas = page.getByLabel('Composition canvas');
+  const before = (await canvas.boundingBox())!;
+  const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
+  const redo = page.getByRole('button', { name: 'Redo', exact: true });
+  await expect(redo).toBeEnabled();
+  for (const name of ['Motion', 'Color', 'Design', 'Design', 'Motion'] as const) {
+    await editingMenu(page, name).click();
+    await expect.poll(async () => canvas.boundingBox()).toEqual(before);
+  }
+  expect(await saveProject(page)).toEqual(original);
+  await expect(redo).toBeEnabled();
+  await redo.click();
+  expect(await saveProject(page)).toEqual(added);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
+
+  const rail = page.getByRole('navigation', { name: 'Editing menus', exact: true });
+  await page.getByRole('button', { name: 'Hide panels', exact: true }).click();
+  await expect(rail).toBeHidden();
+  await expect(properties).toHaveCount(0);
+  await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
+  await expect(properties).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show panels', exact: true }).click();
+  await expect(rail).toBeVisible();
+  await expect(
+    properties.getByRole('heading', { name: 'Motion', exact: true, level: 2 }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  await expect(rail).toBeHidden();
+  await expect(properties).toHaveCount(0);
+  await page.getByRole('button', { name: '2D canvas', exact: true }).click();
+  await expect(rail).toBeVisible();
+  expect(await saveProject(page)).toEqual(original);
+  await expect(redo).toBeEnabled();
 });

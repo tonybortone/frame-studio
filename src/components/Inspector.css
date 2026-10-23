@@ -1,9 +1,10 @@
 .inspector {
   position: absolute;
   top: 58px;
-  right: 14px;
-  bottom: 56px;
-  width: 248px;
+  right: 76px;
+  bottom: 12px;
+  width: 280px;
+  max-width: calc(100% - 96px);
   z-index: 8;
   display: flex;
   flex-direction: column;
@@ -15,42 +16,25 @@
   box-shadow: 0 12px 32px #10121b40;
   color: var(--text);
 }
-.inspector .inspector-tabs {
+.inspector .inspector-header {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 8px;
   flex-shrink: 0;
-  min-height: 36px;
-  margin: 9px 10px 0;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--input);
+  min-height: 47px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
 }
-.inspector .inspector-tabs button {
-  flex: 1;
-  gap: 5px;
-  min-width: 0;
-  height: 27px;
-  padding: 0 6px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
+.inspector .inspector-header > svg {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
 }
-.inspector .inspector-tabs button svg {
-  width: 12px;
-  height: 12px;
-}
-.inspector .inspector-tabs button:hover {
-  color: var(--text);
-}
-.inspector .inspector-tabs button.active {
-  color: var(--text);
-  background: var(--raised);
-  border-color: var(--border);
+.inspector .inspector-header h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 .inspector .inspector-body {
   flex: 1;
@@ -94,7 +78,7 @@
   font-size: 11px;
   color: var(--muted);
 }
-.inspector .inspector-title > button {
+.inspector .inspector-header > button {
   display: grid;
   place-items: center;
   width: 24px;
@@ -103,7 +87,7 @@
   border-radius: 5px;
   color: var(--muted);
 }
-.inspector .inspector-title > button:hover {
+.inspector .inspector-header > button:hover {
   color: var(--text);
   background: var(--raised);
 }
@@ -414,6 +398,38 @@
   color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
+}
+.inspector .inspector-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 10px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.inspector .inspector-empty > div {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--input);
+  color: var(--muted);
+}
+.inspector .inspector-empty h3 {
+  margin: 0 0 7px;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+.inspector .inspector-empty p {
+  max-width: 220px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
 }
 .inspector .motion-grid {
   display: grid;

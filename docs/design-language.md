@@ -51,7 +51,9 @@ Seven editable templates are provided: Blank canvas, Portrait title, Screen + ca
 
 ## Board and frame size
 
-The board supports direct selection and resizing, hand-tool or Space-drag panning, and pointer-centered zoom. Panning and zooming affect the workspace view, not the exported composition. Properties float over the workspace without shifting the board during a drag.
+The board supports direct selection and resizing, hand-tool or Space-drag panning, and pointer-centered zoom. Panning and zooming affect the workspace view, not the exported composition. A slim right rail gives Design, Motion, and Color their own menus. The selected menu opens beside the rail without shifting the board during a drag; clicking it again collapses the panel. The close button and Escape return focus to that menu while keeping the selection.
+
+Design holds layout and content controls, Motion holds animation presets and timing, and Color holds colors, looks, and image adjustments. Without a selection, Design shows project settings, Color edits the canvas background, and Motion explains how to select an element. Audio selections use Sound in place of Motion and disable Color. The rail stays out of the 3D workspace and hides with the other panels in focus mode.
 
 The frame-size picker shows landscape, portrait, square, and social formats as four visual cards with their ratios and exact pixel dimensions. The trigger keeps the current ratio and dimensions visible. Custom width and height have a swap control and can be applied with Enter. Fit contents to frame scales existing objects uniformly; turning it off changes frame dimensions while preserving object coordinates and sizes. Resizing can be undone; choosing the existing size preserves undo and redo history. The menu fits the window and restores focus when closed with Escape.
 

@@ -30,8 +30,10 @@ import { getSelectionBounds, type SelectionTransform } from '../core/selection';
 import { kindIcons } from './Timeline';
 import { ElementColors, ImageTools, MaskControls, elementColorProperty } from './VisualTools';
 import './Inspector.css';
+export type InspectorTab = 'design' | 'motion' | 'color';
+
 interface Props {
-  panelRequest?: { tab: 'design' | 'color'; nonce: number } | null;
+  tab: InspectorTab;
   close: () => void;
   project: Project;
   selected: string[];
@@ -132,7 +134,7 @@ function SoundControls({ layer, patch }: { layer: Layer; patch: (value: Partial<
 }
 
 export default function Inspector({
-  panelRequest,
+  tab,
   close,
   project,
   selected,
@@ -147,10 +149,6 @@ export default function Inspector({
   transformSelection,
   autoRemoveBackground,
 }: Props) {
-  const [tab, setTab] = useState('design');
-  useEffect(() => {
-    if (panelRequest) setTab(panelRequest.tab);
-  }, [panelRequest]);
   const lookStrengthGesture = useRef({ active: false, recorded: false });
   const resetLookStrengthGesture = () => {
     lookStrengthGesture.current = { active: false, recorded: false };
@@ -259,27 +257,30 @@ export default function Inspector({
       </fieldset>
     ) : null;
   const Icon = layer ? kindIcons[layer.kind] : SlidersHorizontal;
+  const category = {
+    design: { label: 'Design', icon: SlidersHorizontal },
+    motion: { label: isAudio ? 'Sound' : 'Motion', icon: isAudio ? Volume2 : Sparkles },
+    color: { label: 'Color', icon: Sliders },
+  }[activeTab];
   return (
-    <aside className="inspector" aria-label="Properties">
-      <div className="inspector-tabs">
-        {[
-          { id: 'design', label: 'Design', icon: SlidersHorizontal },
-          { id: 'motion', label: isAudio ? 'Sound' : 'Motion', icon: isAudio ? Volume2 : Sparkles },
-          { id: 'color', label: 'Color', icon: Sliders },
-        ]
-          .filter((t) => !isAudio || t.id !== 'color')
-          .map((t) => (
-            <button
-              key={t.id}
-              className={activeTab === t.id ? 'active' : ''}
-              aria-pressed={activeTab === t.id}
-              onClick={() => setTab(t.id)}
-            >
-              <t.icon size={13} />
-              {t.label}
-            </button>
-          ))}
-      </div>
+    <aside
+      id="inspector-panel"
+      className="inspector"
+      aria-label="Properties"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      }}
+    >
+      <header className="inspector-header">
+        <category.icon size={15} />
+        <h2>{category.label}</h2>
+        <button aria-label="Close properties" title="Close properties" onClick={close}>
+          <X size={15} />
+        </button>
+      </header>
       <div className="inspector-body">
         <div className="inspector-title">
           <div style={{ color: layer ? LAYER_COLORS[layer.kind] : 'var(--muted)' }}>
@@ -297,55 +298,72 @@ export default function Inspector({
                   : 'Project settings'}
             </span>
           </div>
-          <button aria-label="Close properties" title="Close properties" onClick={close}>
-            <X size={14} />
-          </button>
         </div>
         {!layer ? (
           <>
-            <section className="property-section">
-              <h4>Composition</h4>
-              <label className="field-label">
-                Project name
-                <input
-                  value={project.name}
-                  maxLength={100}
-                  onBlur={(e) => {
-                    if (!e.target.value.trim()) updateProject({ name: 'Untitled project' });
-                  }}
-                  onChange={(e) => updateProject({ name: e.target.value })}
-                />
-              </label>
-              <div className="field-grid">
-                <NumberField
-                  label="Duration (s)"
-                  value={project.duration}
-                  min={Math.max(1, ...project.layers.map((l) => l.start + l.duration))}
-                  max={3600}
-                  onChange={(duration) => updateProject({ duration })}
-                />
-                <NumberField
-                  label="Frame rate"
-                  value={project.fps}
-                  min={1}
-                  max={60}
-                  onChange={(fps) => updateProject({ fps: Math.round(fps) })}
-                />
-              </div>
-            </section>
-            <section className="property-section">
-              <h4>Canvas color</h4>
-              <label className="color-field">
-                <input
-                  type="color"
-                  aria-label="Canvas color"
-                  value={project.background}
-                  onChange={(e) => updateProject({ background: e.target.value })}
-                />
-                <span>{project.background.toUpperCase()}</span>
-                <span>100%</span>
-              </label>
-            </section>
+            {activeTab === 'design' && (
+              <section className="property-section">
+                <h4>Composition</h4>
+                <label className="field-label">
+                  Project name
+                  <input
+                    value={project.name}
+                    maxLength={100}
+                    onBlur={(e) => {
+                      if (!e.target.value.trim()) updateProject({ name: 'Untitled project' });
+                    }}
+                    onChange={(e) => updateProject({ name: e.target.value })}
+                  />
+                </label>
+                <div className="field-grid">
+                  <NumberField
+                    label="Duration (s)"
+                    value={project.duration}
+                    min={Math.max(1, ...project.layers.map((l) => l.start + l.duration))}
+                    max={3600}
+                    onChange={(duration) => updateProject({ duration })}
+                  />
+                  <NumberField
+                    label="Frame rate"
+                    value={project.fps}
+                    min={1}
+                    max={60}
+                    onChange={(fps) => updateProject({ fps: Math.round(fps) })}
+                  />
+                </div>
+              </section>
+            )}
+            {activeTab === 'motion' ? (
+              <section className="inspector-empty">
+                <div>
+                  <Sparkles size={22} />
+                </div>
+                <h3>Select an element to animate</h3>
+                <p>
+                  Choose an element on the canvas or timeline to add motion and adjust its timing.
+                </p>
+              </section>
+            ) : (
+              <section className="property-section">
+                <h4>Canvas color</h4>
+                <label className="color-field">
+                  <input
+                    type="color"
+                    aria-label="Canvas color"
+                    value={project.background}
+                    onChange={(e) => updateProject({ background: e.target.value })}
+                  />
+                  <span>{project.background.toUpperCase()}</span>
+                  <span>100%</span>
+                </label>
+                {activeTab === 'color' && (
+                  <p className="helper-copy">
+                    Set the background of your canvas. Select an element to adjust its colors and
+                    look.
+                  </p>
+                )}
+              </section>
+            )}
           </>
         ) : (
           <>
