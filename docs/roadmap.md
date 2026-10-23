@@ -2,6 +2,8 @@
 
 The goal is a polished Mac editor that makes video, vector composition, motion, and reusable layouts feel like one workflow. This roadmap separates the first implementation from larger engineering milestones. It is an intended sequence, not a release-date commitment.
 
+The [Adobe workflow audit](adobe-capability-audit.md) compares the current alpha with Photoshop color, Illustrator vectors, and After Effects animation/masking. It records verified subsets, missing capabilities, reliability findings, and concrete acceptance examples. Professional feature parity is not established.
+
 ## 0 — Working alpha foundation
 
 Initial scope: a React/TypeScript editor with an Electron shell; semantic layer colors; canvas text/shapes/drawing; local media import; basic SVG decomposition; timeline move/trim/split; multi-selection and groups; reusable layer collections; starter layouts and aspect ratios; basic motion/color controls; project save/load; and capability-detected real-time video export plus snapshots.
@@ -13,6 +15,8 @@ Initial scope: a React/TypeScript editor with an Electron shell; semantic layer 
 ## 1 — Reliable everyday editing
 
 - Improve selection, snapping, alignment, keyboard commands, and discoverability.
+- Unify current-time transforms for rendering, hit-testing, selection outlines and handles.
+- Repair the SVG export/import contract so supported exported artwork can be imported again without losing editable structure.
 - Extend the existing numeric clip controls with real audio waveforms and more precise timeline navigation.
 - Strengthen undo/redo coverage, validation, error recovery, and project compatibility.
 - Introduce managed assets and missing-media relinking; strengthen existing autosave and recovery.

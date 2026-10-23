@@ -1,0 +1,47 @@
+{
+  "auditDate": "2026-10-23",
+  "applicationVersion": "0.1.0-alpha.11",
+  "reviewedCommit": "bf75f2e9466de622962e4e0a358c51fcaa2c21b5",
+  "runtimeSourceCommit": "c4ebc0bb3c57c79a3dc145210d80bb94a4dab282",
+  "runtimeAssets": ["index-CLi_uPB7.js", "index-CFOw9yxQ.css"],
+  "scope": "Adobe official documentation, Frame Studio source, isolated browser workflows. No Adobe binary or Adobe desktop session inspected.",
+  "workflowTests": {
+    "passed": 10,
+    "failed": 0,
+    "command": "playwright test --workers=2 --grep 'imports SVG pieces|color looks persist|masks and flips match|solid background removal|image color replacement|palette recolors|creates a curved Pen|applies a group-safe motion|edits motion in the timeline|drags a layer in 3D'",
+    "scopeLimit": "These checks verify supported subsets, not Adobe feature parity."
+  },
+  "probes": [
+    {
+      "appVersion": "0.1.0-alpha.11",
+      "sourceCommit": "c4ebc0bb3c57c79a3dc145210d80bb94a4dab282",
+      "context": "fresh isolated public starter; no user project opened",
+      "exportSucceeded": true,
+      "reimportSucceeded": false,
+      "actualMessage": "SVG import: The <tspan> element is unsupported. Expand it to simple vector paths first.",
+      "originalLayerCount": 6,
+      "finalLayerCount": 6
+    },
+    {
+      "appVersion": "0.1.0-alpha.11",
+      "sourceCommit": "c4ebc0bb3c57c79a3dc145210d80bb94a4dab282",
+      "context": "fresh isolated generated fixture; no user project opened",
+      "time": 1,
+      "animation": "slide, linear, 2 seconds",
+      "baseX": 300,
+      "visibleX": 260,
+      "width": 40,
+      "clickedVisibleCenterSelected": false,
+      "selectionOutlineUsesBasePosition": true,
+      "previewScale": 1.025,
+      "selectionOutlineOffsetInScreenPixels": 41
+    }
+  ],
+  "probeMeaning": "Both probes successfully reproduced limitations; they are not passing feature-acceptance tests.",
+  "unverifiedSourceRisks": [
+    "Nested group opacity compositing differs from per-child opacity",
+    "Imported stroke cap/join fidelity",
+    "Selection precision of conservative SVG viewBox bounds"
+  ],
+  "userProjectTouched": false
+}
