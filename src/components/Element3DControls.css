@@ -1,0 +1,263 @@
+.element-3d-controls {
+  min-width: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+}
+.element-3d-controls > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.element-3d-controls h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 550;
+}
+.element-3d-controls p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.element-3d-controls > header > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.element-3d-controls .element-3d-toggle {
+  display: flex;
+  align-items: center;
+  width: 28px;
+  height: 17px;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel-raised);
+}
+.element-3d-toggle > span {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.element-3d-toggle[aria-checked='true'] {
+  background: var(--text);
+  border-color: var(--text);
+}
+.element-3d-toggle[aria-checked='true'] > span {
+  margin-left: auto;
+  background: var(--panel);
+}
+.element-3d-poses {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.element-3d-poses button {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 10px;
+}
+.element-3d-field {
+  display: grid;
+  grid-template-columns: 34px minmax(30px, 1fr) 53px;
+  gap: 9px;
+  align-items: center;
+  margin: 7px 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+.element-3d-field > input[type='range'] {
+  width: 100%;
+  min-width: 0;
+  height: 20px;
+  padding: 0;
+  accent-color: var(--text);
+}
+.element-3d-number {
+  display: flex;
+  align-items: center;
+  height: 27px;
+  padding: 0 6px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-soft);
+}
+.element-3d-number input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+  min-width: 0;
+  width: 100%;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.element-3d-number input::-webkit-inner-spin-button,
+.element-3d-number input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.element-3d-number small {
+  font-size: 10px;
+}
+.element-3d-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.element-3d-footer button {
+  padding: 4px 0 4px 5px;
+  color: var(--text);
+  font-size: 10px;
+}
+.element-3d-motion-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+.element-3d-motion-presets button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 10px;
+}
+.element-3d-motion-presets button[aria-pressed='true'] {
+  border-color: var(--text);
+  color: var(--text);
+}
+.element-3d-preview {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 24px;
+  perspective: 80px;
+}
+.element-3d-preview b {
+  width: 18px;
+  height: 18px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 20%, transparent);
+}
+.element-3d-preview.is-tilt-in b {
+  transform: rotateX(22deg) rotateY(-35deg);
+}
+.element-3d-preview.is-flip-in b {
+  transform: rotateY(60deg);
+}
+.element-3d-preview.is-float b {
+  transform: translateY(-2px) rotateX(20deg) rotateY(-18deg);
+  box-shadow: 0 5px 0 color-mix(in srgb, currentColor 12%, transparent);
+}
+.element-3d-controls button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.element-3d-controls :is(button, input):disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.element-3d-controls :is(button, input):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.element-3d-motion.is-compact .element-3d-motion-presets {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.element-3d-motion.is-compact > header > span {
+  display: none;
+}
+.element-3d-motion.is-compact .element-3d-motion-presets button {
+  flex-direction: row;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 2px;
+}
+.element-3d-motion.is-compact .element-3d-preview {
+  width: 20px;
+}
+.element-3d-motion.is-compact .element-3d-preview b {
+  width: 13px;
+  height: 13px;
+}
+.element-3d-timing {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.element-3d-timing-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.element-3d-timing-field > div {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-right: 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-soft);
+}
+.element-3d-timing-field input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.element-3d-timing-field small {
+  font-size: 10px;
+}
+.element-3d-easing {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.element-3d-easing select {
+  min-width: 0;
+  width: 100px;
+  height: 28px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 10px;
+}

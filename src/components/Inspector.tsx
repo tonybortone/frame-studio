@@ -29,6 +29,7 @@ import {
 import { getSelectionBounds, type SelectionTransform } from '../core/selection';
 import { kindIcons } from './Timeline';
 import { ElementColors, ImageTools, MaskControls, elementColorProperty } from './VisualTools';
+import { Element3DControls, Element3DMotionControls } from './Element3DControls';
 import './Inspector.css';
 export type InspectorTab = 'design' | 'motion' | 'color';
 
@@ -175,6 +176,9 @@ export default function Inspector({
   const layer =
     firstSelected?.kind === 'audio' && visualSelection.length ? visualSelection[0] : firstSelected;
   const isAudio = layer?.kind === 'audio';
+  const singleVisual = selectedLayers.length === 1 && !isAudio ? layer : undefined;
+  const motion3d = singleVisual?.transform3d?.enabled ? singleVisual.transform3d.motion : 'none';
+  const hasMotion = layer?.animation !== 'none' || motion3d !== 'none';
   const isGroup = visualSelection.length > 1;
   const bounds = isGroup ? getSelectionBounds(visualSelection) : null;
   const lockedVisual = visualSelection.some((item) => item.locked);
@@ -514,6 +518,17 @@ export default function Inspector({
                       )}
                     </section>
                   )}
+                  <Element3DControls
+                    key={`3d-${singleVisual?.id ?? 'selection'}`}
+                    layer={singleVisual}
+                    onChange={change}
+                    checkpoint={checkpoint}
+                    emptyMessage={
+                      isAudio
+                        ? 'Select a visual element to give it depth.'
+                        : 'Select one element to edit its 3D pose.'
+                    }
+                  />
                   {layer.kind === 'text' && selected.length === 1 && (
                     <section className="property-section">
                       <h4>Typography</h4>
@@ -604,6 +619,7 @@ export default function Inspector({
                   <SoundControls layer={layer} patch={patch} />
                 ) : (
                   <>
+                    <Element3DMotionControls layer={singleVisual} onChange={change} />
                     <section className="property-section">
                       <h4>
                         Motion{' '}
@@ -643,7 +659,7 @@ export default function Inspector({
                       </p>
                       <details className="recipe-details">
                         <summary>Fine-tune</summary>
-                        {layer.animation !== 'none' && (
+                        {hasMotion && (
                           <div className="field-grid motion-timing">
                             <NumberField
                               label="Delay (s)"
@@ -654,10 +670,18 @@ export default function Inspector({
                               onChange={(animationDelay) => patchVisual({ animationDelay })}
                             />
                             <NumberField
-                              label="Duration (s)"
-                              value={motion!.duration}
-                              min={0}
-                              max={Math.min(3600, layer.duration - motion!.delay)}
+                              label={motion3d === 'float' ? 'Period (s)' : 'Duration (s)'}
+                              value={
+                                motion3d === 'float'
+                                  ? Math.max(0.4, layer.animationDuration ?? 0.6)
+                                  : motion!.duration
+                              }
+                              min={motion3d === 'float' ? 0.4 : 0}
+                              max={
+                                motion3d === 'float'
+                                  ? 3600
+                                  : Math.min(3600, layer.duration - motion!.delay)
+                              }
                               step={0.1}
                               onChange={(animationDuration) => patchVisual({ animationDuration })}
                             />
@@ -667,6 +691,11 @@ export default function Inspector({
                           <span>Easing</span>
                           <select
                             aria-label="Animation easing"
+                            disabled={
+                              motion3d === 'float' &&
+                              layer.animation === 'none' &&
+                              !motion!.exitDuration
+                            }
                             value={layer.animationEasing ?? 'ease-out'}
                             onChange={(e) =>
                               patchVisual({ animationEasing: e.target.value as AnimationEasing })

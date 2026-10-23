@@ -29,7 +29,7 @@ Alpha 6 keeps schema version **1** unchanged. Its 12 ready-made components are a
 
 Group content editing changes individual `text` values. Proportional group resizing changes each member's absolute coordinates, dimensions, corner radius, and font size where present. A separate scale, group bounding box, or parent transform is not serialized. Editing either W or H preserves the selection's proportions. Groups containing a locked visual member cannot be moved or resized as a whole.
 
-Visual layers render in array order, from back to front. The timeline and depth-view list show the frontmost visual layer first. Reordering through the depth view changes the visual entries in this array while preserving audio positions. The depth view's camera angle, pan, zoom, and layer spacing are not saved; there is no persistent 3D transform or model format.
+Visual layers render in array order, from back to front. The timeline and depth-view list show the frontmost visual layer first. Reordering through the depth view changes the visual entries in this array while preserving audio positions. The depth view's camera angle, pan, zoom, and layer spacing are not saved. Per-element perspective is stored independently in the optional `transform3d` field described below.
 
 ## Looks and recipes
 
@@ -89,3 +89,13 @@ Optional version-one fields are backward-compatible; absent values retain the or
 Timing values must be finite, nonnegative, and at most 3,600 seconds. Authored settings are retained when trimming; effective timings fit inside the current clip. Entrance delay and duration fit together, while overlapping entrance/end fades multiply. Sound fades multiply the layer volume independently of its visual opacity.
 
 Moving a clip carries its motion. Splitting retains the same clip-relative settings in each half, so an entrance restarts for the new clip; continuous source-relative motion across a split is not implemented. Saved components preserve these settings. Preview, PNG/SVG snapshots, and real-time video export use the same motion evaluation; preview and video export share the sound envelope.
+
+## Per-element 3D (alpha 14)
+
+Visual layers may have `transform3d: { enabled, rotateX, rotateY, z, motion }`. All five fields are required when the object is present. `enabled` is a boolean; X/Y angles are finite degrees from −180 to 180; `z` is normalized depth from −100 to 100 (positive is closer); `motion` is `none`, `tilt-in`, `flip-in`, or `float`. Audio rejects this field. An absent or disabled transform preserves the flat layer; disabling keeps its authored settings for later reuse. Existing `rotation` remains the in-plane Z rotation.
+
+The projection pivot is the element center, with camera distance 2.5 times its longest dimension and depth offset `z / 100 × distance × 0.5`. It changes only that element's perspective; array order still determines compositing. Normalized depth and angles survive resizing, duplication, splitting, and saved components. It is not a scene camera or geometry/model format.
+
+Tilt in and Flip in use the shared clip-relative delay, fitted duration, and easing, ending at the authored pose. Float holds the authored pose until the delay, then loops sinusoidal tilt/depth with `animationDuration` as its period (minimum 0.4 seconds, default 0.6); Float does not use easing. Existing 2D entrance and exit motion can combine with it. Splitting restarts the clip-relative effect.
+
+Preview, depth inspection textures, PNG and video share the same projection renderer. SVG explicitly rejects active, visible, enabled 3D layers rather than exporting them flat. Older version-one files remain readable; older strict app versions cannot read the new field.

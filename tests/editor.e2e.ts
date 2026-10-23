@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { createLayer, createProject, parseProject } from '../src/core/project';
-import type { LayerKind, Project } from '../src/core/types';
+import type { Layer, LayerKind, Project } from '../src/core/types';
+import { projectElementPoint } from '../src/core/element3d';
 
 function editingMenu(page: Page, name: 'Design' | 'Motion' | 'Color' | 'Sound') {
   return page
@@ -2382,4 +2383,483 @@ test('timeline controls stay in one toolbar above readable seconds in a small wi
   });
   expect(contrast, 'Hovered Pause icon contrast').toBeGreaterThanOrEqual(3);
   await pause.click();
+});
+
+function element3dFixture(): Project {
+  return {
+    ...createProject(),
+    name: 'Element perspective',
+    width: 640,
+    height: 480,
+    duration: 4,
+    background: '#ffffff',
+    layers: [
+      createLayer('shape', {
+        name: 'Perspective card',
+        x: 120,
+        y: 100,
+        width: 280,
+        height: 200,
+        radius: 0,
+        fill: '#ff0000',
+        duration: 4,
+      }),
+      createLayer('shape', {
+        name: 'Other card',
+        x: 450,
+        y: 350,
+        width: 80,
+        height: 70,
+        radius: 0,
+        fill: '#00ff00',
+        duration: 4,
+      }),
+      createLayer('audio', { name: 'Sound layer', duration: 4 }),
+    ],
+    components: [],
+  };
+}
+
+async function previewPixels(page: Page, points: number[][]): Promise<number[][]> {
+  return page.getByLabel('Composition canvas').evaluate((element, points) => {
+    const context = (element as HTMLCanvasElement).getContext('2d')!;
+    return points.map(([x, y]) => Array.from(context.getImageData(x, y, 1, 1).data));
+  }, points);
+}
+
+async function exportedPngPixels(page: Page, points: number[][]): Promise<number[][]> {
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export your creation' });
+  await dialog.getByRole('button', { name: 'PNG · current frame', exact: true }).click();
+  const downloaded = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Export PNG', exact: true }).click();
+  const bytes = await downloadBytes(await downloaded);
+  const pixels = await page.evaluate(
+    async ({ bytes, points }) => {
+      const bitmap = await createImageBitmap(
+        new Blob([Uint8Array.from(bytes)], { type: 'image/png' }),
+      );
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return points.map(([x, y]) => Array.from(context.getImageData(x, y, 1, 1).data));
+    },
+    { bytes: Array.from(bytes), points },
+  );
+  await dialog.getByRole('button', { name: 'Close export', exact: true }).click();
+  return pixels;
+}
+
+function projectedPoints(layer: Layer, local: number[][], time = 1.2): number[][] {
+  return local.map(([x, y]) => {
+    const point = projectElementPoint(layer, time, { x, y });
+    return [Math.round(point.x), Math.round(point.y)];
+  });
+}
+
+function expectUniformPixels(pixels: number[][], expected: number[], label: string, tolerance = 1) {
+  const failures = pixels
+    .map((pixel, index) => ({ pixel, index }))
+    .filter(({ pixel }) =>
+      pixel.some((channel, index) => Math.abs(channel - expected[index]) > tolerance),
+    );
+  expect(
+    failures.slice(0, 10),
+    `${label}: ${failures.length}/${pixels.length} pixels differ`,
+  ).toEqual([]);
+}
+
+test('element 3D edits only the selected layer and persists its pose after reopening', async ({
+  page,
+}) => {
+  const fixture = element3dFixture();
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: 'Timeline clip Perspective card', exact: true }).click();
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  const toggle = inspector.getByRole('switch', { name: 'Enable 3D for this element', exact: true });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  for (const [label, value] of [
+    ['Tilt X', '28'],
+    ['Tilt Y', '-40'],
+    ['Depth', '10'],
+  ]) {
+    const input = inspector.getByRole('spinbutton', { name: `3D ${label} value`, exact: true });
+    await input.fill(value);
+    await input.press('Enter');
+  }
+  const after = await saveProject(page, fixture.name);
+  expect(after.layers[0].transform3d).toEqual({
+    enabled: true,
+    rotateX: 28,
+    rotateY: -40,
+    z: 10,
+    motion: 'none',
+  });
+  expect(after.layers.slice(1)).toEqual(before.layers.slice(1));
+  expect({ ...after.layers[0], transform3d: undefined }).toEqual({
+    ...before.layers[0],
+    transform3d: undefined,
+  });
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole('banner').getByRole('button', { name: fixture.name, exact: true }),
+  ).toBeVisible();
+  expect(await saveProject(page, fixture.name)).toEqual(after);
+  await page.getByRole('button', { name: 'Timeline clip Perspective card', exact: true }).click();
+  await expect(
+    inspector.getByRole('spinbutton', { name: '3D Tilt Y value', exact: true }),
+  ).toHaveValue('-40');
+  await toggle.click();
+  expect((await saveProject(page, fixture.name)).layers[0].transform3d?.enabled).toBe(false);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(after);
+});
+
+test('element 3D slider gestures undo once and unchanged input preserves redo', async ({
+  page,
+}) => {
+  const fixture = element3dFixture();
+  fixture.layers[0].transform3d = {
+    enabled: true,
+    rotateX: 12,
+    rotateY: -18,
+    z: 0,
+    motion: 'none',
+  };
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: 'Timeline clip Perspective card', exact: true }).click();
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  const slider = inspector.getByRole('slider', { name: '3D Tilt Y', exact: true });
+  await slider.scrollIntoViewIfNeeded();
+  const bounds = (await slider.boundingBox())!;
+  await page.mouse.move(bounds.x + bounds.width * 0.45, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width * 0.8, bounds.y + bounds.height / 2, { steps: 8 });
+  await page.mouse.move(bounds.x + bounds.width * 0.65, bounds.y + bounds.height / 2, { steps: 8 });
+  await page.mouse.up();
+  const after = await saveProject(page, fixture.name);
+  expect(after.layers[0].transform3d!.rotateY).toBeGreaterThan(20);
+  expect(after.layers.slice(1)).toEqual(before.layers.slice(1));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+  const input = inspector.getByRole('spinbutton', { name: '3D Tilt Y value', exact: true });
+  await input.fill('-18');
+  await input.press('Enter');
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(after);
+  await inspector.getByRole('button', { name: 'Reset 3D', exact: true }).click();
+  expect((await saveProject(page, fixture.name)).layers[0].transform3d).toEqual({
+    enabled: true,
+    rotateX: 0,
+    rotateY: 0,
+    z: 0,
+    motion: 'none',
+  });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(after);
+});
+
+test('element 3D controls guard locked layers, audio, and multiple selection', async ({ page }) => {
+  const fixture = element3dFixture();
+  fixture.layers[0].locked = true;
+  fixture.layers[0].transform3d = {
+    enabled: true,
+    rotateX: 12,
+    rotateY: -18,
+    z: 0,
+    motion: 'none',
+  };
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: 'Timeline clip Perspective card', exact: true }).click();
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  const toggle = inspector.getByRole('switch', { name: 'Enable 3D for this element', exact: true });
+  await expect(toggle).toBeDisabled();
+  await expect(inspector.getByRole('slider', { name: '3D Tilt Y', exact: true })).toBeDisabled();
+  await toggle.dispatchEvent('click');
+  await editingMenu(page, 'Motion').click();
+  await expect(inspector.getByRole('button', { name: '3D Tilt in', exact: true })).toBeDisabled();
+  await inspector.getByRole('button', { name: '3D Tilt in', exact: true }).dispatchEvent('click');
+  await editingMenu(page, 'Design').click();
+  await page.getByRole('tab', { name: 'Layers', exact: true }).click();
+  const library = page.getByRole('complementary', { name: 'Library', exact: true });
+  await library
+    .getByRole('button', { name: 'Other card', exact: true })
+    .click({ modifiers: ['Shift'] });
+  await expect(toggle).toHaveCount(0);
+  await expect(
+    inspector.getByText('Select one element to edit its 3D pose.', { exact: true }),
+  ).toBeVisible();
+  await library.getByRole('button', { name: 'Sound layer', exact: true }).click();
+  await expect(toggle).toHaveCount(0);
+  await editingMenu(page, 'Sound').click();
+  await expect(inspector.getByRole('button', { name: /^3D / })).toHaveCount(0);
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+});
+
+test('element 3D projected pixels can be selected and dragged outside the original flat bounds', async ({
+  page,
+}) => {
+  const fixture = element3dFixture();
+  fixture.layers[0].transform3d = {
+    enabled: true,
+    rotateX: 18,
+    rotateY: 40,
+    z: 65,
+    motion: 'none',
+  };
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  const canvas = page.getByLabel('Composition canvas');
+  const hit = await canvas.evaluate((element) => {
+    const context = (element as HTMLCanvasElement).getContext('2d')!;
+    const red = (x: number, y: number) => {
+      const pixel = context.getImageData(x, y, 1, 1).data;
+      return pixel[0] === 255 && pixel[1] === 0 && pixel[2] === 0;
+    };
+    for (let y = 30; y < 450; y += 4) {
+      for (let x = 30; x < 105; x += 4) {
+        if (red(x, y) && red(x - 4, y) && red(x + 4, y) && red(x, y - 4) && red(x, y + 4))
+          return { x, y };
+      }
+    }
+    return null;
+  });
+  expect(hit, 'The tilted surface should extend visibly beyond x=120').not.toBeNull();
+  const bounds = (await canvas.boundingBox())!;
+  const scale = bounds.width / fixture.width;
+  const x = bounds.x + hit!.x * scale;
+  const y = bounds.y + hit!.y * scale;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await expect(
+    page.getByRole('button', { name: 'Timeline clip Perspective card', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(x + 36, y + 20, { steps: 8 });
+  await page.mouse.up();
+  const after = await saveProject(page, fixture.name);
+  expect(after.layers[0].x).toBeCloseTo(Math.round(before.layers[0].x + 36 / scale), 0);
+  expect(after.layers[0].y).toBeCloseTo(Math.round(before.layers[0].y + 20 / scale), 0);
+  expect(after.layers[0].transform3d).toEqual(before.layers[0].transform3d);
+  expect(after.layers.slice(1)).toEqual(before.layers.slice(1));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+});
+
+test('element 3D motion follows seeking and PNG output while SVG refuses active perspective', async ({
+  page,
+}) => {
+  const fixture = element3dFixture();
+  await openProjectFixture(page, fixture);
+  await page.getByRole('button', { name: 'Timeline clip Perspective card', exact: true }).click();
+  await editingMenu(page, 'Motion').click();
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await inspector.getByRole('button', { name: '3D Tilt in', exact: true }).click();
+  await editingMenu(page, 'Design').click();
+  await inspector.getByRole('button', { name: 'Flat', exact: true }).click();
+  await editingMenu(page, 'Motion').click();
+  await inspector.locator('summary').filter({ hasText: 'Fine-tune' }).click();
+  await inspector.getByRole('spinbutton', { name: 'Delay (s)', exact: true }).fill('1');
+  await inspector.getByRole('spinbutton', { name: 'Duration (s)', exact: true }).fill('1');
+  const ruler = page.getByRole('slider', { name: 'Timeline position', exact: true });
+  await ruler.focus();
+  await ruler.press('Home');
+  const point = [[125, 105]];
+  await expect.poll(() => previewPixels(page, point)).toEqual([[255, 255, 255, 255]]);
+  expect(await exportedPngPixels(page, point)).toEqual([[255, 255, 255, 255]]);
+  await ruler.focus();
+  await ruler.press('Home');
+  await ruler.press('Shift+ArrowRight');
+  await ruler.press('Shift+ArrowRight');
+  await expect.poll(() => previewPixels(page, point)).toEqual([[255, 0, 0, 255]]);
+  expect(await exportedPngPixels(page, point)).toEqual([[255, 0, 0, 255]]);
+  const saved = await saveProject(page, fixture.name);
+  expect(saved.layers[0].transform3d?.motion).toBe('tilt-in');
+  expect(saved.layers.slice(1)).toEqual(parseProject(JSON.stringify(fixture)).layers.slice(1));
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export your creation' });
+  await dialog.getByRole('button', { name: 'SVG · editable frame', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Export SVG', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('3D elements');
+  await dialog.getByRole('button', { name: 'Close export', exact: true }).click();
+  await editingMenu(page, 'Design').click();
+  await inspector.getByRole('switch', { name: 'Enable 3D for this element', exact: true }).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await dialog.getByRole('button', { name: 'SVG · editable frame', exact: true }).click();
+  const downloaded = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Export SVG', exact: true }).click();
+  expect((await downloadBytes(await downloaded)).toString('utf8')).toContain('<svg');
+});
+
+test('element 3D translucent surfaces stay uniform without triangle seams in preview and PNG', async ({
+  page,
+}) => {
+  const layer = createLayer('shape', {
+    name: 'Translucent plane',
+    x: 140,
+    y: 120,
+    width: 480,
+    height: 320,
+    radius: 0,
+    fill: '#ff0000',
+    opacity: 0.5,
+    duration: 4,
+    transform3d: { enabled: true, rotateX: 28, rotateY: -34, z: 8, motion: 'none' },
+  });
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Perspective alpha',
+    width: 800,
+    height: 600,
+    duration: 4,
+    background: '#ffffff',
+    layers: [layer],
+    components: [],
+  };
+  await openProjectFixture(page, fixture);
+  const local: number[][] = [];
+  for (let y = 24; y < layer.height - 24; y += 6)
+    for (let x = 24; x < layer.width - 24; x += 6) local.push([x, y]);
+  const points = projectedPoints(layer, local);
+  await expect
+    .poll(async () => (await previewPixels(page, points.slice(0, 1)))[0][1])
+    .toBeLessThan(200);
+  expectUniformPixels(
+    await previewPixels(page, points),
+    [255, 127, 127, 255],
+    'Preview translucent plane',
+  );
+  expectUniformPixels(
+    await exportedPngPixels(page, points),
+    [255, 127, 127, 255],
+    'PNG translucent plane',
+  );
+});
+
+test('element 3D preserves image transparency and masks at tilt without mesh darkening', async ({
+  page,
+}) => {
+  const src = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 256;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = 'rgba(255, 0, 0, 0.5)';
+    context.fillRect(0, 0, 256, 256);
+    context.clearRect(96, 96, 64, 64);
+    return canvas.toDataURL('image/png');
+  });
+  const layer = createLayer('image', {
+    name: 'Transparent masked image',
+    src,
+    x: 100,
+    y: 60,
+    width: 256,
+    height: 256,
+    opacity: 0.6,
+    radius: 0,
+    mask: 'ellipse',
+    duration: 4,
+    transform3d: { enabled: true, rotateX: 32, rotateY: -25, z: 0, motion: 'none' },
+  });
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Perspective image alpha',
+    width: 512,
+    height: 400,
+    duration: 4,
+    background: '#ffffff',
+    layers: [layer],
+    components: [],
+  };
+  await openProjectFixture(page, fixture);
+  const solid: number[][] = [];
+  for (let y = 56; y <= 200; y += 8)
+    for (let x = 56; x <= 200; x += 8) {
+      if (x < 84 || x > 172 || y < 84 || y > 172) solid.push([x, y]);
+    }
+  const clear = [
+    [112, 112],
+    [128, 128],
+    [144, 144],
+    [20, 20],
+    [236, 20],
+    [20, 236],
+    [236, 236],
+  ];
+  const points = projectedPoints(layer, [...solid, ...clear]);
+  await expect
+    .poll(async () => (await previewPixels(page, points.slice(0, 1)))[0][1])
+    .toBeLessThan(200);
+  for (const [label, pixels] of [
+    ['Preview', await previewPixels(page, points)],
+    ['PNG', await exportedPngPixels(page, points)],
+  ] as const) {
+    expectUniformPixels(
+      pixels.slice(0, solid.length),
+      [255, 178, 178, 255],
+      `${label} source alpha and layer opacity`,
+      2,
+    );
+    expectUniformPixels(
+      pixels.slice(solid.length),
+      [255, 255, 255, 255],
+      `${label} transparent hole and ellipse mask`,
+    );
+  }
+});
+
+test('element 3D layer view edits one pose and looping motion without changing the viewing camera', async ({
+  page,
+}) => {
+  const fixture = element3dFixture();
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  const stage = page.getByRole('region', { name: '3D layer view', exact: true });
+  const originalView = await stage.getAttribute('data-view');
+  const zoom = await page.getByRole('slider', { name: '3D zoom', exact: true }).inputValue();
+  const spacing = await page
+    .getByRole('slider', { name: 'Layer spacing', exact: true })
+    .inputValue();
+  const panel = page.getByRole('complementary', { name: '3D layer stack', exact: true });
+  await panel
+    .getByRole('button', { name: 'Select 3D layer Perspective card', exact: true })
+    .click();
+  await panel.getByRole('switch', { name: 'Enable 3D for this element', exact: true }).click();
+  for (const [label, value] of [
+    ['Tilt X', '30'],
+    ['Tilt Y', '-45'],
+    ['Depth', '20'],
+  ]) {
+    const field = panel.getByRole('spinbutton', { name: `3D ${label} value`, exact: true });
+    await field.fill(value);
+    await field.press('Enter');
+  }
+  await panel.getByRole('button', { name: '3D Float', exact: true }).click();
+  await panel.getByRole('spinbutton', { name: '3D motion period (s)', exact: true }).fill('4');
+  await panel.getByRole('spinbutton', { name: '3D motion delay (s)', exact: true }).fill('1');
+  const after = await saveProject(page, fixture.name);
+  expect(after.layers[0].transform3d).toEqual({
+    enabled: true,
+    rotateX: 30,
+    rotateY: -45,
+    z: 20,
+    motion: 'float',
+  });
+  expect(after.layers[0].animationDuration).toBe(4);
+  expect(after.layers[0].animationDelay).toBe(1);
+  expect(after.layers.map((layer) => layer.id)).toEqual(before.layers.map((layer) => layer.id));
+  expect(after.layers.slice(1)).toEqual(before.layers.slice(1));
+  await expect(stage).toHaveAttribute('data-view', originalView!);
+  await expect(page.getByRole('slider', { name: '3D zoom', exact: true })).toHaveValue(zoom);
+  await expect(page.getByRole('slider', { name: 'Layer spacing', exact: true })).toHaveValue(
+    spacing,
+  );
 });

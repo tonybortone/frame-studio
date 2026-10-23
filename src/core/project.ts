@@ -331,6 +331,7 @@ const LAYER_KEYS = [
   'groupId',
   'animation',
   'animationEasing',
+  'transform3d',
   ...TIMING_KEYS,
   'brightness',
   'contrast',
@@ -379,6 +380,22 @@ function parseLayer(value: unknown): Layer {
   }
   if (item.animationEasing !== undefined)
     layer.animationEasing = item.animationEasing as Layer['animationEasing'];
+  if (item.transform3d !== undefined) {
+    if (layer.kind === 'audio') throw new Error('3D transforms require a visual layer.');
+    const transform = object(item.transform3d, '3D transform');
+    knownKeys(transform, ['enabled', 'rotateX', 'rotateY', 'z', 'motion'], '3D transform');
+    if (typeof transform.enabled !== 'boolean')
+      throw new Error('3D enabled must be true or false.');
+    if (!['none', 'tilt-in', 'flip-in', 'float'].includes(transform.motion as string))
+      throw new Error('Unsupported 3D motion.');
+    layer.transform3d = {
+      enabled: transform.enabled,
+      rotateX: number(transform.rotateX, '3D tilt X', -180, 180),
+      rotateY: number(transform.rotateY, '3D tilt Y', -180, 180),
+      z: number(transform.z, '3D depth', -100, 100),
+      motion: transform.motion as NonNullable<Layer['transform3d']>['motion'],
+    };
+  }
   if (item.mask !== undefined) {
     if (!['none', 'rectangle', 'rounded', 'ellipse', 'diamond'].includes(item.mask as string))
       throw new Error('Unsupported layer mask.');

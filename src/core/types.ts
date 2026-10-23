@@ -2,6 +2,16 @@ export type LayerKind = 'video' | 'audio' | 'image' | 'text' | 'shape' | 'svg' |
 export type Animation = 'none' | 'fade' | 'rise' | 'pop' | 'slide';
 export type AnimationEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
 export type LayerMask = 'none' | 'rectangle' | 'rounded' | 'ellipse' | 'diamond';
+export type Element3DMotion = 'none' | 'tilt-in' | 'flip-in' | 'float';
+/** Perspective of one visual plane, independent of the inspection camera. */
+export interface Element3DTransform {
+  enabled: boolean;
+  rotateX: number;
+  rotateY: number;
+  /** Normalized depth, -100 (farther) to 100 (closer). */
+  z: number;
+  motion: Element3DMotion;
+}
 export interface BackgroundRemoval {
   color: string;
   tolerance: number;
@@ -46,6 +56,7 @@ export interface Layer {
   animationDelay?: number;
   animationEasing?: AnimationEasing;
   exitDuration?: number;
+  transform3d?: Element3DTransform;
   /** Linear gain ramps applied to audio and video sound in preview and export. */
   audioFadeIn?: number;
   audioFadeOut?: number;

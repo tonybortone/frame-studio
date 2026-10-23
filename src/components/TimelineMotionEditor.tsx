@@ -8,6 +8,7 @@ import {
 import { getAudioTiming, getMotionTiming, easeProgress } from '../core/motion';
 import type { Animation, AnimationEasing, Layer } from '../core/types';
 import { LockKeyhole } from '../icons';
+import { ELEMENT_3D_MOTIONS, element3DMotionPatch } from './Element3DControls';
 import './TimelineMotionEditor.css';
 
 interface Props {
@@ -29,6 +30,7 @@ function NumberControl({
   name,
   value,
   maximum,
+  minimum = 0,
   unit = 's',
   disabled,
   onChange,
@@ -37,6 +39,7 @@ function NumberControl({
   name: string;
   value: number;
   maximum: number;
+  minimum?: number;
   unit?: string;
   disabled?: boolean;
   onChange: (value: number) => void;
@@ -48,14 +51,14 @@ function NumberControl({
         <input
           type="number"
           aria-label={name}
-          min={0}
+          min={minimum}
           max={maximum}
           step={unit === '%' ? 1 : 0.1}
           value={Number(value.toFixed(3))}
           disabled={disabled}
           onChange={(event) => {
             const next = event.currentTarget.valueAsNumber;
-            if (Number.isFinite(next)) onChange(clamp(next, maximum));
+            if (Number.isFinite(next)) onChange(Math.max(minimum, clamp(next, maximum)));
           }}
         />
         <small>{unit}</small>
@@ -77,6 +80,11 @@ export default function TimelineMotionEditor({
   useEffect(() => () => gesture.current?.(), []);
   const audio = layer.kind === 'audio';
   const timing = getMotionTiming(layer);
+  const motion3d = layer.transform3d?.enabled ? layer.transform3d.motion : 'none';
+  const hasEntrance = layer.animation !== 'none' || motion3d !== 'none';
+  const floatOnly = motion3d === 'float' && layer.animation === 'none';
+  const period = Math.max(0.4, layer.animationDuration ?? 0.6);
+  const entranceDuration = floatOnly ? period : timing.duration;
   const fades = getAudioTiming(layer);
   const maximum = Math.min(3600, layer.duration);
   const easing = layer.animationEasing ?? 'ease-out';
@@ -96,19 +104,24 @@ export default function TimelineMotionEditor({
       return {
         animationDelay: clamp(
           timing.delay + delta,
-          Math.min(3600, layer.duration - timing.duration),
+          Math.min(3600, layer.duration - (floatOnly ? 0 : timing.duration)),
         ),
-        animationDuration: timing.duration,
+        animationDuration: entranceDuration,
       };
     if (action === 'end')
       return {
-        animationDuration: clamp(
-          timing.duration + delta,
-          Math.min(3600, layer.duration - timing.delay),
-        ),
+        animationDuration: floatOnly
+          ? Math.max(0.4, clamp(period + delta, 3600))
+          : clamp(timing.duration + delta, Math.min(3600, layer.duration - timing.delay)),
       };
-    const end = timing.delay + timing.duration;
-    const delay = Math.max(end - 3600, clamp(timing.delay + delta, Math.min(3600, end)));
+    const end = timing.delay + entranceDuration;
+    const delay = Math.max(
+      end - 3600,
+      clamp(
+        timing.delay + delta,
+        Math.min(3600, floatOnly ? Math.min(layer.duration, end - 0.4) : end),
+      ),
+    );
     return { animationDelay: delay, animationDuration: end - delay };
   };
 
@@ -181,9 +194,17 @@ export default function TimelineMotionEditor({
     const entrance = kind === 'entrance';
     const outgoing = kind === 'exit' || kind === 'fade-out';
     const action: SegmentAction = entrance ? 'move' : outgoing ? 'start' : 'end';
+    const loop = entrance && floatOnly;
+    const visibleDuration = loop
+      ? Math.min(duration, Math.max(0, layer.duration - timing.delay))
+      : duration;
     const curve = Array.from({ length: 21 }, (_, index) => {
       const progress = index / 20;
-      const value = entrance || kind === 'exit' ? easeProgress(progress, easing) : progress;
+      const value = loop
+        ? 0.5 + 0.5 * Math.sin(((progress * visibleDuration) / period) * Math.PI * 2)
+        : entrance || kind === 'exit'
+          ? easeProgress(progress, easing)
+          : progress;
       return `${index === 0 ? 'M' : 'L'}${progress * 100},${outgoing ? 2 + value * 14 : 16 - value * 14}`;
     }).join(' ');
     const add = () => {
@@ -213,7 +234,10 @@ export default function TimelineMotionEditor({
             <div
               className={`timeline-effect-segment ${outgoing ? 'is-outgoing' : ''}`}
               style={
-                { left: start * pixels, width: Math.max(12, duration * pixels) } as CSSProperties
+                {
+                  left: start * pixels,
+                  width: Math.max(12, visibleDuration * pixels),
+                } as CSSProperties
               }
             >
               <svg viewBox="0 0 100 18" preserveAspectRatio="none" aria-hidden="true">
@@ -224,7 +248,7 @@ export default function TimelineMotionEditor({
                 className="timeline-effect-body"
                 disabled={layer.locked}
                 aria-label={`${entrance ? 'Move' : 'Resize'} ${label.toLowerCase()} for ${layer.name}`}
-                title={`${label}: ${seconds(duration)}${entrance ? ' · drag to change delay' : ' · drag to resize'}. Hold Shift for frame steps.`}
+                title={`${label}: ${seconds(duration)}${loop ? ' · repeats to clip end' : ''}${entrance ? ' · drag to change delay' : ' · drag to resize'}. Hold Shift for frame steps.`}
                 onPointerDown={(event) => startSegmentDrag(event, kind, action)}
                 onKeyDown={(event) => keySegment(event, kind, action)}
               >
@@ -296,10 +320,18 @@ export default function TimelineMotionEditor({
         <>
           {renderSegment(
             'entrance',
-            'Entrance',
+            layer.animation !== 'none'
+              ? 'Entrance'
+              : motion3d === 'float'
+                ? '3D float period'
+                : motion3d === 'tilt-in'
+                  ? '3D tilt in'
+                  : motion3d === 'flip-in'
+                    ? '3D flip in'
+                    : 'Entrance',
             layer.start + timing.delay,
-            timing.duration,
-            layer.animation !== 'none',
+            entranceDuration,
+            hasEntrance,
           )}
           {renderSegment(
             'exit',
@@ -378,28 +410,51 @@ export default function TimelineMotionEditor({
                 <option value="slide">Slide</option>
               </select>
             </label>
+            <label className="timeline-select-control">
+              <span>3D motion</span>
+              <select
+                aria-label={`3D motion for ${layer.name}`}
+                value={motion3d}
+                disabled={layer.locked}
+                onChange={(event) => {
+                  const next = event.currentTarget.value as NonNullable<
+                    Layer['transform3d']
+                  >['motion'];
+                  if (next !== motion3d) edit(element3DMotionPatch(layer, next));
+                }}
+              >
+                {ELEMENT_3D_MOTIONS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <NumberControl
               label="Delay"
               name={`Animation delay for ${layer.name}`}
               value={timing.delay}
               maximum={maximum}
-              disabled={layer.locked || layer.animation === 'none'}
+              disabled={layer.locked || !hasEntrance}
               onChange={(value) => edit({ animationDelay: value })}
             />
             <NumberControl
-              label="Duration"
-              name={`Animation duration for ${layer.name}`}
-              value={timing.duration}
-              maximum={Math.min(3600, layer.duration - timing.delay)}
-              disabled={layer.locked || layer.animation === 'none'}
-              onChange={(value) => edit({ animationDuration: value })}
+              label={motion3d === 'float' ? 'Period' : 'Duration'}
+              name={`Animation ${motion3d === 'float' ? 'period' : 'duration'} for ${layer.name}`}
+              value={motion3d === 'float' ? period : timing.duration}
+              minimum={motion3d === 'float' ? 0.4 : 0}
+              maximum={motion3d === 'float' ? 3600 : Math.min(3600, layer.duration - timing.delay)}
+              disabled={layer.locked || !hasEntrance}
+              onChange={(value) =>
+                edit({ animationDuration: motion3d === 'float' ? Math.max(0.4, value) : value })
+              }
             />
             <label className="timeline-select-control">
               <span>Easing</span>
               <select
                 aria-label={`Animation easing for ${layer.name}`}
                 value={easing}
-                disabled={layer.locked || (layer.animation === 'none' && timing.exitDuration <= 0)}
+                disabled={layer.locked || ((!hasEntrance || floatOnly) && timing.exitDuration <= 0)}
                 onChange={(event) =>
                   edit({ animationEasing: event.currentTarget.value as AnimationEasing })
                 }

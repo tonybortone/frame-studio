@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { createLayer } from '../core/project';
 import { DEFAULT_DRAWING_STYLE, type CanvasTool, type DrawingStyle } from '../core/creation';
 import { getSelectionBounds, transformSelection, type SelectionBounds } from '../core/selection';
+import { getElement3DQuad, getQuadBounds, hasElement3D, pointInQuad } from '../core/element3d';
 import {
   appendStrokePoint,
   isVectorPoint,
@@ -12,7 +13,7 @@ import {
   type VectorPoint,
 } from '../core/vector';
 import type { Layer, Project } from '../core/types';
-import { MediaCache, renderFrame } from '../engine/renderer';
+import { animationState, MediaCache, renderFrame } from '../engine/renderer';
 import './CanvasStage.css';
 
 // Keep the creation tools, view switch, and canvas zoom clear at Fit zoom.
@@ -268,7 +269,25 @@ export default function CanvasStage({
       time >= layer.start &&
       time < layer.start + layer.duration,
   );
-  const groupBounds = visibleSelection.length > 1 ? getSelectionBounds(visibleSelection) : null;
+  const selectionHas3D = visibleSelection.some(hasElement3D);
+  const projectedBounds = visibleSelection.map((layer) =>
+    getQuadBounds(getElement3DQuad(layer, time, animationState(layer, time))),
+  );
+  const groupBounds =
+    visibleSelection.length > 1
+      ? selectionHas3D
+        ? (() => {
+            const x = Math.min(...projectedBounds.map((bounds) => bounds.x));
+            const y = Math.min(...projectedBounds.map((bounds) => bounds.y));
+            return {
+              x,
+              y,
+              width: Math.max(...projectedBounds.map((bounds) => bounds.x + bounds.width)) - x,
+              height: Math.max(...projectedBounds.map((bounds) => bounds.y + bounds.height)) - y,
+            };
+          })()
+        : getSelectionBounds(visibleSelection)
+      : null;
   const groupLocked = project.layers.some(
     (layer) => selected.includes(layer.id) && layer.kind !== 'audio' && layer.locked,
   );
@@ -612,6 +631,8 @@ export default function CanvasStage({
         time >= l.start + l.duration
       )
         return false;
+      if (hasElement3D(l))
+        return pointInQuad(origin, getElement3DQuad(l, time, animationState(l, time)));
       const r = (-l.rotation * Math.PI) / 180,
         dx = origin.x - l.x - l.width / 2,
         dy = origin.y - l.y - l.height / 2;
@@ -717,6 +738,7 @@ export default function CanvasStage({
             }}
           >
             {!groupLocked &&
+              !selectionHas3D &&
               tool === 'select' &&
               RESIZE_CORNERS.map((corner) => (
                 <button
@@ -766,54 +788,77 @@ export default function CanvasStage({
           </div>
         )}
         {!groupBounds &&
-          visibleSelection.map((l) => (
-            <div
-              className="selection-box"
-              key={l.id}
-              style={{
-                left: l.x * scale,
-                top: l.y * scale,
-                width: l.width * scale,
-                height: l.height * scale,
-                transform: `rotate(${l.rotation}deg)`,
-              }}
-            >
-              {!l.locked &&
-                tool === 'select' &&
-                RESIZE_CORNERS.map((corner) => (
-                  <button
-                    key={corner.name}
-                    type="button"
-                    className={`resize-handle resize-handle-${corner.name}`}
-                    aria-label={`Resize ${l.name} from ${corner.label}`}
-                    title={`Resize from ${corner.label}. Hold Shift to keep proportions; arrow keys also resize.`}
-                    onPointerDown={(event) => startResize(event, l, corner)}
-                    onKeyDown={(event) => {
-                      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key))
-                        return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const step = event.shiftKey ? 10 : 1;
-                      const horizontal =
-                        event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0;
-                      const vertical =
-                        event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0;
-                      const patch = resizePatch(
-                        l,
-                        corner,
-                        l.width + corner.horizontal * horizontal,
-                        l.height + corner.vertical * vertical,
-                      );
-                      if (patch && (patch.width !== l.width || patch.height !== l.height))
-                        change(l.id, patch);
-                    }}
-                  />
-                ))}
-              <span>
-                {Math.round(l.width)} × {Math.round(l.height)}
-              </span>
-            </div>
-          ))}
+          visibleSelection
+            .filter((layer) => !hasElement3D(layer))
+            .map((l) => (
+              <div
+                className="selection-box"
+                key={l.id}
+                style={{
+                  left: l.x * scale,
+                  top: l.y * scale,
+                  width: l.width * scale,
+                  height: l.height * scale,
+                  transform: `rotate(${l.rotation}deg)`,
+                }}
+              >
+                {!l.locked &&
+                  tool === 'select' &&
+                  RESIZE_CORNERS.map((corner) => (
+                    <button
+                      key={corner.name}
+                      type="button"
+                      className={`resize-handle resize-handle-${corner.name}`}
+                      aria-label={`Resize ${l.name} from ${corner.label}`}
+                      title={`Resize from ${corner.label}. Hold Shift to keep proportions; arrow keys also resize.`}
+                      onPointerDown={(event) => startResize(event, l, corner)}
+                      onKeyDown={(event) => {
+                        if (
+                          !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)
+                        )
+                          return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const step = event.shiftKey ? 10 : 1;
+                        const horizontal =
+                          event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0;
+                        const vertical =
+                          event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0;
+                        const patch = resizePatch(
+                          l,
+                          corner,
+                          l.width + corner.horizontal * horizontal,
+                          l.height + corner.vertical * vertical,
+                        );
+                        if (patch && (patch.width !== l.width || patch.height !== l.height))
+                          change(l.id, patch);
+                      }}
+                    />
+                  ))}
+                <span>
+                  {Math.round(l.width)} × {Math.round(l.height)}
+                </span>
+              </div>
+            ))}
+        {selectionHas3D && (
+          <svg
+            className="element-3d-selection"
+            aria-hidden="true"
+            viewBox={`0 0 ${project.width} ${project.height}`}
+          >
+            {visibleSelection.filter(hasElement3D).map((layer) => {
+              const points = getElement3DQuad(layer, time, animationState(layer, time))
+                .map((point) => `${point.x},${point.y}`)
+                .join(' ');
+              return (
+                <g key={layer.id} data-element-3d-selection={layer.id}>
+                  <polygon points={points} className="element-3d-outline-shadow" />
+                  <polygon points={points} className="element-3d-outline" />
+                </g>
+              );
+            })}
+          </svg>
+        )}
         {drawing.length > 1 && (
           <svg
             className="drawing-preview"

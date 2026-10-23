@@ -8,6 +8,8 @@ The workspace separates media from creation tools and keeps visuals above a dedi
 
 **Alpha 12 simplifies the timeline.** Compact clips use seven distinct colors for video, audio, images, text, shapes, vectors, and drawings. Lock individual rows or the selected layers; locked clips remain selectable while move, trim, split, and delete are protected. Visuals and sound keep separate sections, with inline motion and audio controls available when expanded.
 
+**Alpha 14 adds per-element 3D.** Select one visual element, enable **Design → 3D element**, then adjust X/Y tilt and depth. **Motion → 3D motion** offers Tilt in, Flip in, and Float with timing controls. These saved transforms render in the normal canvas, PNG snapshots, and video; the rest of the composition stays in place. The same controls are available inside **3D layers**.
+
 **Alpha 13 refines the workspace.** Black, charcoal, and white interface controls keep attention on the artwork and colored clips. The library uses compact rows, and the header keeps one global Import action alongside contextual media imports.
 
 **Alpha 6 adds 12 editable components**: browser and terminal windows, a phone, notifications, chat, social cards, titles, and callouts. Open **Components → Ready-made**, search or choose a category, then click to insert at the playhead. Edit the group's text under **Design → Content**, or resize its pieces together with the corner handles or W/H. Your saved compositions stay under **Yours**.
@@ -18,7 +20,7 @@ The inspector now offers **six color looks with adjustable strength** and **five
 
 **Alpha 9 adds compact tool menus.** Choose seven shapes, draw with Pencil or Brush, or build curved SVG paths with the Pen. Masks, color/background tools, Templates, and Components are accessible from the side toolbar. Close menus and the library, or hide both panels for a larger dotted canvas workspace. See the [visual tools guide](docs/visual-tools.md) for controls.
 
-Switch to **3D layers** to arrange the composition from the front, back, top, or an orbiting perspective. Drag a layer to move its actual X/Y position, use precise position fields, and adjust **Layer depth** to place it behind or in front of other layers. Position and order changes save, export, and undo together with the rest of the project. Drag empty space or Alt-drag to orbit; Shift-drag pans. This is a CSS 3D workspace for editable 2D layers: camera angle, spacing, and zoom are view controls. It does not import 3D models or render perspective geometry into video.
+Switch to **3D layers** to arrange the composition from the front, back, top, or an orbiting perspective. Drag a layer to move its actual X/Y position, use precise position fields, and adjust **Layer order** to place it behind or in front of other layers. Position and order changes save, export, and undo together with the rest of the project. Drag empty space or Alt-drag to orbit; Shift-drag pans. This is a CSS 3D workspace for editable 2D layers: camera angle, spacing, and zoom are view controls. Element 3D is a saved perspective transform of a flat visual plane, independent of this inspection camera. It does not import 3D models, add lighting, or sort intersecting objects in 3D.
 
 ![Frame Studio editor](docs/images/editor.png)
 
@@ -55,7 +57,7 @@ Packaging currently targets **Apple Silicon Macs (arm64)** and writes DMG and ZI
 | Timeline         | Move, trim, and split clips; preview a composition                                                     |
 | Media            | Import local video, audio, and images; volume, mute, and audio fade controls                           |
 | Organization     | 12 editable components; saved compositions; group text editing and proportional resize; depth ordering |
-| Motion and color | Motion recipes, timing and easing; six color looks, strength, and basic adjustments                    |
+| Motion and color | Motion recipes, timing and easing; per-element 3D poses and motion; six color looks and adjustments    |
 | Visual tools     | Shape masks and flips; image color replacement and solid-background removal                            |
 | Layout           | Common aspect ratios and starter layouts for screen recordings and presenters                          |
 | Projects         | Device-local autosave; save and reopen projects with embedded media                                    |
@@ -63,9 +65,9 @@ Packaging currently targets **Apple Silicon Macs (arm64)** and writes DMG and ZI
 
 Video export uses the runtime's `MediaRecorder` capabilities. **WebM is the primary target; MP4 is only available when supported by the current runtime.** Export runs in real time. This is not yet a deterministic frame-by-frame render engine.
 
-Imports are limited to **50 MB per file**, and project loading is limited to **100 MB total**. Media is embedded as data URLs in project files, so saved projects can grow quickly. SVG editing supports a subset of SVG rather than complete Illustrator compatibility. SVG snapshots require hiding visible video layers; use PNG for a complete frame containing video. Saved components are reusable copies, not linked instances with nested overrides.
+Imports are limited to **50 MB per file**, and project loading is limited to **100 MB total**. Media is embedded as data URLs in project files, so saved projects can grow quickly. SVG editing supports a subset of SVG rather than complete Illustrator compatibility. SVG snapshots require hiding active video and enabled 3D layers; use PNG or video for a complete perspective composition. Saved components are reusable copies, not linked instances with nested overrides.
 
-Background removal targets a chosen solid color; it is not subject segmentation for complex photographs. Color replacement and background removal currently apply to still images. Their processed raster is capped at a 4,096-pixel longest side and 8 megapixels, consistently across preview and export; the original embedded image is preserved. Masks and flips apply to individual visual layers, not whole groups or track mattes.
+Background removal targets a chosen solid color; it is not subject segmentation for complex photographs. Color replacement and background removal currently apply to still images. Their processed raster is capped at a 4,096-pixel longest side and 8 megapixels, consistently across preview and export; the original embedded image is preserved. Masks and flips apply to individual visual layers, not whole groups or track mattes. Perspective uses bounded raster surfaces (2,048-pixel longest side / 4 megapixels), so enlarged 3D artwork can soften at high export resolutions.
 
 Keyframe curve editing, camera moves, transitions between clips, playback-speed changes, professional audio processing, advanced color grading, automatic editing/reframing, and a signed public installer are future work. See the [roadmap](docs/roadmap.md) for the intended sequence and acceptance criteria.
 

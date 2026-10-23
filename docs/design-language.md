@@ -65,11 +65,11 @@ The frame-size picker shows landscape, portrait, square, and social formats as f
 
 One timeline toolbar groups playback and exact time, editing and selection locking, then zoom and Fit. The ruler underneath is dedicated to seconds and seeking. Second labels sit above the tick marks, with a small playhead handle below them to avoid covering the time labels. Arrow keys step one frame; Shift + arrow steps one second. The canvas remains available for the composition and its editing tools.
 
-The 3D layers view separates the current frame's visible visual layers into CSS 3D planes. Orbit or pan the view, change layer spacing and zoom, or use front, back, top, and perspective presets to inspect overlap. Audio has no visual plane. Hidden layers and clips outside the current time are omitted. These camera controls affect inspection only; the composition and exports remain 2D.
+The 3D layers view separates the current frame's visible visual layers into CSS 3D planes. Orbit or pan the view, change layer spacing and zoom, or use front, back, top, and perspective presets to inspect overlap. Audio has no visual plane. Hidden layers and clips outside the current time are omitted. These camera controls affect inspection only. Per-element perspective is an independent saved content edit that renders in the composition and exports.
 
 Selecting a plane or its layer-list row shares selection with the editor. Dragging an unlocked plane moves its actual X/Y position using perspective-correct pointer mapping; selected unlocked visuals move together. Precise X/Y fields also work in edge-on views, where direct plane dragging is unavailable. Empty-space drag or Alt-drag orbits, while Shift-drag or middle-drag pans. Camera navigation stays separate from content edits.
 
-The selected layer's depth slider and forward/back buttons change its saved stacking order and the 2D result. Depth represents layer order rather than an independent 3D coordinate. Position and depth gestures each create one Undo step. Locked selections cannot be moved; audio keeps its own array slots during depth changes. Visible Back/Front endpoints and the numbered layer list make the order clear.
+The selected layer's Layer order slider and forward/back buttons change its saved stacking order and the 2D result. Layer order is separate from the 3D element Depth control. Position and order gestures each create one Undo step. Locked selections cannot be moved; audio keeps its own array slots during depth changes. Visible Back/Front endpoints and the numbered layer list make the order clear.
 
 ![Position and depth controls in the 3D workspace](images/layer-depth.png)
 
@@ -94,3 +94,9 @@ Interface motion respects reduced-motion preferences. That preference governs th
 ## Inspiration and originality
 
 The brief draws on CapCut's approachable editing, Figma's direct object manipulation, and iOS clarity. Reference screenshots inform the spacious board and differentiated tracks. The earlier [Flask](https://flask.do/) study informed compact control surfaces; the monochrome workspace keeps emphasis on the composition and colored timeline. All controls, template compositions, and application code are developed for Frame Studio.
+
+## Element 3D
+
+The Design inspector and depth workspace share one compact 3D element section: an explicit enable switch, three pose shortcuts, X/Y tilt and depth, and Reset. Motion has separate Still, Tilt in, Flip in, and Float choices. The timeline exposes these settings inside the selected row. Only one selected visual element is eligible; group or audio selection shows a short explanation. Locked controls remain visible but disabled.
+
+The projected outline follows playback time and supports ordinary translation. Inspector dimensions remain available for precise resizing. Perspective controls do not change the canvas or orbit the workspace. Repeated controls share the same component and project values; open/closed panel state is transient.

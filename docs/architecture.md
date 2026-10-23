@@ -45,6 +45,14 @@ Alpha 6's ready-made components use that same model. `core/componentPresets.ts` 
 
 The CSS 3D layer-inspection view projects the active visual layers into separated planes. Its orbit, pan, zoom, and spacing are temporary view state, not a persistent Z coordinate or a new 3D scene model. Audio stays in the timeline. At most 64 planes are drawn at once, with a bounded preview texture budget; selecting another layer changes the inspected window. These preview limits do not change export resolution. Moving a layer forward or backward updates the shared ordered layer collection, preserving audio slots; the existing Canvas 2D renderer and exports then use that order. This operation participates in the editor's undo history.
 
+## Per-element perspective
+
+`core/element3d.ts` evaluates clip-relative 3D motion and projects local points into composition coordinates. Canvas selection and depth-view hit targets use the same projected quadrilateral as the renderer. Selection handles for perspective artwork are hidden; size remains editable in Design. Its optional serialized `transform3d` belongs to one visual layer and is separate from the inspection camera and stacking order.
+
+`engine/projectedLayer.ts` paints existing masks, flips, filters, text, vectors and media to a local texture, then projects a subdivided triangle mesh. Standard [Canvas 2D transforms are affine](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/transform); triangulation supplies perspective without depending on experimental browser APIs. Layer opacity is composited once after the warp. Neutral or disabled poses retain the existing fast path. Two destination caches each hold two surfaces, capped at a 2,048-pixel longest side and 4 megapixels per surface. This bounds memory but can soften large 3D artwork; output composition dimensions are unchanged.
+
+`renderFrame` is still the single path for canvas preview, depth-plane textures, PNG, and video. SVG export refuses active enabled 3D layers with an explicit alternative. These are textured flat planes; model import, lighting, global depth sorting, group pivots and animated scene cameras are not implemented.
+
 ## Module boundaries
 
 Alpha 7 keeps visual-tool geometry and pixel math in `core/visualEffects.ts`. Mask geometry is shared between Canvas clipping and SVG clip paths. Flips are signed scales about the existing layer-center pivot, so they preserve layout and animation timing. A group is still a set of flat layers; the interface only offers masks and flips for one visual layer at a time.

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import type { Layer, Project } from '../core/types';
 import { reorderVisualLayers } from '../core/layerOrder';
+import { getElement3DQuad, getQuadBounds, hasElement3D } from '../core/element3d';
+import { Element3DControls, Element3DMotionControls } from './Element3DControls';
 import {
   canMoveOnDepthPlane,
   unprojectDepthPoint,
@@ -108,6 +110,7 @@ export default function LayerDepthStage({
   const movableLayers = selectedLayers.filter((layer) => !layer.locked);
   const positionLayer = movableLayers[0];
   const depthLayer = selectedLayers.length === 1 ? selectedLayers[0] : null;
+  const elementLayer = selected.length === 1 ? (depthLayer ?? undefined) : undefined;
   const depthIndex = depthLayer ? visuals.findIndex((layer) => layer.id === depthLayer.id) : 0;
   const projection: DepthProjection = {
     viewportWidth: size.width,
@@ -385,8 +388,8 @@ export default function LayerDepthStage({
     <div className="layer-depth-stage">
       <div className="depth-topline">
         <div>
-          <strong>Layer depth preview</strong>
-          <span>Move elements. Arrange their depth.</span>
+          <strong>3D inspection</strong>
+          <span>Choose a layer to move or give it a 3D pose.</span>
         </div>
         <button type="button" onClick={reset} aria-label="Reset 3D view">
           Reset view
@@ -462,6 +465,12 @@ export default function LayerDepthStage({
           </div>
           {planes.map((layer, index) => {
             const motion = animationState(layer, time);
+            const projected = hasElement3D(layer);
+            const quad = getElement3DQuad(layer, time, motion);
+            const bounds = getQuadBounds(quad);
+            const points = quad
+              .map((point) => `${point.x - bounds.x},${point.y - bounds.y}`)
+              .join(' ');
             const chosen = selected.includes(layer.id);
             return (
               <div
@@ -485,7 +494,7 @@ export default function LayerDepthStage({
                 />
                 <button
                   type="button"
-                  className={`depth-layer-hit ${layer.locked ? 'is-locked' : ''}`}
+                  className={`depth-layer-hit ${layer.locked ? 'is-locked' : ''} ${projected ? 'is-projected' : ''}`}
                   title={
                     layer.locked
                       ? 'Locked layer'
@@ -496,21 +505,40 @@ export default function LayerDepthStage({
                   data-inspect-layer={layer.id}
                   aria-label={`Inspect ${layer.name}`}
                   aria-pressed={chosen}
-                  style={{
-                    left: (layer.x + motion.x) * fit,
-                    top: (layer.y + motion.y) * fit,
-                    width: layer.width * fit,
-                    height: layer.height * fit,
-                    transform: `rotate(${layer.rotation}deg) scale(${motion.scale})`,
-                  }}
+                  style={
+                    projected
+                      ? {
+                          left: bounds.x * fit,
+                          top: bounds.y * fit,
+                          width: Math.max(0.01, bounds.width) * fit,
+                          height: Math.max(0.01, bounds.height) * fit,
+                          clipPath: `polygon(${quad.map((point) => `${((point.x - bounds.x) / Math.max(0.01, bounds.width)) * 100}% ${((point.y - bounds.y) / Math.max(0.01, bounds.height)) * 100}%`).join(',')})`,
+                        }
+                      : {
+                          left: (layer.x + motion.x) * fit,
+                          top: (layer.y + motion.y) * fit,
+                          width: layer.width * fit,
+                          height: layer.height * fit,
+                          transform: `rotate(${layer.rotation}deg) scale(${motion.scale})`,
+                        }
+                  }
                   onClick={(event) => {
                     if (event.detail === 0) choose(layer, event.metaKey || event.ctrlKey);
                   }}
                 >
-                  <span className="depth-plane-label">
-                    <b>{rank.get(layer.id)}</b>
-                    {layer.name}
-                  </span>
+                  {projected ? (
+                    <svg
+                      aria-hidden="true"
+                      viewBox={`0 0 ${Math.max(0.01, bounds.width)} ${Math.max(0.01, bounds.height)}`}
+                    >
+                      <polygon points={points} />
+                    </svg>
+                  ) : (
+                    <span className="depth-plane-label">
+                      <b>{rank.get(layer.id)}</b>
+                      {layer.name}
+                    </span>
+                  )}
                 </button>
               </div>
             );
@@ -572,7 +600,7 @@ export default function LayerDepthStage({
           </div>
           <label className="depth-position-slider">
             <span>
-              Depth <b>{depthLayer ? `${depthIndex + 1} / ${visuals.length}` : '—'}</b>
+              Layer order <b>{depthLayer ? `${depthIndex + 1} / ${visuals.length}` : '—'}</b>
             </span>
             <input
               type="range"
@@ -629,7 +657,7 @@ export default function LayerDepthStage({
           </label>
           {selectedLayers.length > 1 && (
             <small className="depth-edit-hint">
-              Drag moves unlocked selections together. Select one for depth.
+              Drag moves unlocked selections together. Select one to change its order or 3D pose.
             </small>
           )}
           {!!selectedLayers.length && !positionLayer && (
@@ -653,6 +681,18 @@ export default function LayerDepthStage({
               Front →
             </button>
           </div>
+        </div>
+        <div className="depth-element-controls">
+          <Element3DControls layer={elementLayer} onChange={change} checkpoint={checkpoint} />
+          {elementLayer && (
+            <Element3DMotionControls
+              layer={elementLayer}
+              onChange={change}
+              checkpoint={checkpoint}
+              compact
+              timing
+            />
+          )}
         </div>
       </aside>
       <div className="depth-bottom-controls">
@@ -705,7 +745,8 @@ export default function LayerDepthStage({
         </label>
       </div>
       <p className="depth-export-note">
-        Position and depth update your video. Orbit, spacing and zoom are preview controls.
+        Position, layer order and element 3D are saved. Orbit, spacing and zoom only change this
+        view.
         {active.length > MAX_PLANES && (
           <span>
             Showing {planes.length} of {active.length} planes. Select any layer to inspect it.

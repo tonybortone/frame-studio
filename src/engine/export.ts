@@ -1,4 +1,5 @@
 import type { Project } from '../core/types';
+import { hasElement3D } from '../core/element3d';
 import { getMaskGeometry } from '../core/visualEffects';
 import { hasImageEffects } from './imageEffects';
 import {
@@ -223,6 +224,10 @@ export function exportSvg(project: Project, time: number, media?: MediaCache): B
   const active = project.layers.filter(
     (layer) => isLayerActive(layer, time) && layer.kind !== 'audio',
   );
+  if (active.some(hasElement3D))
+    throw new Error(
+      'This frame contains 3D elements. Export PNG or video to preserve perspective, or turn off 3D on those elements before exporting SVG.',
+    );
   if (active.some((layer) => layer.kind === 'video'))
     throw new Error(
       'This frame contains video. Export PNG for a complete snapshot, or hide video layers before exporting SVG.',

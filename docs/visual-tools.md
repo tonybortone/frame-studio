@@ -40,15 +40,23 @@ This works best for logos, product cutouts, screenshots, and graphics against a 
 
 Background removal and image color replacement currently support still images. Video can use masks, flips, and the existing color adjustments, but does not use these pixel-cleanup effects.
 
+## Give one element a 3D pose or animation
+
+Select exactly one visual layer and open **Design → 3D element**. Enable the switch, pick a tilt pose or adjust **Tilt X**, **Tilt Y**, and **Depth**. Positive depth brings that element closer; negative moves it farther. Existing Rotation controls its in-plane rotation. **Reset 3D** removes the pose and 3D motion; switching off keeps settings for reuse. Locked layers cannot be changed.
+
+Choose **Motion → 3D motion** for **Tilt in**, **Flip in**, or looping **Float**. Fine-tune duration (Float period), delay, and entrance easing, or expand the layer's timeline motion row. The same pose and compact motion controls are available beside the layer stack in **3D layers**. Select an individual piece via the Layers panel when editing a grouped mockup.
+
+You can drag a tilted element by its projected outline. Use Design W/H for resizing perspective artwork; corner handles are hidden for a selection containing 3D. Only that element gains perspective; other elements, canvas dimensions, and the inspection camera stay as authored. Its transform saves with the project and components, and renders in PNG/video. These are flat visual planes, not imported 3D models or lighting effects. Very large perspective artwork uses bounded rasterization and may soften.
+
 ## Arrange layers in 3D
 
-Open **3D layers** and drag an element to change its X/Y position. Multiple selected unlocked elements move together; use Command/Ctrl-click on layer rows to change the selection. The X/Y fields offer precise placement, including in the edge-on Top view. Use **Layer depth** for a single selected layer, or the forward/back buttons for a selection, to change which elements sit in front. A movement gesture takes one Undo step.
+Open **3D layers** and drag an element to change its X/Y position. Multiple selected unlocked elements move together; use Command/Ctrl-click on layer rows to change the selection. The X/Y fields offer precise placement, including in the edge-on Top view. Use **Layer order** for a single selected layer, or the forward/back buttons for a selection, to change which elements sit in front. A movement gesture takes one Undo step.
 
-Drag empty space or Alt-drag to orbit. Shift-drag or middle-drag pans, and scrolling zooms. Camera angle, spacing, and zoom only change your workspace view. Position and layer order affect the saved project, 2D canvas, and exports; depth is the stacking order of 2D artwork rather than an independent Z coordinate.
+Drag empty space or Alt-drag to orbit. Shift-drag or middle-drag pans, and scrolling zooms. Camera angle, spacing, and zoom only change your workspace view. Position and layer order affect the saved project, 2D canvas, and exports; Layer order controls stacking; per-element Depth controls perspective independently.
 
 ## Preview, save, and export
 
-The 2D canvas, 3D layer inspection, PNG, and video output use the same processed image. SVG embeds that processed image while keeping other vector content editable. SVG still requires hiding visible video layers. The composition background remains visible through removed pixels; removing an image's background does not make the composition itself transparent.
+The 2D canvas, 3D layer inspection, PNG, and video output use the same processed image. SVG embeds that processed image while keeping other vector content editable. SVG still requires hiding active video and enabled 3D layers; PNG/video retain their appearance. The composition background remains visible through removed pixels; removing an image's background does not make the composition itself transparent.
 
 Cleanup raster processing is capped at a 4,096-pixel longest side and 8 megapixels. Smaller sources retain their dimensions. The original embedded image is unchanged, so removing the cleanup restores the original resolution. Processing caches are bounded and are not written into project JSON.
 

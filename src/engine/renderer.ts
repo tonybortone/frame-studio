@@ -1,6 +1,8 @@
 import type { Layer, Project } from '../core/types';
 import { audioEnvelope, easeProgress, getMotionTiming } from '../core/motion';
 import { getMaskGeometry } from '../core/visualEffects';
+import { getElement3DState } from '../core/element3d';
+import { drawProjectedLayer } from './projectedLayer';
 import { ProcessedImageCache } from './imageEffects';
 
 type MediaElement = HTMLImageElement | HTMLVideoElement | HTMLAudioElement;
@@ -224,6 +226,92 @@ export function animationState(
   };
 }
 
+/** Draw local content once; 2D, perspective preview, PNG, and video share it. */
+function drawLayerContents(ctx: CanvasRenderingContext2D, layer: Layer, media: MediaCache): void {
+  const mask = getMaskGeometry(layer);
+  if (mask) {
+    ctx.beginPath();
+    if (mask.kind === 'ellipse') {
+      ctx.ellipse(
+        mask.x + mask.width / 2,
+        mask.y + mask.height / 2,
+        mask.width / 2,
+        mask.height / 2,
+        0,
+        0,
+        Math.PI * 2,
+      );
+    } else if (mask.kind === 'diamond') {
+      ctx.moveTo(mask.x + mask.width / 2, mask.y);
+      ctx.lineTo(mask.x + mask.width, mask.y + mask.height / 2);
+      ctx.lineTo(mask.x + mask.width / 2, mask.y + mask.height);
+      ctx.lineTo(mask.x, mask.y + mask.height / 2);
+      ctx.closePath();
+    } else ctx.roundRect(mask.x, mask.y, mask.width, mask.height, mask.radius);
+    ctx.clip();
+  }
+  ctx.filter = `brightness(${layer.brightness}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
+  ctx.fillStyle = layer.fill;
+  if (layer.kind === 'shape') {
+    ctx.beginPath();
+    ctx.roundRect(0, 0, layer.width, layer.height, Math.max(0, layer.radius));
+    ctx.fill();
+  } else if (layer.kind === 'text') {
+    const size = layer.fontSize ?? 48;
+    ctx.font = `${layer.fontWeight ?? 600} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.textBaseline = 'top';
+    (layer.text ?? '')
+      .split('\n')
+      .forEach((line, index) => ctx.fillText(line, 0, index * size * 1.12));
+  } else if (layer.kind === 'svg' || layer.kind === 'drawing') {
+    if (layer.path) {
+      const [x, y, width, height] = parseViewBox(layer.viewBox, layer.width, layer.height);
+      ctx.scale(layer.width / width, layer.height / height);
+      ctx.translate(-x, -y);
+      const path = new Path2D(layer.path);
+      if (layer.kind === 'svg' && layer.fill !== 'none') ctx.fill(path);
+      if (layer.stroke && layer.stroke !== 'none') {
+        ctx.strokeStyle = layer.stroke;
+        ctx.lineWidth = layer.strokeWidth ?? 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke(path);
+      }
+    }
+  } else {
+    const element = media.get(layer.id);
+    if (element && !(element instanceof HTMLAudioElement)) {
+      const width = element instanceof HTMLVideoElement ? element.videoWidth : element.naturalWidth;
+      const height =
+        element instanceof HTMLVideoElement ? element.videoHeight : element.naturalHeight;
+      if (width && height) {
+        const source = element instanceof HTMLImageElement ? media.imageSource(layer)! : element;
+        const sourcePixelWidth = source instanceof HTMLCanvasElement ? source.width : width;
+        const sourcePixelHeight = source instanceof HTMLCanvasElement ? source.height : height;
+        const scale = Math.max(layer.width / sourcePixelWidth, layer.height / sourcePixelHeight);
+        const sourceWidth = layer.width / scale;
+        const sourceHeight = layer.height / scale;
+        if (layer.mask === undefined) {
+          ctx.beginPath();
+          ctx.roundRect(0, 0, layer.width, layer.height, Math.max(0, layer.radius));
+          ctx.clip();
+        }
+        ctx.drawImage(
+          source,
+          (sourcePixelWidth - sourceWidth) / 2,
+          (sourcePixelHeight - sourceHeight) / 2,
+          sourceWidth,
+          sourceHeight,
+          0,
+          0,
+          layer.width,
+          layer.height,
+        );
+      }
+    }
+  }
+}
+
 /** Both preview and exported frames call this function; layer order is bottom to top. */
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
@@ -240,6 +328,25 @@ export function renderFrame(
   for (const layer of project.layers) {
     if (!isLayerActive(layer, time) || layer.kind === 'audio') continue;
     const animation = animationState(layer, time);
+    const spatial = getElement3DState(layer, time);
+    if (spatial.rotateX !== 0 || spatial.rotateY !== 0 || spatial.z !== 0) {
+      drawProjectedLayer(
+        ctx,
+        layer,
+        time,
+        animation,
+        {
+          width: project.width,
+          height: project.height,
+          pixelScale: Math.max(
+            ctx.canvas.width / project.width,
+            ctx.canvas.height / project.height,
+          ),
+        },
+        (context) => drawLayerContents(context, layer, media),
+      );
+      continue;
+    }
     ctx.save();
     ctx.translate(
       layer.x + layer.width / 2 + animation.x,
@@ -248,90 +355,8 @@ export function renderFrame(
     ctx.rotate((layer.rotation * Math.PI) / 180);
     ctx.scale(animation.scale * (layer.flipX ? -1 : 1), animation.scale * (layer.flipY ? -1 : 1));
     ctx.translate(-layer.width / 2, -layer.height / 2);
-    const mask = getMaskGeometry(layer);
-    if (mask) {
-      ctx.beginPath();
-      if (mask.kind === 'ellipse') {
-        ctx.ellipse(
-          mask.x + mask.width / 2,
-          mask.y + mask.height / 2,
-          mask.width / 2,
-          mask.height / 2,
-          0,
-          0,
-          Math.PI * 2,
-        );
-      } else if (mask.kind === 'diamond') {
-        ctx.moveTo(mask.x + mask.width / 2, mask.y);
-        ctx.lineTo(mask.x + mask.width, mask.y + mask.height / 2);
-        ctx.lineTo(mask.x + mask.width / 2, mask.y + mask.height);
-        ctx.lineTo(mask.x, mask.y + mask.height / 2);
-        ctx.closePath();
-      } else ctx.roundRect(mask.x, mask.y, mask.width, mask.height, mask.radius);
-      ctx.clip();
-    }
     ctx.globalAlpha = Math.min(1, Math.max(0, animation.opacity));
-    ctx.filter = `brightness(${layer.brightness}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
-    ctx.fillStyle = layer.fill;
-    if (layer.kind === 'shape') {
-      ctx.beginPath();
-      ctx.roundRect(0, 0, layer.width, layer.height, Math.max(0, layer.radius));
-      ctx.fill();
-    } else if (layer.kind === 'text') {
-      const size = layer.fontSize ?? 48;
-      ctx.font = `${layer.fontWeight ?? 600} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-      ctx.textBaseline = 'top';
-      (layer.text ?? '')
-        .split('\n')
-        .forEach((line, index) => ctx.fillText(line, 0, index * size * 1.12));
-    } else if (layer.kind === 'svg' || layer.kind === 'drawing') {
-      if (layer.path) {
-        const [x, y, width, height] = parseViewBox(layer.viewBox, layer.width, layer.height);
-        ctx.scale(layer.width / width, layer.height / height);
-        ctx.translate(-x, -y);
-        const path = new Path2D(layer.path);
-        if (layer.kind === 'svg' && layer.fill !== 'none') ctx.fill(path);
-        if (layer.stroke && layer.stroke !== 'none') {
-          ctx.strokeStyle = layer.stroke;
-          ctx.lineWidth = layer.strokeWidth ?? 3;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.stroke(path);
-        }
-      }
-    } else {
-      const element = media.get(layer.id);
-      if (element && !(element instanceof HTMLAudioElement)) {
-        const width =
-          element instanceof HTMLVideoElement ? element.videoWidth : element.naturalWidth;
-        const height =
-          element instanceof HTMLVideoElement ? element.videoHeight : element.naturalHeight;
-        if (width && height) {
-          const source = element instanceof HTMLImageElement ? media.imageSource(layer)! : element;
-          const sourcePixelWidth = source instanceof HTMLCanvasElement ? source.width : width;
-          const sourcePixelHeight = source instanceof HTMLCanvasElement ? source.height : height;
-          const scale = Math.max(layer.width / sourcePixelWidth, layer.height / sourcePixelHeight);
-          const sourceWidth = layer.width / scale;
-          const sourceHeight = layer.height / scale;
-          if (layer.mask === undefined) {
-            ctx.beginPath();
-            ctx.roundRect(0, 0, layer.width, layer.height, Math.max(0, layer.radius));
-            ctx.clip();
-          }
-          ctx.drawImage(
-            source,
-            (sourcePixelWidth - sourceWidth) / 2,
-            (sourcePixelHeight - sourceHeight) / 2,
-            sourceWidth,
-            sourceHeight,
-            0,
-            0,
-            layer.width,
-            layer.height,
-          );
-        }
-      }
-    }
+    drawLayerContents(ctx, layer, media);
     ctx.restore();
   }
   ctx.restore();

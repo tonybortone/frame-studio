@@ -139,6 +139,27 @@ describe('SVG snapshot export', () => {
     project.layers[0].hidden = true;
     expect(() => exportSvg(project, 1)).not.toThrow();
   });
+  it('rejects active 3D elements with a usable export alternative, including a neutral pose', async () => {
+    const project = createProject();
+    const layer = createLayer('shape', {
+      start: 1,
+      duration: 2,
+      transform3d: { enabled: true, rotateX: 0, rotateY: 0, z: 0, motion: 'none' },
+    });
+    project.layers = [layer];
+    expect(() => exportSvg(project, 1)).toThrow('Export PNG or video to preserve perspective');
+    expect(() => exportSvg(project, 0)).not.toThrow();
+    expect(() => exportSvg(project, 3)).not.toThrow();
+    layer.hidden = true;
+    expect(() => exportSvg(project, 1)).not.toThrow();
+    layer.hidden = false;
+    layer.transform3d!.enabled = false;
+    expect(await exportSvg(project, 1).text()).toContain('<rect width="320"');
+    project.layers = [
+      createLayer('audio', { transform3d: { ...layer.transform3d!, enabled: true } }),
+    ];
+    expect(() => exportSvg(project, 1)).not.toThrow();
+  });
   it('does not advertise recording formats when the recorder API is unavailable', () => {
     expect(getVideoFormats()).toEqual([]);
   });

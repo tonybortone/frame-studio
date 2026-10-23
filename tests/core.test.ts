@@ -31,6 +31,60 @@ describe('project files', () => {
     expect(loaded.layers[0].animationDuration).toBeUndefined();
     expect(loaded.layers[0].animationEasing).toBeUndefined();
     expect(loaded.layers[0].audioFadeIn).toBeUndefined();
+    expect(loaded.layers[0].transform3d).toBeUndefined();
+  });
+
+  it('preserves element 3D through projects, components, duplication, splitting and resizing', () => {
+    const project = createProject();
+    const layer = createLayer('shape', {
+      transform3d: { enabled: true, rotateX: 24, rotateY: -35, z: 18, motion: 'float' },
+    });
+    project.layers = [layer];
+    project.components = [{ id: '3d-card', name: '3D card', layers: [layer] }];
+    expect(parseProject(JSON.stringify(project))).toEqual(project);
+    expect(duplicateLayers([layer])[0].transform3d).toEqual(layer.transform3d);
+    expect(
+      splitLayer(layer, layer.start + layer.duration / 2).map((part) => part.transform3d),
+    ).toEqual([layer.transform3d, layer.transform3d]);
+    expect(changeAspectRatio(project, 1080, 1920).layers[0].transform3d).toEqual(layer.transform3d);
+    layer.transform3d!.enabled = false;
+    expect(parseProject(JSON.stringify(project)).layers[0].transform3d).toEqual(layer.transform3d);
+  });
+
+  it('strictly validates element 3D in layers and saved components', () => {
+    const valid = { enabled: true, rotateX: 12, rotateY: -18, z: 0, motion: 'none' };
+    const invalid = [
+      null,
+      [],
+      {},
+      { ...valid, enabled: 'true' },
+      { ...valid, rotateX: 181 },
+      { ...valid, rotateY: -181 },
+      { ...valid, z: 101 },
+      { ...valid, z: null },
+      { ...valid, motion: 'spin' },
+      { ...valid, camera: 42 },
+    ];
+    for (const transform3d of invalid) {
+      for (const component of [false, true]) {
+        const project = JSON.parse(JSON.stringify(createProject()));
+        project.layers[0].transform3d = transform3d;
+        if (component) {
+          project.components = [{ id: 'bad', name: 'Bad', layers: project.layers }];
+          project.layers = [];
+        }
+        expect(() => parseProject(JSON.stringify(project))).toThrow();
+      }
+    }
+    const project = createProject();
+    project.layers = [createLayer('audio', { transform3d: { ...valid, motion: 'none' } })];
+    expect(() => parseProject(JSON.stringify(project))).toThrow(
+      '3D transforms require a visual layer',
+    );
+    project.layers = [createLayer('shape', { transform3d: { ...valid, motion: 'none' } })];
+    expect(() => parseProject(JSON.stringify(project).replace('"z":0', '"z":1e999'))).toThrow(
+      'finite number',
+    );
   });
 
   it('round-trips authored motion and sound settings in projects and saved components', () => {

@@ -81,6 +81,27 @@
   z-index: 1;
 }
 
+.board-surface .element-3d-selection {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.element-3d-selection polygon {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.element-3d-outline-shadow {
+  stroke: #0008;
+  stroke-width: 3px;
+}
+.element-3d-outline {
+  stroke: var(--accent);
+  stroke-width: 1px;
+}
+
 .board-surface .selection-box > .resize-handle {
   position: absolute;
   width: 10px;

@@ -345,7 +345,7 @@ export default function Timeline({
               tabIndex={0}
               aria-label={`Timeline clip ${layer.name}`}
               aria-pressed={active}
-              title={`${layer.name}${layer.locked ? ' · Locked' : ''}${audio && layer.muted ? ' · Muted' : ''}${layer.groupId ? ' · Grouped' : ''}${!audio && (layer.animation !== 'none' || (layer.exitDuration ?? 0) > 0) ? ' · Motion applied' : ''}`}
+              title={`${layer.name}${layer.locked ? ' · Locked' : ''}${audio && layer.muted ? ' · Muted' : ''}${layer.groupId ? ' · Grouped' : ''}${!audio && (layer.animation !== 'none' || (layer.exitDuration ?? 0) > 0 || (layer.transform3d?.enabled && layer.transform3d.motion !== 'none')) ? ' · Motion applied' : ''}`}
               className={`timeline-clip ${active ? 'selected' : ''} ${layer.hidden ? 'is-hidden' : ''} ${layer.locked ? 'is-locked' : ''} ${audio && layer.muted ? 'is-muted' : ''}`}
               style={
                 {

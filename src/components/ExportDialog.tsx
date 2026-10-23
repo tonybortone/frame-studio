@@ -123,8 +123,8 @@ export default function ExportDialog({ project, time, media, close }: Props) {
         )}
         {format === 'svg' && (
           <p className="helper-copy">
-            Exports editable vector layers and embedded images. Hide video layers first, or choose
-            PNG for a complete frame.
+            Exports editable vector layers and embedded images. Choose PNG or video to include 3D
+            effects. Hide video layers before exporting SVG.
           </p>
         )}
         {error && (
