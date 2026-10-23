@@ -55,6 +55,8 @@ The board supports direct selection and resizing, hand-tool or Space-drag pannin
 
 The frame-size picker shows landscape, portrait, square, and social formats as four visual cards with their ratios and exact pixel dimensions. The trigger keeps the current ratio and dimensions visible. Custom width and height have a swap control and can be applied with Enter. Fit contents to frame scales existing objects uniformly; turning it off changes frame dimensions while preserving object coordinates and sizes. Resizing can be undone; choosing the existing size preserves undo and redo history. The menu fits the window and restores focus when closed with Escape.
 
+![Visual format cards and custom canvas dimensions](images/canvas-size.png)
+
 Playback controls and exact time readouts are fixed at the left of the timeline ruler, alongside the timeline’s only seek control. Second labels sit above the tick marks, with a small playhead handle below them to avoid covering the time labels. Arrow keys step one frame; Shift + arrow steps one second. The canvas remains available for the composition and its editing tools.
 
 The 3D layers view separates the current frame's visible visual layers into CSS 3D planes. Orbit or pan the view, change layer spacing and zoom, or use front, back, top, and perspective presets to inspect overlap. Audio has no visual plane. Hidden layers and clips outside the current time are omitted. These camera controls affect inspection only; the composition and exports remain 2D.
