@@ -153,6 +153,33 @@
   border-bottom: 1px solid #ffffff0b;
   gap: 12px;
 }
+.timeline-motion-mode {
+  position: sticky;
+  left: 0;
+  width: var(--timeline-viewport-width);
+  z-index: 9;
+  order: 1;
+  display: flex;
+  gap: 4px;
+  padding: 5px 14px;
+  background: #1c1c1c;
+  border-bottom: 1px solid #ffffff10;
+}
+.timeline-motion-mode button {
+  padding: 4px 12px;
+  height: 27px;
+  border-radius: 5px;
+  color: #a9a9a9;
+  font-size: 11px;
+  gap: 8px;
+}
+.timeline-motion-mode button[aria-selected='true'] {
+  background: #363636;
+  color: #f2f2f2;
+}
+.timeline-motion-mode button span {
+  font-size: 15px;
+}
 .timeline-motion-heading > div:first-child {
   display: flex;
   align-items: center;

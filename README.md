@@ -8,7 +8,7 @@ The canvas keeps creation tools on the left and Design, Motion, and Color on the
 
 **Create and reuse.** Add nine shapes, draw with Pencil or Brush, or make curved SVG paths with the Pen. Templates, Components, and Masks have visible shortcuts. Seven editable templates cover common layouts; 12 editable components include browser windows, phones, notifications, chats, and titles. Save your own selections as reusable components.
 
-**Edit and animate.** A color-coded timeline separates visual layers from sound. Its toolbar groups playback, exact time, editing, locking, and zoom. Click Motion or expand a layer for Entrance, Loop, and Exit controls, or sound levels and fades. Click the current time to jump precisely, step frame by frame, or preview one clip. See the [timeline and motion guide](docs/timeline-motion.md). Apply shape masks, flips, six color looks, or still-image color replacement and solid-background removal. See the [visual tools guide](docs/visual-tools.md).
+**Edit and animate.** A color-coded timeline separates visual layers from sound. Its toolbar groups playback, exact time, editing, locking, and zoom. Click Motion or expand a layer for editable Position, Size, Rotation and Opacity keyframes, with draggable diamonds and Bézier curves. The Presets tab retains Entrance, Loop and Exit controls; audio has separate levels and fades. See the [keyframe guide](docs/keyframes.md). Click the current time to jump precisely, step frame by frame, or preview one clip. See the [timeline and motion guide](docs/timeline-motion.md). Apply shape masks, flips, six color looks, or still-image color replacement and solid-background removal. See the [visual tools guide](docs/visual-tools.md).
 
 **Give one element depth.** Select a visual layer, enable **Design → 3D element**, then adjust X/Y tilt and depth. **Motion → 3D motion** adds Tilt in, Flip in, or Float. These transforms save and render in PNG/video without changing the rest of the composition. **3D layers** provides a separate orbiting workspace for inspection and X/Y positioning; Layer order controls stacking. These are flat visual planes, not imported 3D models or lighting effects.
 
@@ -59,7 +59,7 @@ Imports are limited to **50 MB per file**, and project loading is limited to **1
 
 Background removal targets a chosen solid color; it is not subject segmentation for complex photographs. Color replacement and background removal currently apply to still images. Their processed raster is capped at a 4,096-pixel longest side and 8 megapixels, consistently across preview and export; the original embedded image is preserved. Masks and flips apply to individual visual layers, not whole groups or track mattes. Perspective uses bounded raster surfaces (2,048-pixel longest side / 4 megapixels), so enlarged 3D artwork can soften at high export resolutions.
 
-Keyframe curve editing, camera moves, transitions between clips, playback-speed changes, professional audio processing, advanced color grading, automatic editing/reframing, and a signed public installer are future work. See the [roadmap](docs/roadmap.md) for the intended sequence and acceptance criteria.
+Camera moves, transitions between clips, playback-speed changes, professional audio processing, advanced color grading, automatic editing/reframing, and a signed public installer are future work. See the [roadmap](docs/roadmap.md) for the intended sequence and acceptance criteria.
 
 ## Built to extend
 

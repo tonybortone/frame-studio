@@ -1,4 +1,20 @@
-import type { Layer, LayerKind, Project } from './types';
+import type {
+  KeyframeCurve,
+  KeyframeEasing,
+  KeyframeProperty,
+  Layer,
+  LayerKeyframes,
+  LayerKind,
+  Project,
+} from './types';
+import {
+  KEYFRAME_EASINGS,
+  KEYFRAME_LIMITS,
+  KEYFRAME_PROPERTIES,
+  MAX_KEYFRAME_TIME,
+  MAX_PROPERTY_KEYFRAMES,
+  transformKeyframeGeometry,
+} from './keyframes';
 
 const KINDS: LayerKind[] = ['video', 'audio', 'image', 'text', 'shape', 'svg', 'drawing'];
 const ANIMATIONS = ['none', 'fade', 'rise', 'fall', 'pop', 'slide', 'slide-right', 'zoom-out'];
@@ -187,6 +203,19 @@ export function duplicateLayers(layers: Layer[]): Layer[] {
     return {
       ...layer,
       id: uid(),
+      ...(layer.keyframes
+        ? {
+            keyframes: Object.fromEntries(
+              Object.entries(layer.keyframes).map(([property, frames]) => [
+                property,
+                frames!.map((frame) => ({
+                  ...frame,
+                  ...(frame.curve ? { curve: [...frame.curve] as KeyframeCurve } : {}),
+                })),
+              ]),
+            ) as LayerKeyframes,
+          }
+        : {}),
       ...(layer.groupId ? { groupId: groups.get(layer.groupId)! } : {}),
     };
   });
@@ -200,6 +229,7 @@ export function splitLayer(layer: Layer, time: number): Layer[] {
   const elapsed = time - layer.start;
   if (!Number.isFinite(time) || elapsed < 0.01 || layer.duration - elapsed < 0.01) return [layer];
   const right = { ...layer, id: uid(), start: time, duration: layer.duration - elapsed };
+  if (layer.keyframes) right.keyframeOffset = (layer.keyframeOffset ?? 0) + elapsed;
   if (layer.kind === 'audio' || layer.kind === 'video')
     right.mediaOffset = (layer.mediaOffset ?? 0) + elapsed;
   return [{ ...layer, duration: elapsed }, right];
@@ -218,6 +248,7 @@ export function changeAspectRatio(project: Project, width: number, height: numbe
     height,
     layers: project.layers.map((layer) => ({
       ...layer,
+      ...transformKeyframeGeometry(layer, { scale, translateX: offsetX, translateY: offsetY }),
       x: layer.x * scale + offsetX,
       y: layer.y * scale + offsetY,
       width: layer.width * scale,
@@ -337,6 +368,8 @@ const LAYER_KEYS = [
   'loopAnimation',
   'loopDuration',
   'loopAmount',
+  'keyframes',
+  'keyframeOffset',
   'transform3d',
   ...TIMING_KEYS,
   'brightness',
@@ -411,6 +444,54 @@ function parseLayer(value: unknown): Layer {
     layer.loopDuration = number(item.loopDuration, 'Loop period', 0.4, 3600);
   if (item.loopAmount !== undefined)
     layer.loopAmount = number(item.loopAmount, 'Loop amount', 0, 100);
+  if (item.keyframeOffset !== undefined)
+    layer.keyframeOffset = number(
+      item.keyframeOffset,
+      'Keyframe offset',
+      -MAX_KEYFRAME_TIME,
+      MAX_KEYFRAME_TIME,
+    );
+  if (item.keyframes !== undefined) {
+    if (layer.kind === 'audio') throw new Error('Property keyframes require a visual layer.');
+    const tracks = object(item.keyframes, 'Property keyframes');
+    knownKeys(tracks, [...KEYFRAME_PROPERTIES], 'Property keyframes');
+    layer.keyframes = {};
+    for (const property of Object.keys(tracks) as KeyframeProperty[]) {
+      const values = tracks[property];
+      if (!Array.isArray(values) || values.length > MAX_PROPERTY_KEYFRAMES)
+        throw new Error(`A property must contain at most ${MAX_PROPERTY_KEYFRAMES} keyframes.`);
+      let previousTime = -Infinity;
+      const ids = new Set<string>();
+      layer.keyframes[property] = values.map((value) => {
+        const frame = object(value, 'Keyframe');
+        knownKeys(frame, ['id', 'time', 'value', 'easing', 'curve'], 'Keyframe');
+        const id = string(frame.id, 'Keyframe ID', 128, 1);
+        if (ids.has(id)) throw new Error('Keyframe IDs must be unique within a property.');
+        ids.add(id);
+        const time = number(frame.time, 'Keyframe time', 0, MAX_KEYFRAME_TIME);
+        if (time <= previousTime) throw new Error('Keyframes must be sorted with unique times.');
+        previousTime = time;
+        if (!KEYFRAME_EASINGS.includes(frame.easing as KeyframeEasing))
+          throw new Error('Unsupported keyframe easing.');
+        const easing = frame.easing as KeyframeEasing;
+        let curve: KeyframeCurve | undefined;
+        if (frame.curve !== undefined || easing === 'custom') {
+          if (easing !== 'custom' || !Array.isArray(frame.curve) || frame.curve.length !== 4)
+            throw new Error('Custom keyframe easing requires four curve coordinates.');
+          curve = frame.curve.map((value, index) =>
+            number(value, 'Keyframe curve', index % 2 === 0 ? 0 : -4, index % 2 === 0 ? 1 : 4),
+          ) as KeyframeCurve;
+        }
+        return {
+          id,
+          time,
+          value: number(frame.value, `Keyframe ${property}`, ...KEYFRAME_LIMITS[property]),
+          easing,
+          ...(curve ? { curve } : {}),
+        };
+      });
+    }
+  }
   if (item.transform3d !== undefined) {
     if (layer.kind === 'audio') throw new Error('3D transforms require a visual layer.');
     const transform = object(item.transform3d, '3D transform');

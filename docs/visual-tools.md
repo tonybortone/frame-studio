@@ -44,7 +44,7 @@ Background removal and image color replacement currently support still images. V
 
 ## Motion in the timeline
 
-Select a layer and click **Motion** in the timeline toolbar. Entrance, Loop, and Exit have separate controls, including direction, travel, period, and easing. **Preview clip** plays that interval; **Reset** removes motion in one undoable change. See the [timeline and motion guide](timeline-motion.md) for timing and limits.
+Select a layer and click **Motion** in the timeline toolbar. The **Presets** tab has separate Entrance, Loop, and Exit controls, including direction, travel, period, and easing. **Preview clip** plays that interval; **Reset presets** removes those presets in one undoable change, preserving authored keyframes. See the [timeline and motion guide](timeline-motion.md) for timing and limits.
 
 ## Give one element a 3D pose or animation
 
@@ -69,3 +69,5 @@ The 2D canvas, 3D layer inspection, PNG, and video output use the same processed
 Cleanup raster processing is capped at a 4,096-pixel longest side and 8 megapixels. Smaller sources retain their dimensions. The original embedded image is unchanged, so removing the cleanup restores the original resolution. Processing caches are bounded and are not written into project JSON.
 
 New effects are optional fields in version-one project files. Older projects open without migration. Projects using the new fields require alpha 7 or later.
+
+Use **Motion → Keyframes** to animate position, artwork size, rotation and opacity directly. See the [keyframe guide](keyframes.md) for diamonds, curves and canvas auto-keying.

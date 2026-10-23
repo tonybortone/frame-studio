@@ -102,7 +102,7 @@ Loops begin after the effective 2D or 3D entrance, or at the delay when there is
 
 Timing values must be finite, nonnegative, and at most 3,600 seconds. Authored settings are retained when trimming; effective timings fit inside the current clip. Entrance delay and duration fit together, while overlapping entrance/end fades multiply. Sound fades multiply the layer volume independently of its visual opacity.
 
-Moving a clip carries its motion. Splitting retains the same clip-relative settings in each half, so an entrance restarts for the new clip; continuous source-relative motion across a split is not implemented. Saved components preserve these settings. Preview, PNG/SVG snapshots, and real-time video export use the same motion evaluation; preview and video export share the sound envelope.
+Moving a clip carries its motion. Splitting retains the same clip-relative settings in each half, so an entrance restarts for the new clip; these preset envelopes restart after splitting. Property keyframes below instead preserve continuous evaluated motion. Saved components preserve these settings. Preview, PNG/SVG snapshots, and real-time video export use the same motion evaluation; preview and video export share the sound envelope.
 
 ## Per-element 3D (alpha 14)
 
@@ -113,3 +113,13 @@ The projection pivot is the element center, with camera distance 2.5 times its l
 Tilt in and Flip in use the shared clip-relative delay, fitted duration, and easing, ending at the authored pose. Float holds the authored pose until the delay, then loops sinusoidal tilt/depth with `animationDuration` as its period (minimum 0.4 seconds, default 0.6); Float does not use easing. Existing 2D entrance and exit motion can combine with it. Splitting restarts the clip-relative effect.
 
 Preview, depth inspection textures, PNG and video share the same projection renderer. SVG explicitly rejects active, visible, enabled 3D layers rather than exporting them flat. Older version-one files remain readable; older strict app versions cannot read the new field.
+
+## Property keyframes (alpha 17)
+
+Visual layers optionally store `keyframes`, a map from `x`, `y`, `width`, `height`, `rotation`, or `opacity` to an ordered array of `{id, time, value, easing, curve?}`. Each scalar track has up to 256 keys; IDs are unique within a track and times strictly increase. Easing is `linear`, `hold`, `ease-in`, `ease-out`, `ease-in-out`, or `custom` and belongs to the outgoing segment. Custom `curve` has four finite Bézier control coordinates: X in 0–1, Y in −4–4. The UI constrains dragged Y handles to −0.5–1.5. Standard easings use canonical cubic Bézier curves; interpolation solves curve X before sampling Y.
+
+Values are absolute: X/Y within ±100,000px; width/height 0.01–32,768px; rotation within ±360,000 degrees; opacity 0–1. Size/opacity and other outputs are bounded after interpolation. Rotation interpolates the authored numbers, allowing full spins. Missing tracks use the layer's static value; values before/after the keyed interval hold the first/last key.
+
+`keyframeOffset` is an optional finite offset within ±172,800s. Evaluation samples `projectTime - layer.start + keyframeOffset`. Stored key times remain 0–172,800s; helper edits rebase tracks when an extended-left clip requires negative local time. Splitting increments the right clip's offset instead of approximating its curves. Trimming left changes the offset by the trim amount; trimming right does not alter tracks. Off-clip keys are retained. Normal clip moves only change start.
+
+Audio rejects these visual tracks. Parsing validates all fields, finite numbers and bounds. Duplication deep-copies tracks and curve tuples. Aspect-ratio fitting transforms position/size keys, and ordinary duplicate offsets translate position keys. Saved components preserve keyframes and offsets. Existing files remain compatible with schema version 1; older strict parsers cannot read these optional fields.

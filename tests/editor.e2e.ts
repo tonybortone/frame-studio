@@ -3273,3 +3273,595 @@ test('directional exits and float pulse loops agree between preview and exported
   }
   expect(await saveProject(page, fixture.name)).toEqual(original);
 });
+
+function keyframeFixture(tracked = true): Project {
+  const frame = (id: string, time: number, value: number) => ({
+    id,
+    time,
+    value,
+    easing: 'linear' as const,
+  });
+  return {
+    ...createProject(),
+    name: 'Keyframe study',
+    width: 640,
+    height: 480,
+    duration: 6,
+    fps: 30,
+    background: '#ffffff',
+    components: [],
+    layers: [
+      createLayer('shape', {
+        name: 'Keyframe card',
+        start: 1,
+        duration: 4,
+        x: 20,
+        y: 20,
+        width: 40,
+        height: 30,
+        fill: '#ff0000',
+        radius: 0,
+        ...(tracked
+          ? {
+              keyframes: {
+                x: [frame('position-x-a', 0, 80), frame('position-x-b', 2, 240)],
+                y: [frame('position-y-a', 0, 80), frame('position-y-b', 2, 160)],
+                width: [frame('size-w-a', 0, 80), frame('size-w-b', 2, 160)],
+                height: [frame('size-h-a', 0, 40), frame('size-h-b', 2, 80)],
+                rotation: [frame('rotation-a', 0, 0), frame('rotation-b', 2, 90)],
+                opacity: [frame('opacity-a', 0, 1), frame('opacity-b', 2, 0.5)],
+              },
+            }
+          : {}),
+      }),
+      createLayer('shape', {
+        name: 'Unchanged card',
+        x: 500,
+        y: 360,
+        width: 50,
+        height: 40,
+        fill: '#00ff00',
+        duration: 6,
+      }),
+      createLayer('audio', { name: 'Keyframe sound', duration: 6 }),
+    ],
+  };
+}
+
+async function openKeyframes(page: Page, name = 'Keyframe card') {
+  await page.getByRole('button', { name: `Edit motion for ${name}`, exact: true }).click();
+  const motion = page.getByRole('group', { name: `Motion editor for ${name}`, exact: true });
+  await motion.getByRole('tab', { name: 'Keyframes', exact: true }).click();
+  return motion.getByRole('group', { name: `Keyframes for ${name}`, exact: true });
+}
+
+test('property keyframes author all four controls at clip-local times and persist without changing sibling layers', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture(false);
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  const keys = await openKeyframes(page);
+  await jumpToTime(page, '1.5');
+  for (const property of ['Position', 'Size', 'Rotation', 'Opacity'])
+    await keys
+      .getByRole('button', { name: `Add ${property} keyframe for Keyframe card`, exact: true })
+      .click();
+  for (const [label, value] of [
+    ['Position X', '80'],
+    ['Position Y', '90'],
+    ['Size W', '100'],
+    ['Size H', '60'],
+    ['Rotation value', '0'],
+    ['Opacity value', '100'],
+  ])
+    await keys
+      .getByRole('spinbutton', { name: `${label} for Keyframe card`, exact: true })
+      .fill(value);
+  await jumpToTime(page, '3.5');
+  for (const [label, value] of [
+    ['Position X', '240'],
+    ['Position Y', '170'],
+    ['Size W', '200'],
+    ['Size H', '140'],
+    ['Rotation value', '90'],
+    ['Opacity value', '50'],
+  ])
+    await keys
+      .getByRole('spinbutton', { name: `${label} for Keyframe card`, exact: true })
+      .fill(value);
+  const authored = await saveProject(page, fixture.name);
+  const tracks = authored.layers[0].keyframes!;
+  for (const [property, values] of Object.entries({
+    x: [80, 240],
+    y: [90, 170],
+    width: [100, 200],
+    height: [60, 140],
+    rotation: [0, 90],
+    opacity: [1, 0.5],
+  })) {
+    const frames = tracks[property as keyof typeof tracks]!;
+    expect(frames.map(({ time }) => time)).toEqual([0.5, 2.5]);
+    expect(frames.map(({ value }) => value)).toEqual(values);
+    expect(new Set(frames.map(({ id }) => id)).size).toBe(2);
+  }
+  expect(authored.layers.slice(1)).toEqual(original.layers.slice(1));
+  for (const field of ['x', 'y', 'width', 'height', 'rotation', 'opacity'] as const)
+    expect(authored.layers[0][field]).toBe(original.layers[0][field]);
+  await jumpToTime(page, '2.5');
+  for (const [label, value] of [
+    ['Position X', '160'],
+    ['Position Y', '130'],
+    ['Size W', '150'],
+    ['Size H', '100'],
+    ['Rotation value', '45'],
+    ['Opacity value', '75'],
+  ])
+    await expect(
+      keys.getByRole('spinbutton', { name: `${label} for Keyframe card`, exact: true }),
+    ).toHaveValue(value);
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeEnabled();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+});
+
+test('keyframe diamonds snap paired properties to frames and preserve single gesture undo and redo', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture();
+  await openProjectFixture(page, fixture);
+  const keys = await openKeyframes(page);
+  const before = await saveProject(page, fixture.name);
+  const diamond = keys.getByRole('button', {
+    name: 'Position keyframe at 2.00 seconds for Keyframe card',
+    exact: true,
+  });
+  await diamond.scrollIntoViewIfNeeded();
+  const box = (await diamond.boundingBox())!;
+  const pixels = Number(
+    await page.getByRole('slider', { name: 'Timeline zoom', exact: true }).inputValue(),
+  );
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + pixels * 0.51, box.y + box.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  const moved = await saveProject(page, fixture.name);
+  expect(moved.layers[0].keyframes!.x!.map(({ time }) => time)).toEqual([0, 2.5]);
+  expect(moved.layers[0].keyframes!.y!.map(({ time }) => time)).toEqual([0, 2.5]);
+  expect(moved.layers[0].keyframes!.rotation).toEqual(before.layers[0].keyframes!.rotation);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+  await keys
+    .getByRole('button', {
+      name: 'Position keyframe at 2.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(moved);
+  const movedDiamond = keys.getByRole('button', {
+    name: 'Position keyframe at 2.50 seconds for Keyframe card',
+    exact: true,
+  });
+  await movedDiamond.focus();
+  await movedDiamond.press('ArrowRight');
+  const stepped = await saveProject(page, fixture.name);
+  expect(stepped.layers[0].keyframes!.x![1].time).toBeCloseTo(2.5 + 1 / 30, 6);
+  expect(stepped.layers[0].keyframes!.y![1].time).toBeCloseTo(2.5 + 1 / 30, 6);
+  await keys
+    .getByRole('spinbutton', { name: 'Selected keyframe time for Keyframe card', exact: true })
+    .fill('0');
+  const collided = await saveProject(page, fixture.name);
+  expect(collided.layers[0].keyframes!.x).toHaveLength(1);
+  expect(collided.layers[0].keyframes!.y).toHaveLength(1);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(stepped);
+});
+
+test('keyframe curves edit the outgoing segment with pointer and keyboard undo while keeping the last key disabled', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture();
+  await openProjectFixture(page, fixture);
+  const keys = await openKeyframes(page);
+  await keys
+    .getByRole('button', {
+      name: 'Rotation keyframe at 0.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  const curve = keys.getByRole('combobox', {
+    name: 'Keyframe curve for Keyframe card',
+    exact: true,
+  });
+  await curve.selectOption('ease-in');
+  await jumpToTime(page, '2');
+  const easedRotation = Number(
+    await keys
+      .getByRole('spinbutton', { name: 'Rotation value for Keyframe card', exact: true })
+      .inputValue(),
+  );
+  expect(easedRotation).toBeGreaterThan(0);
+  expect(easedRotation).toBeLessThan(45);
+  await keys
+    .getByRole('button', {
+      name: 'Rotation keyframe at 0.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  await curve.selectOption('hold');
+  await jumpToTime(page, '2');
+  await expect(
+    keys.getByRole('spinbutton', { name: 'Rotation value for Keyframe card', exact: true }),
+  ).toHaveValue('0');
+  await keys
+    .getByRole('button', {
+      name: 'Rotation keyframe at 0.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  await curve.selectOption('custom');
+  const custom = await saveProject(page, fixture.name);
+  const start = keys.getByRole('button', {
+    name: 'Curve start handle for Keyframe card',
+    exact: true,
+  });
+  await start.press('ArrowRight');
+  const keyboard = await saveProject(page, fixture.name);
+  expect(keyboard.layers[0].keyframes!.rotation![0].curve![0]).toBeCloseTo(
+    custom.layers[0].keyframes!.rotation![0].curve![0] + 0.02,
+    6,
+  );
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(custom);
+  const end = keys.getByRole('button', { name: 'Curve end handle for Keyframe card', exact: true });
+  await end.scrollIntoViewIfNeeded();
+  const bounds = (await end.boundingBox())!;
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width / 2 + 18, bounds.y + bounds.height / 2 - 12, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  const dragged = await saveProject(page, fixture.name);
+  expect(dragged.layers[0].keyframes!.rotation![0].curve).not.toEqual(
+    custom.layers[0].keyframes!.rotation![0].curve,
+  );
+  expect(dragged.layers[0].keyframes!.x).toEqual(custom.layers[0].keyframes!.x);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(custom);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(dragged);
+  await keys
+    .getByRole('button', {
+      name: 'Rotation keyframe at 2.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  await expect(curve).toBeDisabled();
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeEnabled();
+  expect(await saveProject(page, fixture.name)).toEqual(dragged);
+});
+
+test('keyframe delete is isolated from layer deletion and locked or audio layers cannot change tracks', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture();
+  await openProjectFixture(page, fixture);
+  const keys = await openKeyframes(page);
+  const before = await saveProject(page, fixture.name);
+  const key = keys.getByRole('button', {
+    name: 'Rotation keyframe at 2.00 seconds for Keyframe card',
+    exact: true,
+  });
+  await key.click();
+  await key.press('Delete');
+  const deleted = await saveProject(page, fixture.name);
+  expect(deleted.layers).toHaveLength(before.layers.length);
+  expect(deleted.layers[0].keyframes!.rotation).toHaveLength(1);
+  expect(deleted.layers[0].keyframes!.x).toEqual(before.layers[0].keyframes!.x);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+  await keys
+    .getByRole('button', {
+      name: 'Rotation keyframe at 0.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  await page.getByRole('button', { name: 'Lock Keyframe card', exact: true }).click();
+  const locked = await saveProject(page, fixture.name);
+  await expect(
+    keys.getByRole('spinbutton', { name: 'Position X for Keyframe card', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    keys.getByRole('button', { name: 'Delete selected keyframe for Keyframe card', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    keys.getByRole('combobox', { name: 'Keyframe curve for Keyframe card', exact: true }),
+  ).toBeDisabled();
+  expect(await saveProject(page, fixture.name)).toEqual(locked);
+  await page.getByRole('button', { name: 'Edit audio for Keyframe sound', exact: true }).click();
+  const audio = page.getByRole('group', { name: 'Audio editor for Keyframe sound', exact: true });
+  await expect(audio.getByRole('tab', { name: 'Keyframes', exact: true })).toHaveCount(0);
+  expect(await saveProject(page, fixture.name)).toEqual(locked);
+});
+
+test('keyframed geometry and opacity match PNG and evaluated canvas picking in flat and tilted views', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture();
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  await jumpToTime(page, '2');
+  const points = [
+    [220, 150],
+    [255, 185],
+    [30, 30],
+  ];
+  const expected = [
+    [255, 64, 64, 255],
+    [255, 64, 64, 255],
+    [255, 255, 255, 255],
+  ];
+  await expect.poll(async () => (await previewPixels(page, points))[0][1]).toBe(64);
+  for (const [index, pixel] of (await previewPixels(page, points)).entries())
+    expectUniformPixels([pixel], expected[index], `Flat preview ${index}`);
+  for (const [index, pixel] of (await exportedPngPixels(page, points)).entries())
+    expectUniformPixels([pixel], expected[index], `Flat PNG ${index}`);
+  // Closing export currently returns the transport to the composition start.
+  await jumpToTime(page, '2');
+  const canvas = page.getByLabel('Composition canvas');
+  const bounds = (await canvas.boundingBox())!;
+  const scale = bounds.width / fixture.width;
+  await page.mouse.click(bounds.x + 220 * scale, bounds.y + 150 * scale);
+  await expect(
+    page.getByRole('button', { name: 'Timeline clip Keyframe card', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  const selected = page.locator('.selection-box').last();
+  const outline = await selected.evaluate((element) => ({
+    width: parseFloat((element as HTMLElement).style.width),
+    height: parseFloat((element as HTMLElement).style.height),
+    transform: (element as HTMLElement).style.transform,
+  }));
+  expect(outline.width).toBeCloseTo(120 * scale, 1);
+  expect(outline.height).toBeCloseTo(60 * scale, 1);
+  expect(outline.transform).toContain('45deg');
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await inspector.getByRole('switch', { name: 'Enable 3D for this element', exact: true }).click();
+  await inspector.getByRole('button', { name: 'Tilt left', exact: true }).click();
+  await inspector.getByRole('button', { name: 'Close properties', exact: true }).click();
+  await jumpToTime(page, '2');
+  await expect.poll(async () => (await previewPixels(page, [[220, 150]]))[0][1]).toBe(64);
+  const tiltedPixels = await previewPixels(page, [[220, 150]]);
+  expect(await exportedPngPixels(page, [[220, 150]])).toEqual(tiltedPixels);
+  const authored = await saveProject(page, fixture.name);
+  expect(authored.layers[0].keyframes).toEqual(before.layers[0].keyframes);
+  expect(authored.layers.slice(1)).toEqual(before.layers.slice(1));
+});
+
+test('dragging an evaluated keyed element inserts keys at the playhead with one undo and preserves base geometry', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture();
+  fixture.layers[0].keyframes = {
+    x: fixture.layers[0].keyframes!.x,
+    y: fixture.layers[0].keyframes!.y,
+  };
+  fixture.layers[0].width = 100;
+  fixture.layers[0].height = 60;
+  await openProjectFixture(page, fixture);
+  await jumpToTime(page, '2');
+  const before = await saveProject(page, fixture.name);
+  const canvas = (await page.getByLabel('Composition canvas').boundingBox())!;
+  const scale = canvas.width / fixture.width;
+  const x = canvas.x + 200 * scale,
+    y = canvas.y + 150 * scale;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 30 * scale, y + 20 * scale, { steps: 8 });
+  await page.mouse.up();
+  const moved = await saveProject(page, fixture.name);
+  expect(moved.layers[0].x).toBe(before.layers[0].x);
+  expect(moved.layers[0].y).toBe(before.layers[0].y);
+  expect(moved.layers[0].keyframes!.x!.map(({ time }) => time)).toEqual([0, 1, 2]);
+  expect(moved.layers[0].keyframes!.y!.map(({ time }) => time)).toEqual([0, 1, 2]);
+  expect(moved.layers[0].keyframes!.x![1].value).toBeCloseTo(190, 0);
+  expect(moved.layers[0].keyframes!.y![1].value).toBeCloseTo(140, 0);
+  expect(moved.layers.slice(1)).toEqual(before.layers.slice(1));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  const position = inspector.getByRole('spinbutton', { name: 'X', exact: true });
+  await expect(position).toHaveValue('160');
+  await position.fill('205');
+  const precise = await saveProject(page, fixture.name);
+  expect(precise.layers[0].x).toBe(before.layers[0].x);
+  expect(precise.layers[0].keyframes!.x![1]).toMatchObject({ time: 1, value: 205 });
+  expect(precise.layers[0].keyframes!.y).toEqual(before.layers[0].keyframes!.y);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+});
+
+test('splitting a custom keyed clip retains exact sampled frames on both sides and exports the same image', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture();
+  fixture.layers[0].keyframes!.x![0] = {
+    ...fixture.layers[0].keyframes!.x![0],
+    easing: 'custom',
+    curve: [0.2, 0.1, 0.7, 0.8],
+  };
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  const points = Array.from({ length: 48 }, (_, row) =>
+    Array.from({ length: 64 }, (_, column) => [column * 10 + 5, row * 10 + 5]),
+  ).flat();
+  const samples: { points: number[][]; pixels: number[][] }[] = [];
+  for (const time of ['1.5', '2.5']) {
+    await jumpToTime(page, time);
+    const pixels = await previewPixels(page, points);
+    // Chromium can switch canvas raster backends after readback. Compare interiors,
+    // excluding a 10px ring around all antialiased edges, including unchanged layers.
+    const stable = pixels
+      .map((pixel, index) => ({ pixel, index }))
+      .filter(
+        ({ pixel, index }) =>
+          index >= 65 &&
+          index < pixels.length - 65 &&
+          index % 64 > 0 &&
+          index % 64 < 63 &&
+          [-65, -64, -63, -1, 1, 63, 64, 65].every((offset) =>
+            pixels[index + offset].every((channel, i) => channel === pixel[i]),
+          ),
+      );
+    expect(stable.filter(({ pixel }) => pixel[0] === 255 && pixel[1] < 200).length).toBeGreaterThan(
+      5,
+    );
+    samples.push({
+      points: stable.map(({ index }) => points[index]),
+      pixels: stable.map(({ pixel }) => pixel),
+    });
+  }
+  await page.getByRole('button', { name: 'Timeline clip Keyframe card', exact: true }).click();
+  await jumpToTime(page, '2');
+  await page.getByRole('button', { name: 'Split clip', exact: true }).click();
+  const split = await saveProject(page, fixture.name);
+  const clips = split.layers.filter(
+    (layer) => layer.kind === 'shape' && layer.name.startsWith('Keyframe card'),
+  );
+  expect(clips).toHaveLength(2);
+  expect(clips.find((layer) => layer.start === 2)?.keyframeOffset).toBe(1);
+  for (const [index, time] of ['1.5', '2.5'].entries()) {
+    await jumpToTime(page, time);
+    await expect
+      .poll(() => previewPixels(page, samples[index].points))
+      .toEqual(samples[index].pixels);
+    expect(await exportedPngPixels(page, samples[index].points)).toEqual(samples[index].pixels);
+  }
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
+test('keyframe lanes and selected curve controls remain reachable in small and large editor windows', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture();
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  const keys = await openKeyframes(page);
+  for (const viewport of [
+    { width: 1000, height: 700 },
+    { width: 1500, height: 980 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const property of ['Position', 'Size', 'Rotation', 'Opacity']) {
+      const row = keys.getByRole('group', {
+        name: `${property} keyframes for Keyframe card`,
+        exact: true,
+      });
+      await row
+        .getByRole('button', {
+          name: `${property} keyframe at 0.00 seconds for Keyframe card`,
+          exact: true,
+        })
+        .click();
+      const label = row.locator('.keyframe-row-label');
+      await label.scrollIntoViewIfNeeded();
+      await expect(label).toBeInViewport();
+      for (const input of await row.getByRole('spinbutton').all()) {
+        const box = (await input.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(45);
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+      }
+    }
+    const curve = keys.getByRole('combobox', {
+      name: 'Keyframe curve for Keyframe card',
+      exact: true,
+    });
+    await curve.scrollIntoViewIfNeeded();
+    await expect(curve).toBeInViewport();
+    for (const handleName of [
+      'Curve start handle for Keyframe card',
+      'Curve end handle for Keyframe card',
+    ]) {
+      const handle = keys.getByRole('button', { name: handleName, exact: true });
+      await handle.scrollIntoViewIfNeeded();
+      await expect(handle).toBeInViewport();
+      const box = (await handle.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    }
+  }
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+});
+
+test('invalid property keyframe imports leave the current composition and redo history intact', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  await page.getByRole('button', { name: 'Add text', exact: true }).click();
+  const authored = await saveProject(page);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  const malformed = keyframeFixture();
+  malformed.layers[0].keyframes!.x![1].time = 0;
+  await page
+    .getByRole('banner')
+    .getByRole('button', { name: 'A little idea', exact: true })
+    .click();
+  const chosen = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Open project', exact: true }).click();
+  await (
+    await chosen
+  ).setFiles({
+    name: 'invalid-keyframes.framestudio',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(malformed)),
+  });
+  await expect(page.getByRole('status')).toContainText(
+    'Keyframes must be sorted with unique times',
+  );
+  expect(await saveProject(page)).toEqual(original);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(authored);
+});
+
+test('endpoint keyframe typing edits the selected final key and undoes the whole field gesture once', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture();
+  fixture.duration = 5;
+  fixture.layers[0].keyframes!.x![1].time = 4;
+  fixture.layers[0].keyframes!.y![1].time = 4;
+  fixture.layers[1].duration = 5;
+  fixture.layers[2].duration = 5;
+  await openProjectFixture(page, fixture);
+  const keys = await openKeyframes(page);
+  await keys
+    .getByRole('button', {
+      name: 'Position keyframe at 4.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  const before = await saveProject(page, fixture.name);
+  const x = keys.getByRole('spinbutton', { name: 'Position X for Keyframe card', exact: true });
+  await expect(x).toHaveValue('240');
+  await x.focus();
+  await x.press('ControlOrMeta+A');
+  await x.pressSequentially('320');
+  await x.press('Enter');
+  const authored = await saveProject(page, fixture.name);
+  expect(authored.layers[0].keyframes!.x!.map(({ time }) => time)).toEqual([0, 4]);
+  expect(authored.layers[0].keyframes!.x![1].value).toBe(320);
+  expect(authored.layers[0].keyframes!.y).toEqual(before.layers[0].keyframes!.y);
+  expect(authored.layers[0].x).toBe(before.layers[0].x);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+});

@@ -85,7 +85,7 @@ Each row has a lock control, and the toolbar can lock or unlock the selection in
 
 ![Playback controls and the timeline ruler](images/timeline.png)
 
-Expanding a visual track or clicking Motion opens three sections: Entrance, Loop, and Exit. Each has named choices and timing controls, with easing curves beside the Feel choices. The header offers Preview clip, Reset, and Close. Travel distance, directional entrances and exits, and Float/Pulse loops use the shared renderer. The entrance and exit strips represent those actual timing settings and can be adjusted directly. This is preset-based motion editing, not an arbitrary keyframe graph editor.
+Expanding a visual track or clicking Motion opens three sections: Entrance, Loop, and Exit. Each has named choices and timing controls, with easing curves beside the Feel choices. The header offers Preview clip, Reset, and Close. Travel distance, directional entrances and exits, and Float/Pulse loops use the shared renderer. The entrance and exit strips represent those actual timing settings and can be adjusted directly. The adjacent Keyframes tab provides four labeled property lanes with paired Position/Size diamonds, current values, and a compact outgoing-curve editor. Temporal curves are editable; spatial paths and speed graphs are not implied.
 
 Expanding an audio track exposes volume, mute, and fade-in/fade-out duration. Audio-only properties omit visual transforms and opacity. Sound fades affect gain independently of visual opacity. Shared timing calculations keep preview and export consistent; shortening a clip clamps its effective timing without discarding authored values.
 

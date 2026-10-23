@@ -5,6 +5,19 @@ export type AnimationEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
 export type ExitAnimation =
   'none' | 'fade' | 'reverse' | 'rise' | 'fall' | 'slide-left' | 'slide-right' | 'shrink';
 export type LoopAnimation = 'none' | 'float' | 'pulse';
+export type KeyframeProperty = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'opacity';
+export type KeyframeEasing = AnimationEasing | 'hold' | 'custom';
+export type KeyframeCurve = [number, number, number, number];
+export interface PropertyKeyframe {
+  id: string;
+  /** Authored clip time. Subtract keyframeOffset to locate a retained key after a split/trim. */
+  time: number;
+  value: number;
+  /** Controls the segment leaving this key. */
+  easing: KeyframeEasing;
+  curve?: KeyframeCurve;
+}
+export type LayerKeyframes = Partial<Record<KeyframeProperty, PropertyKeyframe[]>>;
 export type LayerMask = 'none' | 'rectangle' | 'rounded' | 'ellipse' | 'diamond';
 export type Element3DMotion = 'none' | 'tilt-in' | 'flip-in' | 'float';
 /** Perspective of one visual plane, independent of the inspection camera. */
@@ -69,6 +82,9 @@ export interface Layer {
   loopDuration?: number;
   /** Pixels for Float; percentage growth for Pulse. */
   loopAmount?: number;
+  keyframes?: LayerKeyframes;
+  /** Sampling origin retained by split/trim so Bézier segments remain exact. */
+  keyframeOffset?: number;
   transform3d?: Element3DTransform;
   /** Linear gain ramps applied to audio and video sound in preview and export. */
   audioFadeIn?: number;

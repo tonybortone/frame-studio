@@ -1,6 +1,7 @@
 import {
   useEffect,
   useRef,
+  useState,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
@@ -20,12 +21,17 @@ import type { Animation, AnimationEasing, Layer } from '../core/types';
 import { LockKeyhole, Play, RotateCw, X } from '../icons';
 import { ELEMENT_3D_MOTIONS, element3DMotionPatch } from './Element3DControls';
 import './TimelineMotionEditor.css';
+import TimelineKeyframeEditor from './TimelineKeyframeEditor';
 
 interface Props {
   layer: Layer;
   fps: number;
   pixels: number;
   laneWidth: number;
+  time: number;
+  compositionDuration: number;
+  seek: (time: number) => void;
+  onKeyframesOpen: () => void;
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   checkpoint: () => void;
   onClose: () => void;
@@ -123,6 +129,10 @@ export default function TimelineMotionEditor({
   fps,
   pixels,
   laneWidth,
+  time,
+  compositionDuration,
+  seek,
+  onKeyframesOpen,
   change,
   checkpoint,
   onClose,
@@ -131,6 +141,9 @@ export default function TimelineMotionEditor({
   const gesture = useRef<(() => void) | null>(null);
   useEffect(() => () => gesture.current?.(), []);
   const audio = layer.kind === 'audio';
+  const [mode, setMode] = useState<'presets' | 'keyframes'>(() =>
+    Object.values(layer.keyframes ?? {}).some((track) => track?.length) ? 'keyframes' : 'presets',
+  );
   const timing = getMotionTiming(layer);
   const motion3d = layer.transform3d?.enabled ? layer.transform3d.motion : 'none';
   const hasEntrance = layer.animation !== 'none' || motion3d !== 'none';
@@ -373,7 +386,7 @@ export default function TimelineMotionEditor({
             fades.fadeOut > 0,
           )}
         </>
-      ) : (
+      ) : mode === 'presets' ? (
         <>
           {renderSegment(
             'entrance',
@@ -398,7 +411,7 @@ export default function TimelineMotionEditor({
             timing.exitDuration > 0,
           )}
         </>
-      )}
+      ) : null}
       <div className="timeline-motion-heading">
         <div>
           <strong>{audio ? 'Sound' : 'Motion'}</strong>
@@ -417,14 +430,14 @@ export default function TimelineMotionEditor({
           >
             <Play size={13} /> Preview clip
           </button>
-          {!audio && (
+          {!audio && mode === 'presets' && (
             <button
               type="button"
               aria-label={`Reset motion for ${layer.name}`}
               disabled={layer.locked || !hasMotion}
               onClick={() => edit(resetMotionPatch(layer))}
             >
-              <RotateCw size={13} /> Reset
+              <RotateCw size={13} /> Reset presets
             </button>
           )}
           <button
@@ -437,250 +450,294 @@ export default function TimelineMotionEditor({
           </button>
         </div>
       </div>
-      <div className={`timeline-inline-controls ${audio ? 'is-audio' : 'is-visual'}`}>
-        {audio ? (
-          <section
-            className="timeline-motion-phase timeline-sound-controls"
-            aria-label={`Sound settings for ${layer.name}`}
+      {!audio && (
+        <div
+          className="timeline-motion-mode"
+          role="tablist"
+          aria-label={`Motion editing mode for ${layer.name}`}
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'presets'}
+            onClick={() => setMode('presets')}
           >
-            <NumberControl
-              label="Volume"
-              name={`Audio volume for ${layer.name}`}
-              value={(layer.volume ?? 1) * 100}
-              maximum={100}
-              unit="%"
-              disabled={layer.locked}
-              onChange={(value) => edit({ volume: value / 100 })}
-            />
-            <NumberControl
-              label="Fade in"
-              name={`Audio fade in for ${layer.name}`}
-              value={fades.fadeIn}
-              maximum={maximum}
-              disabled={layer.locked}
-              onChange={(value) => edit({ audioFadeIn: value })}
-            />
-            <NumberControl
-              label="Fade out"
-              name={`Audio fade out for ${layer.name}`}
-              value={fades.fadeOut}
-              maximum={maximum}
-              disabled={layer.locked}
-              onChange={(value) => edit({ audioFadeOut: value })}
-            />
-            <button
-              type="button"
-              className={`timeline-mute-control ${layer.muted ? 'is-muted' : ''}`}
-              aria-label={`Mute audio for ${layer.name}`}
-              aria-pressed={Boolean(layer.muted)}
-              disabled={layer.locked}
-              onClick={() => edit({ muted: !layer.muted })}
-            >
-              {layer.muted ? 'Muted' : 'Mute'}
-            </button>
-          </section>
-        ) : (
-          <>
+            Presets
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'keyframes'}
+            onClick={() => {
+              setMode('keyframes');
+              onKeyframesOpen();
+            }}
+          >
+            Keyframes <span aria-hidden="true">◇</span>
+          </button>
+        </div>
+      )}
+      {!audio && mode === 'keyframes' ? (
+        <TimelineKeyframeEditor
+          key={layer.id}
+          layer={layer}
+          fps={fps}
+          time={time}
+          compositionDuration={compositionDuration}
+          pixels={pixels}
+          laneWidth={laneWidth}
+          seek={seek}
+          change={change}
+          checkpoint={checkpoint}
+        />
+      ) : (
+        <div className={`timeline-inline-controls ${audio ? 'is-audio' : 'is-visual'}`}>
+          {audio ? (
             <section
-              className="timeline-motion-phase"
-              aria-label={`Entrance settings for ${layer.name}`}
+              className="timeline-motion-phase timeline-sound-controls"
+              aria-label={`Sound settings for ${layer.name}`}
             >
-              <h4>
-                <span>01</span> Entrance <small>Come into frame</small>
-              </h4>
-              <label className="timeline-select-control">
-                <span>Style</span>
-                <select
-                  aria-label={`Motion preset for ${layer.name}`}
-                  value={layer.animation}
-                  disabled={layer.locked}
-                  onChange={(event) => edit({ animation: event.currentTarget.value as Animation })}
-                >
-                  {ENTRANCE_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="timeline-phase-fields">
-                <NumberControl
-                  label="Start after"
-                  name={`Animation delay for ${layer.name}`}
-                  value={timing.delay}
-                  maximum={maximum}
-                  disabled={layer.locked || !hasEntrance}
-                  onChange={(value) => edit({ animationDelay: value })}
-                />
-                <NumberControl
-                  label={motion3d === 'float' ? '3D period' : 'Duration'}
-                  name={`Animation ${motion3d === 'float' ? 'period' : 'duration'} for ${layer.name}`}
-                  value={motion3d === 'float' ? period : timing.duration}
-                  minimum={motion3d === 'float' ? 0.4 : 0}
-                  maximum={
-                    motion3d === 'float' ? 3600 : Math.min(3600, layer.duration - timing.delay)
-                  }
-                  disabled={layer.locked || !hasEntrance}
-                  onChange={(value) => edit({ animationDuration: value })}
-                />
-                <NumberControl
-                  label="Travel"
-                  name={`Motion travel for ${layer.name}`}
-                  value={getAnimationDistance(layer)}
-                  maximum={2000}
-                  unit="px"
-                  disabled={
-                    layer.locked ||
-                    !['rise', 'fall', 'slide', 'slide-right'].includes(layer.animation)
-                  }
-                  onChange={(value) => edit({ animationDistance: value })}
-                />
-              </div>
-              <EasingControl
-                name={`Animation easing for ${layer.name}`}
-                value={easing}
-                disabled={layer.locked || !hasEntrance || floatOnly}
-                onChange={(value) => edit({ animationEasing: value })}
+              <NumberControl
+                label="Volume"
+                name={`Audio volume for ${layer.name}`}
+                value={(layer.volume ?? 1) * 100}
+                maximum={100}
+                unit="%"
+                disabled={layer.locked}
+                onChange={(value) => edit({ volume: value / 100 })}
               />
-            </section>
-            <section
-              className="timeline-motion-phase"
-              aria-label={`Loop settings for ${layer.name}`}
-            >
-              <h4>
-                <span>02</span> Loop <small>After the entrance</small>
-              </h4>
-              <label className="timeline-select-control">
-                <span>Style</span>
-                <select
-                  aria-label={`Loop motion for ${layer.name}`}
-                  value={loopStyle}
-                  disabled={layer.locked}
-                  onChange={(event) =>
-                    edit({ loopAnimation: event.currentTarget.value as Layer['loopAnimation'] })
-                  }
-                >
-                  {LOOP_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="timeline-phase-fields">
-                <NumberControl
-                  label="Period"
-                  name={`Loop period for ${layer.name}`}
-                  value={loop.period}
-                  minimum={0.4}
-                  maximum={3600}
-                  disabled={layer.locked || loopStyle === 'none'}
-                  onChange={(value) => edit({ loopDuration: value })}
-                />
-                <NumberControl
-                  label="Amount"
-                  name={`Loop amount for ${layer.name}`}
-                  value={loop.amount}
-                  maximum={100}
-                  unit={loopStyle === 'pulse' ? '%' : 'px'}
-                  disabled={layer.locked || loopStyle === 'none'}
-                  onChange={(value) => edit({ loopAmount: value })}
-                />
-              </div>
-              <label className="timeline-select-control timeline-3d-choice">
-                <span>3D motion</span>
-                <select
-                  aria-label={`3D motion for ${layer.name}`}
-                  value={motion3d}
-                  disabled={layer.locked}
-                  onChange={(event) => {
-                    const next = event.currentTarget.value as NonNullable<
-                      Layer['transform3d']
-                    >['motion'];
-                    if (next !== motion3d) edit(element3DMotionPatch(layer, next));
-                  }}
-                >
-                  {ELEMENT_3D_MOTIONS.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </section>
-            <section
-              className="timeline-motion-phase"
-              aria-label={`Exit settings for ${layer.name}`}
-            >
-              <h4>
-                <span>03</span> Exit <small>Leave the frame</small>
-              </h4>
-              <label className="timeline-select-control">
-                <span>Style</span>
-                <select
-                  aria-label={`Exit motion for ${layer.name}`}
-                  value={exitStyle}
-                  disabled={layer.locked}
-                  onChange={(event) =>
-                    edit({
-                      exitAnimation: event.currentTarget.value as Layer['exitAnimation'],
-                      exitDuration:
-                        layer.exitDuration && layer.exitDuration > 0
-                          ? layer.exitDuration
-                          : Math.min(0.5, maximum),
-                    })
-                  }
-                >
-                  {EXIT_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="timeline-phase-fields">
-                <NumberControl
-                  label="Duration"
-                  name={`${exitStyle === 'fade' || exitStyle === 'none' ? 'Exit fade' : 'Exit duration'} for ${layer.name}`}
-                  value={timing.exitDuration}
-                  maximum={maximum}
-                  disabled={layer.locked}
-                  onChange={(value) =>
-                    edit({
-                      exitDuration: value,
-                      ...(exitStyle === 'none' && value > 0
-                        ? { exitAnimation: 'fade' as const }
-                        : {}),
-                    })
-                  }
-                />
-                <NumberControl
-                  label="Shared travel"
-                  name={`Exit travel for ${layer.name}`}
-                  value={getAnimationDistance(
-                    layer,
-                    exitStyle === 'reverse' ? layer.animation : exitStyle,
-                  )}
-                  maximum={2000}
-                  unit="px"
-                  disabled={
-                    layer.locked ||
-                    !['rise', 'fall', 'slide-left', 'slide-right', 'reverse'].includes(exitStyle)
-                  }
-                  onChange={(value) => edit({ animationDistance: value })}
-                />
-              </div>
-              <EasingControl
-                name={`Exit easing for ${layer.name}`}
-                value={exitEasing}
-                disabled={layer.locked || exitStyle === 'none'}
-                onChange={(value) => edit({ exitEasing: value })}
+              <NumberControl
+                label="Fade in"
+                name={`Audio fade in for ${layer.name}`}
+                value={fades.fadeIn}
+                maximum={maximum}
+                disabled={layer.locked}
+                onChange={(value) => edit({ audioFadeIn: value })}
               />
+              <NumberControl
+                label="Fade out"
+                name={`Audio fade out for ${layer.name}`}
+                value={fades.fadeOut}
+                maximum={maximum}
+                disabled={layer.locked}
+                onChange={(value) => edit({ audioFadeOut: value })}
+              />
+              <button
+                type="button"
+                className={`timeline-mute-control ${layer.muted ? 'is-muted' : ''}`}
+                aria-label={`Mute audio for ${layer.name}`}
+                aria-pressed={Boolean(layer.muted)}
+                disabled={layer.locked}
+                onClick={() => edit({ muted: !layer.muted })}
+              >
+                {layer.muted ? 'Muted' : 'Mute'}
+              </button>
             </section>
-          </>
-        )}
-      </div>
-      {!audio && loopStyle !== 'none' && loop.delay < layer.duration && (
+          ) : (
+            <>
+              <section
+                className="timeline-motion-phase"
+                aria-label={`Entrance settings for ${layer.name}`}
+              >
+                <h4>
+                  <span>01</span> Entrance <small>Come into frame</small>
+                </h4>
+                <label className="timeline-select-control">
+                  <span>Style</span>
+                  <select
+                    aria-label={`Motion preset for ${layer.name}`}
+                    value={layer.animation}
+                    disabled={layer.locked}
+                    onChange={(event) =>
+                      edit({ animation: event.currentTarget.value as Animation })
+                    }
+                  >
+                    {ENTRANCE_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="timeline-phase-fields">
+                  <NumberControl
+                    label="Start after"
+                    name={`Animation delay for ${layer.name}`}
+                    value={timing.delay}
+                    maximum={maximum}
+                    disabled={layer.locked || !hasEntrance}
+                    onChange={(value) => edit({ animationDelay: value })}
+                  />
+                  <NumberControl
+                    label={motion3d === 'float' ? '3D period' : 'Duration'}
+                    name={`Animation ${motion3d === 'float' ? 'period' : 'duration'} for ${layer.name}`}
+                    value={motion3d === 'float' ? period : timing.duration}
+                    minimum={motion3d === 'float' ? 0.4 : 0}
+                    maximum={
+                      motion3d === 'float' ? 3600 : Math.min(3600, layer.duration - timing.delay)
+                    }
+                    disabled={layer.locked || !hasEntrance}
+                    onChange={(value) => edit({ animationDuration: value })}
+                  />
+                  <NumberControl
+                    label="Travel"
+                    name={`Motion travel for ${layer.name}`}
+                    value={getAnimationDistance(layer)}
+                    maximum={2000}
+                    unit="px"
+                    disabled={
+                      layer.locked ||
+                      !['rise', 'fall', 'slide', 'slide-right'].includes(layer.animation)
+                    }
+                    onChange={(value) => edit({ animationDistance: value })}
+                  />
+                </div>
+                <EasingControl
+                  name={`Animation easing for ${layer.name}`}
+                  value={easing}
+                  disabled={layer.locked || !hasEntrance || floatOnly}
+                  onChange={(value) => edit({ animationEasing: value })}
+                />
+              </section>
+              <section
+                className="timeline-motion-phase"
+                aria-label={`Loop settings for ${layer.name}`}
+              >
+                <h4>
+                  <span>02</span> Loop <small>After the entrance</small>
+                </h4>
+                <label className="timeline-select-control">
+                  <span>Style</span>
+                  <select
+                    aria-label={`Loop motion for ${layer.name}`}
+                    value={loopStyle}
+                    disabled={layer.locked}
+                    onChange={(event) =>
+                      edit({ loopAnimation: event.currentTarget.value as Layer['loopAnimation'] })
+                    }
+                  >
+                    {LOOP_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="timeline-phase-fields">
+                  <NumberControl
+                    label="Period"
+                    name={`Loop period for ${layer.name}`}
+                    value={loop.period}
+                    minimum={0.4}
+                    maximum={3600}
+                    disabled={layer.locked || loopStyle === 'none'}
+                    onChange={(value) => edit({ loopDuration: value })}
+                  />
+                  <NumberControl
+                    label="Amount"
+                    name={`Loop amount for ${layer.name}`}
+                    value={loop.amount}
+                    maximum={100}
+                    unit={loopStyle === 'pulse' ? '%' : 'px'}
+                    disabled={layer.locked || loopStyle === 'none'}
+                    onChange={(value) => edit({ loopAmount: value })}
+                  />
+                </div>
+                <label className="timeline-select-control timeline-3d-choice">
+                  <span>3D motion</span>
+                  <select
+                    aria-label={`3D motion for ${layer.name}`}
+                    value={motion3d}
+                    disabled={layer.locked}
+                    onChange={(event) => {
+                      const next = event.currentTarget.value as NonNullable<
+                        Layer['transform3d']
+                      >['motion'];
+                      if (next !== motion3d) edit(element3DMotionPatch(layer, next));
+                    }}
+                  >
+                    {ELEMENT_3D_MOTIONS.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </section>
+              <section
+                className="timeline-motion-phase"
+                aria-label={`Exit settings for ${layer.name}`}
+              >
+                <h4>
+                  <span>03</span> Exit <small>Leave the frame</small>
+                </h4>
+                <label className="timeline-select-control">
+                  <span>Style</span>
+                  <select
+                    aria-label={`Exit motion for ${layer.name}`}
+                    value={exitStyle}
+                    disabled={layer.locked}
+                    onChange={(event) =>
+                      edit({
+                        exitAnimation: event.currentTarget.value as Layer['exitAnimation'],
+                        exitDuration:
+                          layer.exitDuration && layer.exitDuration > 0
+                            ? layer.exitDuration
+                            : Math.min(0.5, maximum),
+                      })
+                    }
+                  >
+                    {EXIT_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="timeline-phase-fields">
+                  <NumberControl
+                    label="Duration"
+                    name={`${exitStyle === 'fade' || exitStyle === 'none' ? 'Exit fade' : 'Exit duration'} for ${layer.name}`}
+                    value={timing.exitDuration}
+                    maximum={maximum}
+                    disabled={layer.locked}
+                    onChange={(value) =>
+                      edit({
+                        exitDuration: value,
+                        ...(exitStyle === 'none' && value > 0
+                          ? { exitAnimation: 'fade' as const }
+                          : {}),
+                      })
+                    }
+                  />
+                  <NumberControl
+                    label="Shared travel"
+                    name={`Exit travel for ${layer.name}`}
+                    value={getAnimationDistance(
+                      layer,
+                      exitStyle === 'reverse' ? layer.animation : exitStyle,
+                    )}
+                    maximum={2000}
+                    unit="px"
+                    disabled={
+                      layer.locked ||
+                      !['rise', 'fall', 'slide-left', 'slide-right', 'reverse'].includes(exitStyle)
+                    }
+                    onChange={(value) => edit({ animationDistance: value })}
+                  />
+                </div>
+                <EasingControl
+                  name={`Exit easing for ${layer.name}`}
+                  value={exitEasing}
+                  disabled={layer.locked || exitStyle === 'none'}
+                  onChange={(value) => edit({ exitEasing: value })}
+                />
+              </section>
+            </>
+          )}
+        </div>
+      )}
+      {!audio && mode === 'presets' && loopStyle !== 'none' && loop.delay < layer.duration && (
         <div className="timeline-effect-row timeline-loop-row">
           <div className="timeline-effect-label">
             <span>{loopStyle === 'float' ? 'Float loop' : 'Pulse loop'}</span>

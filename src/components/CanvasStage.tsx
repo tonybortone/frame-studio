@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { createLayer } from '../core/project';
 import { DEFAULT_DRAWING_STYLE, type CanvasTool, type DrawingStyle } from '../core/creation';
 import { getSelectionBounds, transformSelection, type SelectionBounds } from '../core/selection';
 import { getElement3DQuad, getQuadBounds, hasElement3D, pointInQuad } from '../core/element3d';
+import { evaluateKeyframedLayer } from '../core/keyframes';
 import {
   appendStrokePoint,
   isVectorPoint,
@@ -39,19 +40,39 @@ const RESIZE_CORNERS = [
 type ResizeCorner = (typeof RESIZE_CORNERS)[number];
 
 /** Keep the opposite world-space corner fixed, including on rotated layers. */
-function resizePatch(layer: Layer, corner: ResizeCorner, width: number, height: number) {
+function resizePatch(
+  layer: Layer,
+  corner: ResizeCorner,
+  width: number,
+  height: number,
+  visualScale = 1,
+) {
   const angle = (layer.rotation * Math.PI) / 180;
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
   const nextWidth = Math.min(32768, Math.max(1, width));
   const nextHeight = Math.min(32768, Math.max(1, height));
-  const centerShiftX = (corner.horizontal * (nextWidth - layer.width)) / 2;
-  const centerShiftY = (corner.vertical * (nextHeight - layer.height)) / 2;
+  const centerShiftX = (corner.horizontal * (nextWidth - layer.width) * visualScale) / 2;
+  const centerShiftY = (corner.vertical * (nextHeight - layer.height) * visualScale) / 2;
   const x = layer.x + (layer.width - nextWidth) / 2 + cosine * centerShiftX - sine * centerShiftY;
   const y = layer.y + (layer.height - nextHeight) / 2 + sine * centerShiftX + cosine * centerShiftY;
   if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 100000 || Math.abs(y) > 100000)
     return null;
   return { x, y, width: nextWidth, height: nextHeight };
+}
+
+/** Never write an evaluated layer back wholesale when resizing a selection. */
+function groupResizePatch(layer: Layer): Partial<Layer> {
+  const geometry = { x: layer.x, y: layer.y, width: layer.width, height: layer.height };
+  // Animated size already scales the original artwork in the renderer. Scaling
+  // the font/radius here as well would grow that content a second time.
+  if (layer.keyframes?.width?.length || layer.keyframes?.height?.length) return geometry;
+  return {
+    ...geometry,
+    radius: layer.radius,
+    ...(layer.fontSize === undefined ? {} : { fontSize: layer.fontSize }),
+    ...(layer.strokeWidth === undefined ? {} : { strokeWidth: layer.strokeWidth }),
+  };
 }
 
 interface Props {
@@ -266,7 +287,11 @@ export default function CanvasStage({
       y: ((event.clientY - r.top) / r.height) * project.height,
     };
   };
-  const visibleSelection = project.layers.filter(
+  const evaluatedLayers = useMemo(
+    () => project.layers.map((layer) => evaluateKeyframedLayer(layer, time)),
+    [project.layers, time],
+  );
+  const visibleSelection = evaluatedLayers.filter(
     (layer) =>
       selected.includes(layer.id) &&
       layer.kind !== 'audio' &&
@@ -344,7 +369,7 @@ export default function CanvasStage({
         checkpoint();
         resized = true;
       }
-      layers.forEach((layer) => change(layer.id, layer, false));
+      layers.forEach((layer) => change(layer.id, groupResizePatch(layer), false));
     };
     const end = () => {
       target.removeEventListener('pointermove', move);
@@ -373,12 +398,13 @@ export default function CanvasStage({
     const angle = (layer.rotation * Math.PI) / 180;
     const cosine = Math.cos(angle);
     const sine = Math.sin(angle);
+    const visualScale = animationState(layer, time).scale;
     let resized = false;
     target.setPointerCapture(event.pointerId);
     const move = (next: globalThis.PointerEvent) => {
       const position = point(next);
-      const dx = position.x - origin.x;
-      const dy = position.y - origin.y;
+      const dx = (position.x - origin.x) / visualScale;
+      const dy = (position.y - origin.y) / visualScale;
       let width = layer.width + corner.horizontal * (dx * cosine + dy * sine);
       let height = layer.height + corner.vertical * (-dx * sine + dy * cosine);
       if (next.shiftKey) {
@@ -393,7 +419,7 @@ export default function CanvasStage({
         width = layer.width * factor;
         height = layer.height * factor;
       }
-      const patch = resizePatch(layer, corner, width, height);
+      const patch = resizePatch(layer, corner, width, height, visualScale);
       if (!patch) return;
       if (!resized) {
         if (Math.abs(patch.width - layer.width) + Math.abs(patch.height - layer.height) < 0.5)
@@ -627,7 +653,7 @@ export default function CanvasStage({
       return;
     }
     target.setPointerCapture(event.pointerId);
-    const hit = [...project.layers].reverse().find((l) => {
+    const hit = [...evaluatedLayers].reverse().find((l) => {
       if (
         l.hidden ||
         l.locked ||
@@ -636,15 +662,7 @@ export default function CanvasStage({
         time >= l.start + l.duration
       )
         return false;
-      if (hasElement3D(l))
-        return pointInQuad(origin, getElement3DQuad(l, time, animationState(l, time)));
-      const r = (-l.rotation * Math.PI) / 180,
-        dx = origin.x - l.x - l.width / 2,
-        dy = origin.y - l.y - l.height / 2;
-      return (
-        Math.abs(dx * Math.cos(r) - dy * Math.sin(r)) <= l.width / 2 &&
-        Math.abs(dx * Math.sin(r) + dy * Math.cos(r)) <= l.height / 2
-      );
+      return pointInQuad(origin, getElement3DQuad(l, time, animationState(l, time)));
     });
     if (!hit) {
       select([]);
@@ -660,7 +678,7 @@ export default function CanvasStage({
         : group;
     select(ids);
     let moved = false;
-    const originals = project.layers.filter((l) => ids.includes(l.id) && !l.locked);
+    const originals = evaluatedLayers.filter((l) => ids.includes(l.id) && !l.locked);
     const move = (e: globalThis.PointerEvent) => {
       const p = point(e);
       if (!moved) {
@@ -777,7 +795,7 @@ export default function CanvasStage({
                       checkpoint();
                       keyboardGroupResize.current = true;
                     }
-                    layers.forEach((layer) => change(layer.id, layer, false));
+                    layers.forEach((layer) => change(layer.id, groupResizePatch(layer), false));
                   }}
                   onKeyUp={(event) => {
                     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
@@ -803,11 +821,11 @@ export default function CanvasStage({
                 className="selection-box"
                 key={l.id}
                 style={{
-                  left: l.x * scale,
-                  top: l.y * scale,
+                  left: (l.x + animationState(l, time).x) * scale,
+                  top: (l.y + animationState(l, time).y) * scale,
                   width: l.width * scale,
                   height: l.height * scale,
-                  transform: `rotate(${l.rotation}deg)`,
+                  transform: `rotate(${l.rotation}deg) scale(${animationState(l, time).scale})`,
                 }}
               >
                 {!l.locked &&
@@ -837,6 +855,7 @@ export default function CanvasStage({
                           corner,
                           l.width + corner.horizontal * horizontal,
                           l.height + corner.vertical * vertical,
+                          animationState(l, time).scale,
                         );
                         if (patch && (patch.width !== l.width || patch.height !== l.height))
                           change(l.id, patch);

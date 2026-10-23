@@ -47,12 +47,14 @@ import { kindIcons } from './Timeline';
 import { ElementColors, ImageTools, MaskControls, elementColorProperty } from './VisualTools';
 import { Element3DControls, Element3DMotionControls } from './Element3DControls';
 import './Inspector.css';
+import { evaluateKeyframedLayer } from '../core/keyframes';
 export type InspectorTab = 'design' | 'motion' | 'color';
 
 interface Props {
   tab: InspectorTab;
   close: () => void;
   project: Project;
+  time: number;
   selected: string[];
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   updateProject: (patch: Partial<Project>) => void;
@@ -154,6 +156,7 @@ export default function Inspector({
   tab,
   close,
   project,
+  time,
   selected,
   change,
   updateProject,
@@ -185,10 +188,12 @@ export default function Inspector({
     selection: string;
     values: string;
   } | null>(null);
-  const selectedLayers = project.layers.filter((item) => selected.includes(item.id));
+  const selectedLayers = project.layers
+    .filter((item) => selected.includes(item.id))
+    .map((item) => evaluateKeyframedLayer(item, time));
   const visualSelection = selectedLayers.filter((item) => item.kind !== 'audio');
   const visualTargets = getEditableVisualLayers(project.layers, selected);
-  const firstSelected = project.layers.find((item) => item.id === selected[0]);
+  const firstSelected = selectedLayers.find((item) => item.id === selected[0]);
   const layer =
     firstSelected?.kind === 'audio' && visualSelection.length ? visualSelection[0] : firstSelected;
   const isAudio = layer?.kind === 'audio';

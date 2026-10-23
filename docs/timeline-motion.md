@@ -2,7 +2,9 @@
 
 The timeline groups playback, editing, and zoom. Controls and clip rows use larger targets and readable labels; category colors stay consistent with the rest of the editor. Click the current time to enter seconds, minutes:seconds, or minutes:seconds:frames. Enter applies a valid time; Escape cancels. Frame-step buttons move by one project frame and pause playback. Locate brings the current playhead into view; Fit shows the sequence.
 
-Select one layer and click **Motion** in the toolbar, or expand its row. The expanded editor has **Preview clip**, **Reset**, and **Close**. Preview plays the composition over that clip's time span and stops at its last frame. It changes the view only. Reset removes motion in one undoable edit while retaining the element's position and 3D pose. Locked layers remain readable but cannot be changed.
+Select one layer and click **Motion** in the toolbar, or expand its row. The expanded editor has **Preview clip**, **Reset presets**, and **Close**. Preview plays the composition over that clip's time span and stops at its last frame. It changes the view only. Reset presets removes preset motion in one undoable edit while retaining the element's position and 3D pose. Locked layers remain readable but cannot be changed.
+
+Choose **Keyframes** for editable property tracks and curves; see the [keyframe guide](keyframes.md). **Presets** keeps the three-phase controls below. Both systems can be combined.
 
 ## Three phases
 
@@ -28,4 +30,4 @@ This is an interaction study of publicly documented behavior. No proprietary imp
 | [Keyframe operations](https://helpx.adobe.com/after-effects/desktop/animate-in-after-effects/animation-keyframes/setting-selecting-deleting-keyframes.html) include reversing animation.                   | Reverse entrance is an approachable exit preset.                                |
 | [Expression reference](https://helpx.adobe.com/after-effects/desktop/work-with-expressions/expression-language-reference/expression-language-reference.html) distinguishes animation cycles from playback. | Simple Float/Pulse loops have explicit period and amount settings.              |
 
-Full property keyframes, Bézier speed graphs, expressions, motion blur, tracking, and animated mask paths remain separate future capabilities. The current controls do not claim After Effects parity.
+Position, size, rotation and opacity now have real keyframes with temporal Bézier curves. Speed graphs, expressions, motion blur, tracking, and animated mask paths remain separate future capabilities. The current controls do not claim After Effects parity.

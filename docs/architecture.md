@@ -76,7 +76,7 @@ Video and audio elements require asynchronous decoding and playback synchronizat
 
 **A new layer kind:** extend `LayerKind` and its typed data; add a semantic label/color; implement render, import, inspector, serialization validation, and export behavior together. Verify it at timeline boundaries and in saved projects.
 
-**A new motion recipe:** add a combination of supported animation fields in `core/presets.ts`. A genuinely new animation behavior also needs an animation type, shared time-based evaluation, validation, and UI support. Keep motion based on composition time so scrubbing and playback agree. A future keyframe system should replace preset-specific branching with typed property tracks and easing evaluation.
+**A new motion recipe:** add a combination of supported animation fields in `core/presets.ts`. A genuinely new animation behavior also needs an animation type, shared time-based evaluation, validation, and UI support. Keep motion based on composition time so scrubbing and playback agree. The keyframe system in `core/keyframes.ts` evaluates typed scalar tracks before preset envelopes. Keep interpolation pure, clip-relative and identical across render and selection paths.
 
 **A new color look:** author brightness, contrast, and saturation values in `core/presets.ts`. If a look needs a different visual operation, implement it consistently in rendering, snapshots, exports, and validation before exposing the control. Current looks are display-space adjustments, not LUTs or a color-managed grading pipeline.
 
@@ -89,3 +89,7 @@ Video and audio elements require asynchronous decoding and playback synchronizat
 **Larger media projects:** replace embedded data URLs with a managed asset store and references. Add migration, missing-file relinking, proxy generation, cache limits, and recovery before changing the project storage contract.
 
 **Advanced vector editing:** introduce a richer scene graph only when transforms, paths, nested groups, and instances have defined behavior. Preserve versioned migration from flat layers.
+
+## Property keyframes
+
+`core/keyframes.ts` owns immutable track editing, cubic Bézier interpolation and evaluated geometry. Rendering keeps authored local artwork separate from its evaluated pose so size animation scales text and masks. Canvas/Inspector edits route through `App.change` to auto-key already animated properties. Whole-composition transforms update both static geometry and key values. `TimelineKeyframeEditor` groups six scalar channels into four rows, while `KeyframeCurveEditor` edits the outgoing temporal curve. Gesture checkpoints preserve one-step undo. A clip-local evaluation offset retains exact curves through trims and splits without baking samples or changing existing project meaning.

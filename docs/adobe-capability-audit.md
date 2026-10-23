@@ -2,6 +2,8 @@
 
 **23 October 2026 · Frame Studio 0.1.0-alpha.11**
 
+> Historical audit of alpha11. Alpha17 adds editable Position, Size, Rotation and Opacity tracks, temporal Bézier curves, and selection geometry that follows animated poses. See the [current keyframe guide](keyframes.md). The findings below describe the audited version, not the current feature set.
+
 Frame Studio does not currently offer the editing freedom of Photoshop, Illustrator, or After Effects. It implements useful subsets of their workflows. More controls alone will not close the gap: editable paths, reusable masks, property animation, nested transforms, and a defined color pipeline are the underlying requirements.
 
 The target remains a simple creator interface. Advanced capabilities should appear next to the selected object, with progressive disclosure rather than a permanently crowded workspace.

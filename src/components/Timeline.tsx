@@ -55,7 +55,7 @@ interface Props {
   select: (ids: string[]) => void;
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   checkpoint: () => void;
-  onExpand?: () => void;
+  onExpand?: (keyframes?: boolean) => void;
   resetScrollKey?: number;
   motionRequest?: number;
   onPreviewLayer: (layer: Layer) => void;
@@ -134,7 +134,7 @@ export default function Timeline({
     const layer = project.layers.find((item) => item.id === selected[0]);
     if (!layer || layer.kind === 'audio') return;
     setExpandedId(layer.id);
-    onExpand?.();
+    onExpand?.(Object.values(layer.keyframes ?? {}).some((track) => track?.length));
   }, [motionRequest, selected, project.layers, onExpand]);
   useLayoutEffect(() => {
     if (!expandedId) return;
@@ -235,6 +235,7 @@ export default function Timeline({
             start: layer.start + safe,
             duration: layer.duration - safe,
             mediaOffset: Math.max(0, offset + safe),
+            ...(layer.keyframes ? { keyframeOffset: (layer.keyframeOffset ?? 0) + safe } : {}),
           },
           false,
         );
@@ -290,6 +291,7 @@ export default function Timeline({
     const animated =
       !audio &&
       (layer.animation !== 'none' ||
+        Object.values(layer.keyframes ?? {}).some((track) => track?.length) ||
         ((layer.exitDuration ?? 0) > 0 && layer.exitAnimation !== 'none') ||
         (layer.loopAnimation && layer.loopAnimation !== 'none') ||
         (layer.transform3d?.enabled && layer.transform3d.motion !== 'none'));
@@ -311,7 +313,8 @@ export default function Timeline({
               onClick={(event) => {
                 event.stopPropagation();
                 select([layer.id]);
-                if (!expanded) onExpand?.();
+                if (!expanded)
+                  onExpand?.(Object.values(layer.keyframes ?? {}).some((track) => track?.length));
                 setExpandedId(expanded ? null : layer.id);
               }}
             >
@@ -411,10 +414,15 @@ export default function Timeline({
         </div>
         {expanded && (
           <TimelineMotionEditor
+            key={layer.id}
             layer={layer}
             fps={project.fps}
             pixels={pixels}
             laneWidth={width}
+            time={time}
+            compositionDuration={project.duration}
+            seek={seek}
+            onKeyframesOpen={() => onExpand?.(true)}
             change={change}
             checkpoint={checkpoint}
             onClose={() => setExpandedId(null)}

@@ -1,5 +1,6 @@
 import type { Project } from '../core/types';
 import { hasElement3D } from '../core/element3d';
+import { evaluateKeyframedLayer } from '../core/keyframes';
 import { getMaskGeometry } from '../core/visualEffects';
 import { hasImageEffects } from './imageEffects';
 import {
@@ -233,7 +234,8 @@ export function exportSvg(project: Project, time: number, media?: MediaCache): B
       'This frame contains video. Export PNG for a complete snapshot, or hide video layers before exporting SVG.',
     );
   const body = active
-    .map((layer, index) => {
+    .map((authored, index) => {
+      const layer = evaluateKeyframedLayer(authored, time);
       const animation = animationState(layer, time);
       const scale =
         layer.flipX || layer.flipY
@@ -242,31 +244,35 @@ export function exportSvg(project: Project, time: number, media?: MediaCache): B
       const transform = `translate(${layer.x + layer.width / 2 + animation.x} ${layer.y + layer.height / 2 + animation.y}) rotate(${layer.rotation}) scale(${scale}) translate(${-layer.width / 2} ${-layer.height / 2})`;
       const filter = `brightness(${layer.brightness}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
       let content = '';
-      if (layer.kind === 'shape')
-        content = `<rect width="${layer.width}" height="${layer.height}" rx="${Math.max(0, layer.radius)}" fill="${escapeXml(layer.fill)}"/>`;
-      else if (layer.kind === 'text') {
-        const size = layer.fontSize ?? 48;
-        content = `<text fill="${escapeXml(layer.fill)}" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="${size}" font-weight="${layer.fontWeight ?? 600}" dominant-baseline="text-before-edge">${(
-          layer.text ?? ''
+      if (authored.kind === 'shape')
+        content = `<rect width="${authored.width}" height="${authored.height}" rx="${Math.max(0, authored.radius)}" fill="${escapeXml(authored.fill)}"/>`;
+      else if (authored.kind === 'text') {
+        const size = authored.fontSize ?? 48;
+        content = `<text fill="${escapeXml(authored.fill)}" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="${size}" font-weight="${authored.fontWeight ?? 600}" dominant-baseline="text-before-edge">${(
+          authored.text ?? ''
         )
           .split('\n')
           .map(
             (line, index) => `<tspan x="0" y="${index * size * 1.12}">${escapeXml(line)}</tspan>`,
           )
           .join('')}</text>`;
-      } else if (layer.kind === 'image') {
-        if (!layer.src?.startsWith('data:image/'))
+      } else if (authored.kind === 'image') {
+        if (!authored.src?.startsWith('data:image/'))
           throw new Error('SVG export requires embedded image files.');
-        if (hasImageEffects(layer) && !media)
+        if (hasImageEffects(authored) && !media)
           throw new Error('Image effects require prepared media before exporting SVG.');
-        const source = hasImageEffects(layer) ? media!.imageDataUrl(layer) : layer.src;
-        const legacyClip = layer.mask === undefined;
-        content = `${legacyClip ? `<defs><clipPath id="image-${index}"><rect width="${layer.width}" height="${layer.height}" rx="${Math.max(0, layer.radius)}"/></clipPath></defs>` : ''}<image width="${layer.width}" height="${layer.height}" href="${escapeXml(source)}" preserveAspectRatio="xMidYMid slice"${legacyClip ? ` clip-path="url(#image-${index})"` : ''}/>`;
-      } else if (layer.path) {
-        const [x, y, width, height] = parseViewBox(layer.viewBox, layer.width, layer.height);
-        content = `<g transform="scale(${layer.width / width} ${layer.height / height}) translate(${-x} ${-y})"><path d="${escapeXml(layer.path)}" fill="${layer.kind === 'drawing' ? 'none' : escapeXml(layer.fill)}" stroke="${escapeXml(layer.stroke ?? 'none')}" stroke-width="${layer.strokeWidth ?? 3}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+        const source = hasImageEffects(authored) ? media!.imageDataUrl(authored) : authored.src;
+        const legacyClip = authored.mask === undefined;
+        content = `${legacyClip ? `<defs><clipPath id="image-${index}"><rect width="${authored.width}" height="${authored.height}" rx="${Math.max(0, authored.radius)}"/></clipPath></defs>` : ''}<image width="${authored.width}" height="${authored.height}" href="${escapeXml(source)}" preserveAspectRatio="xMidYMid slice"${legacyClip ? ` clip-path="url(#image-${index})"` : ''}/>`;
+      } else if (authored.path) {
+        const [x, y, width, height] = parseViewBox(
+          authored.viewBox,
+          authored.width,
+          authored.height,
+        );
+        content = `<g transform="scale(${authored.width / width} ${authored.height / height}) translate(${-x} ${-y})"><path d="${escapeXml(authored.path)}" fill="${authored.kind === 'drawing' ? 'none' : escapeXml(authored.fill)}" stroke="${escapeXml(authored.stroke ?? 'none')}" stroke-width="${authored.strokeWidth ?? 3}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
       }
-      const mask = getMaskGeometry(layer);
+      const mask = getMaskGeometry(authored);
       if (mask) {
         const geometry =
           mask.kind === 'ellipse'
@@ -276,6 +282,8 @@ export function exportSvg(project: Project, time: number, media?: MediaCache): B
               : `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}"/>`;
         content = `<defs><clipPath id="mask-${index}" clipPathUnits="userSpaceOnUse">${geometry}</clipPath></defs><g clip-path="url(#mask-${index})">${content}</g>`;
       }
+      if (layer.width !== authored.width || layer.height !== authored.height)
+        content = `<g transform="scale(${layer.width / authored.width} ${layer.height / authored.height})">${content}</g>`;
       return `<g transform="${transform}" opacity="${animation.opacity}" style="filter:${filter}">${content}</g>`;
     })
     .join('\n');

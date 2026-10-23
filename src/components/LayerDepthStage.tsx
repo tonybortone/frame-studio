@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } 
 import type { Layer, Project } from '../core/types';
 import { reorderVisualLayers } from '../core/layerOrder';
 import { getElement3DQuad, getQuadBounds, hasElement3D } from '../core/element3d';
+import { evaluateKeyframedLayer } from '../core/keyframes';
 import { Element3DControls, Element3DMotionControls } from './Element3DControls';
 import {
   canMoveOnDepthPlane,
@@ -108,7 +109,9 @@ export default function LayerDepthStage({
   const forward = reorderVisualLayers(project.layers, selected, 1) !== project.layers;
   const selectedLayers = visuals.filter((layer) => selected.includes(layer.id));
   const movableLayers = selectedLayers.filter((layer) => !layer.locked);
-  const positionLayer = movableLayers[0];
+  const positionLayer = movableLayers[0]
+    ? evaluateKeyframedLayer(movableLayers[0], time)
+    : undefined;
   const depthLayer = selectedLayers.length === 1 ? selectedLayers[0] : null;
   const elementLayer = selected.length === 1 ? (depthLayer ?? undefined) : undefined;
   const depthIndex = depthLayer ? visuals.findIndex((layer) => layer.id === depthLayer.id) : 0;
@@ -242,12 +245,14 @@ export default function LayerDepthStage({
   };
   const updatePosition = (axis: 'x' | 'y', value: number) => {
     if (!positionLayer || !Number.isFinite(value)) return;
-    const editable = latestLayers.current.filter(
-      (layer) =>
-        movableLayers.some((item) => item.id === layer.id) &&
-        !layer.locked &&
-        layer.kind !== 'audio',
-    );
+    const editable = latestLayers.current
+      .filter(
+        (layer) =>
+          movableLayers.some((item) => item.id === layer.id) &&
+          !layer.locked &&
+          layer.kind !== 'audio',
+      )
+      .map((layer) => evaluateKeyframedLayer(layer, time));
     if (!editable.length) return;
     const delta = clamp(
       value - positionLayer[axis],
@@ -301,7 +306,9 @@ export default function LayerDepthStage({
     if (movingLayer && (movingLayer.locked || !canMove)) return;
     const movingIds =
       movingLayer && selected.includes(movingLayer.id) ? selected : [movingLayer?.id];
-    const originals = visuals.filter((layer) => movingIds.includes(layer.id) && !layer.locked);
+    const originals = visuals
+      .filter((layer) => movingIds.includes(layer.id) && !layer.locked)
+      .map((layer) => evaluateKeyframedLayer(layer, time));
     const rect = target.getBoundingClientRect();
     const z = movingLayer
       ? planeDepth(planes.findIndex((layer) => layer.id === movingLayer.id))
@@ -463,7 +470,8 @@ export default function LayerDepthStage({
               {project.width} × {project.height}
             </span>
           </div>
-          {planes.map((layer, index) => {
+          {planes.map((authored, index) => {
+            const layer = evaluateKeyframedLayer(authored, time);
             const motion = animationState(layer, time);
             const projected = hasElement3D(layer);
             const quad = getElement3DQuad(layer, time, motion);

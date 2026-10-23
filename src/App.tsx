@@ -55,6 +55,12 @@ import { MediaCache, syncMedia, stopMedia } from './engine/renderer';
 import { importMedia } from './engine/assets';
 import { saveBlob } from './engine/export';
 import { sampleBackgroundColor } from './engine/imageEffects';
+import {
+  evaluateKeyframedLayer,
+  transformKeyframeGeometry,
+  KEYFRAME_PROPERTIES,
+} from './core/keyframes';
+import { geometryEditPatch } from './core/geometryEditing';
 
 export default function App() {
   const { project, ready, saveStatus, update, checkpoint, undo, redo } = useEditor();
@@ -193,12 +199,32 @@ export default function App() {
     setPlaybackSession((session) => session + 1);
   };
   const change = useCallback(
-    (id: string, patch: Partial<Layer>, record = true) =>
-      update(
-        (p) => ({ ...p, layers: p.layers.map((l) => (l.id === id ? { ...l, ...patch } : l)) }),
-        record,
-      ),
-    [update],
+    (id: string, patch: Partial<Layer>, record = true) => {
+      if (
+        KEYFRAME_PROPERTIES.some((property) => patch[property] !== undefined) ||
+        'keyframes' in patch
+      )
+        setPlaying(false);
+      try {
+        update((p) => {
+          const layers = p.layers.map((l) =>
+            l.id === id
+              ? {
+                  ...l,
+                  ...('keyframes' in patch ? patch : geometryEditPatch(l, patch, time, p.fps)),
+                }
+              : l,
+          );
+          // A rejected key (for example, a full property track) must not consume
+          // an undo step or clear redo before the edit has been computed.
+          if (record) checkpoint();
+          return { ...p, layers };
+        }, false);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : 'Could not edit this element.');
+      }
+    },
+    [update, checkpoint, time, notify],
   );
   const autoRemoveBackground = (layerId: string) => {
     const layer = project.layers.find((item) => item.id === layerId);
@@ -239,10 +265,27 @@ export default function App() {
   );
   const transformSelected = (transform: SelectionTransform) => {
     try {
-      const layers = transformLayers(project.layers, selected, transform);
-      if (layers === project.layers) return;
+      const evaluated = project.layers.map((layer) => evaluateKeyframedLayer(layer, time));
+      const transformed = transformLayers(evaluated, selected, transform);
+      if (transformed === evaluated) return;
+      const layers = project.layers.map((layer, index) => {
+        if (transformed[index] === evaluated[index]) return layer;
+        const next = transformed[index];
+        const patch: Partial<Layer> = {};
+        for (const property of KEYFRAME_PROPERTIES) {
+          if (next[property] !== evaluated[index][property]) patch[property] = next[property];
+        }
+        // Keyed Size scales local content at render time. Static objects retain their style scaling.
+        if (!layer.keyframes?.width?.length && !layer.keyframes?.height?.length) {
+          patch.fontSize = next.fontSize;
+          patch.radius = next.radius;
+          patch.strokeWidth = next.strokeWidth;
+        }
+        return { ...layer, ...geometryEditPatch(layer, patch, time, project.fps) };
+      });
       const next = { ...project, layers };
       parseProject(JSON.stringify(next));
+      setPlaying(false);
       update(() => next);
     } catch (error) {
       notify(
@@ -262,7 +305,12 @@ export default function App() {
   }, [selected, project.layers, update]);
   const duplicate = useCallback(() => {
     const copies = duplicateLayers(project.layers.filter((l) => selected.includes(l.id))).map(
-      (l) => ({ ...l, x: l.x + 24, y: l.y + 24 }),
+      (l) => ({
+        ...l,
+        x: l.x + 24,
+        y: l.y + 24,
+        ...transformKeyframeGeometry(l, { translateX: 24, translateY: 24 }),
+      }),
     );
     if (copies.length) add(copies);
   }, [project.layers, selected, add]);
@@ -893,6 +941,7 @@ export default function App() {
             close={closeInspector}
             tab={activeInspectorTab}
             project={project}
+            time={time}
             selected={selected}
             change={change}
             updateProject={(patch) => update((p) => ({ ...p, ...patch }))}
@@ -1027,8 +1076,10 @@ export default function App() {
           select={selectLayers}
           change={change}
           checkpoint={checkpoint}
-          onExpand={() =>
-            setTimelineHeight((height) => Math.min(Math.max(height, 460), maxTimelineHeight()))
+          onExpand={(keyframes) =>
+            setTimelineHeight((height) =>
+              Math.min(Math.max(height, keyframes ? 620 : 460), maxTimelineHeight()),
+            )
           }
         />
       </section>

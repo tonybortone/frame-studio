@@ -38,8 +38,8 @@ Initial scope: a React/TypeScript editor with an Electron shell; semantic layer 
 
 ## 3 — Motion authoring
 
-- Add keyframes for position, scale, rotation, opacity, and selected effect properties.
-- Extend preset easing and timing handles with property-keyframe curves, spring-like presets, and editable keyframe handles.
+- Shipped in alpha17: editable Position, Size, Rotation and Opacity keyframes, draggable timing diamonds, and temporal Bézier handles. See the [keyframe guide](keyframes.md).
+- Extend property animation to selected effects, spring-like presets, and spatial motion paths.
 - Extend the existing static shape masks with animated masks, track mattes, transitions, camera-style framing, and motion paths.
 - Let users save and reuse motion treatments independently of content.
 - Explore simple frame-by-frame/pencil animation with onion-skin previews.

@@ -8,6 +8,7 @@ import {
 } from '../core/motion';
 import { getMaskGeometry } from '../core/visualEffects';
 import { getElement3DState } from '../core/element3d';
+import { evaluateKeyframedLayer } from '../core/keyframes';
 import { drawProjectedLayer } from './projectedLayer';
 import { ProcessedImageCache } from './imageEffects';
 
@@ -374,10 +375,23 @@ export function renderFrame(
   ctx.scale(ctx.canvas.width / project.width, ctx.canvas.height / project.height);
   ctx.fillStyle = project.background;
   ctx.fillRect(0, 0, project.width, project.height);
-  for (const layer of project.layers) {
-    if (!isLayerActive(layer, time) || layer.kind === 'audio') continue;
+  for (const authored of project.layers) {
+    if (!isLayerActive(authored, time) || authored.kind === 'audio') continue;
+    const layer = evaluateKeyframedLayer(authored, time);
     const animation = animationState(layer, time);
     const spatial = getElement3DState(layer, time);
+    // Size tracks scale the original artwork, including text, masks and strokes.
+    // The same painter is used for flat output and perspective textures.
+    const paint = (context: CanvasRenderingContext2D) => {
+      if (layer.width === authored.width && layer.height === authored.height) {
+        drawLayerContents(context, authored, media);
+        return;
+      }
+      context.save();
+      context.scale(layer.width / authored.width, layer.height / authored.height);
+      drawLayerContents(context, authored, media);
+      context.restore();
+    };
     if (spatial.rotateX !== 0 || spatial.rotateY !== 0 || spatial.z !== 0) {
       drawProjectedLayer(
         ctx,
@@ -392,7 +406,7 @@ export function renderFrame(
             ctx.canvas.height / project.height,
           ),
         },
-        (context) => drawLayerContents(context, layer, media),
+        paint,
       );
       continue;
     }
@@ -405,7 +419,7 @@ export function renderFrame(
     ctx.scale(animation.scale * (layer.flipX ? -1 : 1), animation.scale * (layer.flipY ? -1 : 1));
     ctx.translate(-layer.width / 2, -layer.height / 2);
     ctx.globalAlpha = Math.min(1, Math.max(0, animation.opacity));
-    drawLayerContents(ctx, layer, media);
+    paint(ctx);
     ctx.restore();
   }
   ctx.restore();
