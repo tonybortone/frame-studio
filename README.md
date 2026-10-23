@@ -4,25 +4,15 @@ A local-first canvas and video editor for Mac. Arrange video, audio, images, tex
 
 Frame Studio is an early, open-source alpha. The aim is the directness of a design tool with an approachable video-editing workflow: reusable compositions, clear controls, and an interface that feels at home on a Mac.
 
-The workspace separates media from creation tools and keeps visuals above a dedicated audio area. Expand a timeline layer to edit entrances, easing, exit fades, or sound levels and fades. Resize or fit the timeline, choose a canvas preset or custom dimensions, and start from seven editable templates. One timeline toolbar holds playback, exact time, editing, selection locking, and zoom. Drag the seconds ruler to seek, use arrow keys to step one frame, or Shift + arrow to step one second.
+The canvas keeps creation tools on the left and Design, Motion, and Color on the right. Tool labels collapse to icons, menus close with Escape or an outside click, and Hide panels makes more room for the composition. A subtle dot grid follows pan and zoom.
 
-**Alpha 12 simplifies the timeline.** Compact clips use seven distinct colors for video, audio, images, text, shapes, vectors, and drawings. Lock individual rows or the selected layers; locked clips remain selectable while move, trim, split, and delete are protected. Visuals and sound keep separate sections, with inline motion and audio controls available when expanded.
+**Create and reuse.** Add nine shapes, draw with Pencil or Brush, or make curved SVG paths with the Pen. Templates, Components, and Masks have visible shortcuts. Seven editable templates cover common layouts; 12 editable components include browser windows, phones, notifications, chats, and titles. Save your own selections as reusable components.
 
-**Alpha 14 adds per-element 3D.** Select one visual element, enable **Design → 3D element**, then adjust X/Y tilt and depth. **Motion → 3D motion** offers Tilt in, Flip in, and Float with timing controls. These saved transforms render in the normal canvas, PNG snapshots, and video; the rest of the composition stays in place. The same controls are available inside **3D layers**.
+**Edit and animate.** A color-coded timeline separates visual layers from sound. Its toolbar groups playback, exact time, editing, locking, and zoom. Expand a layer for motion timing or sound levels and fades. Apply shape masks, flips, six color looks, or still-image color replacement and solid-background removal. See the [visual tools guide](docs/visual-tools.md).
 
-**Alpha 13 refines the workspace.** Black, charcoal, and white interface controls keep attention on the artwork and colored clips. The library uses compact rows, and the header keeps one global Import action alongside contextual media imports.
+**Give one element depth.** Select a visual layer, enable **Design → 3D element**, then adjust X/Y tilt and depth. **Motion → 3D motion** adds Tilt in, Flip in, or Float. These transforms save and render in PNG/video without changing the rest of the composition. **3D layers** provides a separate orbiting workspace for inspection and X/Y positioning; Layer order controls stacking. These are flat visual planes, not imported 3D models or lighting effects.
 
-**Alpha 6 adds 12 editable components**: browser and terminal windows, a phone, notifications, chat, social cards, titles, and callouts. Open **Components → Ready-made**, search or choose a category, then click to insert at the playhead. Edit the group's text under **Design → Content**, or resize its pieces together with the corner handles or W/H. Your saved compositions stay under **Yours**.
-
-The inspector now offers **six color looks with adjustable strength** and **five motion choices**, with detailed controls tucked under Adjust and Fine-tune. Looks and motion apply to selected unlocked visual elements; Pop is available for a single element so it does not pull a component apart. The [Resolve workflow analysis](docs/resolve-workflow-analysis.md) documents the public references, exact implemented behavior, and future functions.
-
-**Alpha 7 adds masks and image cleanup.** Select one visual layer and use **Design** for a rectangle, rounded, ellipse, or diamond mask, an adjustable inset, and horizontal/vertical flips. For a still image, **Color** adds local solid-background removal and targeted color replacement. Choose the background automatically from the image border, refine tolerance and edge softness, or restore it at any time. The source image stays intact. Text, shapes, and drawings also have quick palette swatches, and the canvas toolbar uses compact line icons. See the [visual tools guide](docs/visual-tools.md) for controls and limits.
-
-**Alpha 9 adds compact tool menus.** Choose seven shapes, draw with Pencil or Brush, or build curved SVG paths with the Pen. Masks, color/background tools, Templates, and Components are accessible from the side toolbar. Close menus and the library, or hide both panels for a larger dotted canvas workspace. See the [visual tools guide](docs/visual-tools.md) for controls.
-
-Switch to **3D layers** to arrange the composition from the front, back, top, or an orbiting perspective. Drag a layer to move its actual X/Y position, use precise position fields, and adjust **Layer order** to place it behind or in front of other layers. Position and order changes save, export, and undo together with the rest of the project. Drag empty space or Alt-drag to orbit; Shift-drag pans. This is a CSS 3D workspace for editable 2D layers: camera angle, spacing, and zoom are view controls. Element 3D is a saved perspective transform of a flat visual plane, independent of this inspection camera. It does not import 3D models, add lighting, or sort intersecting objects in 3D.
-
-![Frame Studio editor](docs/images/editor.png)
+![Frame Studio creation tools](docs/images/toolbar.png)
 
 ## Run locally
 

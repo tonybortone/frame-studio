@@ -18,11 +18,14 @@ import './CanvasStage.css';
 
 // Keep the creation tools, view switch, and canvas zoom clear at Fit zoom.
 const BOARD_INSETS = { left: 88, right: 32, top: 72, bottom: 56 } as const;
-function boardGeometry(size: { width: number; height: number }) {
+function boardGeometry(
+  size: { width: number; height: number },
+  leftInset: number = BOARD_INSETS.left,
+) {
   return {
-    centerX: (size.width + BOARD_INSETS.left - BOARD_INSETS.right) / 2,
+    centerX: (size.width + leftInset - BOARD_INSETS.right) / 2,
     centerY: (size.height + BOARD_INSETS.top - BOARD_INSETS.bottom) / 2,
-    width: Math.max(1, size.width - BOARD_INSETS.left - BOARD_INSETS.right),
+    width: Math.max(1, size.width - leftInset - BOARD_INSETS.right),
     height: Math.max(1, size.height - BOARD_INSETS.top - BOARD_INSETS.bottom),
   };
 }
@@ -59,6 +62,7 @@ interface Props {
   tool: CanvasTool;
   drawingStyle?: DrawingStyle;
   zoom: number;
+  leftInset?: number;
   onZoomChange?: (zoom: number) => void;
   resetViewKey?: number;
   select: (ids: string[]) => void;
@@ -75,6 +79,7 @@ export default function CanvasStage({
   tool,
   drawingStyle = DEFAULT_DRAWING_STYLE,
   zoom,
+  leftInset = BOARD_INSETS.left,
   onZoomChange,
   resetViewKey,
   select,
@@ -101,8 +106,8 @@ export default function CanvasStage({
   const activePanCleanup = useRef<(() => void) | null>(null);
   const activeGroupResizeCleanup = useRef<(() => void) | null>(null);
   const keyboardGroupResize = useRef(false);
-  const viewport = useRef({ zoom, pan, size, onZoomChange });
-  viewport.current = { zoom, pan, size, onZoomChange };
+  const viewport = useRef({ zoom, pan, size, onZoomChange, leftInset });
+  viewport.current = { zoom, pan, size, onZoomChange, leftInset };
   useEffect(() => {
     setPan({ x: 0, y: 0 });
     activeGroupResizeCleanup.current?.();
@@ -162,7 +167,7 @@ export default function CanvasStage({
         const nextZoom = Math.max(0.15, Math.min(3, current.zoom * Math.exp(-deltaY * 0.008)));
         const ratio = nextZoom / current.zoom;
         const bounds = node.getBoundingClientRect();
-        const board = boardGeometry(current.size);
+        const board = boardGeometry(current.size, current.leftInset);
         const cursorX = event.clientX - bounds.left - board.centerX;
         const cursorY = event.clientY - bounds.top - board.centerY;
         const nextPan = {
@@ -231,7 +236,7 @@ export default function CanvasStage({
     return () => observer.disconnect();
   }, []);
   const safeZoom = Number.isFinite(zoom) ? Math.max(0.15, Math.min(3, zoom)) : 1;
-  const board = boardGeometry(size);
+  const board = boardGeometry(size, leftInset);
   const scale =
     Math.max(0.001, Math.min(board.width / project.width, board.height / project.height)) *
     safeZoom;
@@ -697,7 +702,10 @@ export default function CanvasStage({
       onPointerDown={(event) => {
         if (event.button === 0 && event.target === event.currentTarget) select([]);
       }}
-      style={{ backgroundPosition: `${pan.x}px ${pan.y}px` }}
+      style={{
+        backgroundPosition: `${pan.x}px ${pan.y}px`,
+        backgroundSize: `${100 * safeZoom}px ${100 * safeZoom}px, ${20 * safeZoom}px ${20 * safeZoom}px`,
+      }}
     >
       <div
         className="artboard"

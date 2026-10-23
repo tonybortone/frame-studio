@@ -1,4 +1,11 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Group, LayoutTemplate, PenTool, Plus, SlidersHorizontal, X } from '../icons';
 import {
@@ -9,7 +16,7 @@ import {
 } from '../core/creation';
 import type { Layer } from '../core/types';
 import ToolGlyph from './ToolGlyph';
-import { MaskControls } from './VisualTools';
+import { MASKS, MaskControls, MaskIcon } from './VisualTools';
 import './CanvasToolbar.css';
 
 interface Props {
@@ -29,6 +36,8 @@ interface Props {
   onMenuOpen: () => void;
   busy: boolean;
   depthView: boolean;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
 }
 
 type Menu = 'shapes' | 'drawing' | 'masks';
@@ -45,7 +54,7 @@ const DRAWING_TOOLS = [
     tool: 'pen',
     name: 'Pen',
     shortcut: 'B',
-    description: 'Build a path, point by point',
+    description: 'Bézier curves & straight SVG paths',
     width: 3,
   },
 ] as const;
@@ -94,6 +103,16 @@ function MaskGlyph() {
   );
 }
 
+function navigateChoices(event: ReactKeyboardEvent<HTMLDivElement>, columns: number) {
+  const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
+  const index = buttons.indexOf(event.target as HTMLButtonElement);
+  const delta = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: columns, ArrowUp: -columns }[event.key];
+  if (index < 0 || (delta === undefined && !['Home', 'End'].includes(event.key))) return;
+  event.preventDefault();
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : index + delta!;
+  buttons[Math.max(0, Math.min(buttons.length - 1, next))]?.focus();
+}
+
 export default function CanvasToolbar({
   tool,
   drawingStyle,
@@ -111,6 +130,8 @@ export default function CanvasToolbar({
   onMenuOpen,
   busy,
   depthView,
+  expanded,
+  onExpandedChange,
 }: Props) {
   const [menu, setMenu] = useState<Menu | null>(null);
   const [position, setPosition] = useState({ left: 0, top: 0 });
@@ -195,9 +216,19 @@ export default function CanvasToolbar({
       setMenu(null);
     };
     document.addEventListener('pointerdown', outside);
+    const focusOutside = (event: FocusEvent) => {
+      if (
+        event.target instanceof Node &&
+        !rail.current?.contains(event.target) &&
+        !popover.current?.contains(event.target)
+      )
+        setMenu(null);
+    };
+    document.addEventListener('focusin', focusOutside);
     document.addEventListener('keydown', escape, true);
     return () => {
       document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('focusin', focusOutside);
       document.removeEventListener('keydown', escape, true);
     };
   }, [menu]);
@@ -220,11 +251,25 @@ export default function CanvasToolbar({
     <>
       <div
         ref={rail}
-        className="creation-toolbar"
+        className={`creation-toolbar ${expanded ? 'is-expanded' : ''}`}
         role="toolbar"
         aria-label="Canvas tools"
         aria-orientation="vertical"
       >
+        <button
+          type="button"
+          className="creation-rail-toggle"
+          title={expanded ? 'Collapse tools' : 'Show tool labels'}
+          aria-label={expanded ? 'Collapse tools' : 'Show tool labels'}
+          aria-expanded={expanded}
+          onClick={() => {
+            dismiss(false);
+            onExpandedChange(!expanded);
+          }}
+        >
+          <span className="creation-tool-label">Tools</span>
+          <ChevronDown size={14} className="creation-rail-chevron" aria-hidden="true" />
+        </button>
         {!depthView && (
           <>
             <button
@@ -236,6 +281,7 @@ export default function CanvasToolbar({
               onClick={() => run(() => onToolChange('select'))}
             >
               <ToolGlyph kind="select" />
+              <span className="creation-tool-label">Select</span>
             </button>
             <button
               type="button"
@@ -246,6 +292,7 @@ export default function CanvasToolbar({
               onClick={() => run(() => onToolChange('hand'))}
             >
               <ToolGlyph kind="hand" />
+              <span className="creation-tool-label">Move view</span>
             </button>
             <span className="creation-divider" aria-hidden="true" />
           </>
@@ -259,6 +306,7 @@ export default function CanvasToolbar({
           {...menuProps('shapes')}
         >
           <ToolGlyph kind="shape" />
+          <span className="creation-tool-label">Shapes</span>
           <ChevronDown className="creation-menu-caret" size={8} aria-hidden="true" />
         </button>
         <button
@@ -269,6 +317,7 @@ export default function CanvasToolbar({
           onClick={() => run(onAddText)}
         >
           <ToolGlyph kind="text" />
+          <span className="creation-tool-label">Text</span>
         </button>
         {!depthView && (
           <button
@@ -280,6 +329,9 @@ export default function CanvasToolbar({
             {...menuProps('drawing')}
           >
             <DrawingIcon kind={drawing ? tool : 'pen'} />
+            <span className="creation-tool-label">
+              {drawing ? DRAWING_TOOLS.find((item) => item.tool === tool)?.name : 'Draw & pen'}
+            </span>
             <ChevronDown className="creation-menu-caret" size={8} aria-hidden="true" />
           </button>
         )}
@@ -291,6 +343,7 @@ export default function CanvasToolbar({
           {...menuProps('masks')}
         >
           <MaskGlyph />
+          <span className="creation-tool-label">Masks</span>
           <ChevronDown className="creation-menu-caret" size={8} aria-hidden="true" />
         </button>
         <span className="creation-divider" aria-hidden="true" />
@@ -301,6 +354,7 @@ export default function CanvasToolbar({
           onClick={() => run(onTemplates)}
         >
           <LayoutTemplate size={20} strokeWidth={1.7} aria-hidden="true" />
+          <span className="creation-tool-label">Templates</span>
         </button>
         <button
           type="button"
@@ -309,6 +363,7 @@ export default function CanvasToolbar({
           onClick={() => run(onComponents)}
         >
           <ToolGlyph kind="component" />
+          <span className="creation-tool-label">Components</span>
         </button>
         {selectedLayers.length > 0 && (
           <button
@@ -319,6 +374,7 @@ export default function CanvasToolbar({
             onClick={() => run(onSaveComponent)}
           >
             <Plus size={18} aria-hidden="true" />
+            <span className="creation-tool-label">Save component</span>
           </button>
         )}
         {selectedLayers.length > 1 && (
@@ -330,6 +386,7 @@ export default function CanvasToolbar({
             onClick={() => run(onGroup)}
           >
             <Group size={18} aria-hidden="true" />
+            <span className="creation-tool-label">Group</span>
           </button>
         )}
       </div>
@@ -356,7 +413,7 @@ export default function CanvasToolbar({
             </div>
             {menu === 'shapes' && (
               <>
-                <div className="canvas-shape-grid">
+                <div className="canvas-shape-grid" onKeyDown={(event) => navigateChoices(event, 3)}>
                   {SHAPE_PRESETS.map((shape, index) => (
                     <button
                       key={shape.id}
@@ -393,7 +450,10 @@ export default function CanvasToolbar({
             )}
             {menu === 'drawing' && (
               <>
-                <div className="canvas-drawing-options">
+                <div
+                  className="canvas-drawing-options"
+                  onKeyDown={(event) => navigateChoices(event, 1)}
+                >
                   {DRAWING_TOOLS.map((item, index) => (
                     <button
                       key={item.tool}
@@ -420,6 +480,20 @@ export default function CanvasToolbar({
                   ))}
                 </div>
                 <div className="canvas-drawing-style">
+                  <svg
+                    className="canvas-stroke-preview"
+                    viewBox="0 0 230 38"
+                    role="img"
+                    aria-label="Drawing stroke preview"
+                  >
+                    <path
+                      d="M12 26C55 -4 70 45 116 17S178 12 218 18"
+                      fill="none"
+                      stroke={drawingStyle.color}
+                      strokeWidth={Math.min(18, drawingStyle.width)}
+                      strokeLinecap="round"
+                    />
+                  </svg>
                   <label className="canvas-stroke-field">
                     <span>Stroke</span>
                     <span className="canvas-stroke-input">
@@ -497,10 +571,32 @@ export default function CanvasToolbar({
                     />
                   </fieldset>
                 ) : (
-                  <div className="canvas-mask-empty">
-                    <MaskGlyph />
-                    <p>{maskHint}</p>
-                  </div>
+                  <>
+                    <div className="canvas-mask-catalog" aria-label="Available mask shapes">
+                      {MASKS.filter((kind) => kind !== 'none').map((kind) => (
+                        <span key={kind}>
+                          <MaskIcon kind={kind} />
+                          <small>{kind[0].toUpperCase() + kind.slice(1)}</small>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="canvas-mask-empty">
+                      <p>{maskHint}</p>
+                    </div>
+                    {!depthView && !layer && (
+                      <button
+                        type="button"
+                        className="canvas-mask-select"
+                        data-autofocus=""
+                        onClick={() => {
+                          dismiss();
+                          onToolChange('select');
+                        }}
+                      >
+                        Choose an element
+                      </button>
+                    )}
+                  </>
                 )}
                 <button
                   type="button"

@@ -6,19 +6,21 @@ These tools edit the selected layer and participate in Undo/Redo. They run local
 
 ## Shapes and drawing
 
-**Shapes** opens seven choices: rectangle, rounded rectangle, ellipse, triangle, star, line, and arrow. Each inserts an editable layer at the current playhead. Resize and recolor it on the board or in Properties.
+The left **Tools** rail starts with visible names. Use **Collapse tools** for an icon-only rail, or **Show tool labels** to expand it again. **Templates** opens the template library; **Components** opens reusable designs.
+
+**Shapes** opens nine choices: rectangle, rounded rectangle, ellipse, triangle, star, diamond, hexagon, line, and arrow. Each inserts an editable layer at the current playhead. Resize and recolor it on the board or in Properties. Arrow keys move between choices; Enter inserts the focused shape.
 
 ![Compact shape menu on the canvas](images/toolbar.png)
 
-**Drawing tools** contains Pencil, Brush, and Pen, with stroke color and width settings. Pencil and Brush create freehand vector strokes; Brush starts with a wider stroke. **Pen (B)** builds a path point by point: click for a corner, drag for a smooth Bézier handle. **Enter / Finish** completes an open path. Click the first point or use **Close path** to make a filled closed shape. **Backspace** removes the last draft point; **Escape / Cancel** discards the draft. Completing the path is one undo step.
+**Drawing tools** contains Pencil, Brush, and Pen, with stroke color and width settings and a live stroke preview. Pencil and Brush create freehand vector strokes; Brush starts with a wider stroke. **Pen (B)** builds a path point by point: click for a corner, drag for a smooth Bézier handle. **Enter / Finish** completes an open path. Click the first point or use **Close path** to make a filled closed shape. **Backspace** removes the last draft point; **Escape / Cancel** discards the draft. Completing the path is one undo step.
 
 Paths stay vector data in project files and SVG exports. They can be moved, resized, colored, grouped, masked, and animated like other layers. This creates new paths; reopening imported paths for anchor-by-anchor editing is not yet supported.
 
-Tool menus close with their X, Escape, or a click elsewhere. **Templates** and **Components** have visible toolbar shortcuts. The library has its own close button. **Hide panels** clears both side panels and keeps them hidden while selecting or drawing; **Show panels** restores them. These view changes do not alter the project.
+Tool menus close with their X, Escape, or a click or keyboard focus elsewhere. The library has its own close button. **Hide panels** clears both side panels and collapses the tool labels; **Show panels** restores their previous state. Tools can still be expanded independently. The board has a two-level dot grid that follows pan and zoom; **Canvas grid** toggles it. These view changes do not alter the project or exports.
 
 ## Mask and flip
 
-Select one unlocked visual element, then open **Masks and effects** in the canvas toolbar, or **Design** in Properties. Choose None, Rectangle, Rounded, Ellipse, or Diamond. Inset brings the mask inward equally from each edge; Roundness adjusts the Rounded mask. These are local bounds, so the mask follows the element when it moves, rotates, or animates. Horizontal and vertical flips use its center and leave its placement and clip timing unchanged.
+Select one unlocked visual element, then open **Masks** in the canvas toolbar, or **Design** in Properties. Choose None, Rectangle, Rounded, Ellipse, or Diamond. Without an eligible selection, the menu still shows the four mask shapes and explains how to select an element. **Color & background** opens the selected element’s Color menu; from the 3D workspace it returns to the 2D canvas. Inset brings the mask inward equally from each edge; Roundness adjusts the Rounded mask. These are local bounds, so the mask follows the element when it moves, rotates, or animates. Horizontal and vertical flips use its center and leave its placement and clip timing unchanged.
 
 An ellipse fills the element's bounds; use equal width and height for a circle. An explicit mask replaces the legacy rounded corners of an image or video. None removes clipping. The original geometry stays editable, and changing the mask does not crop pixels out of the source file.
 
@@ -49,6 +51,8 @@ Choose **Motion → 3D motion** for **Tilt in**, **Flip in**, or looping **Float
 You can drag a tilted element by its projected outline. Use Design W/H for resizing perspective artwork; corner handles are hidden for a selection containing 3D. Only that element gains perspective; other elements, canvas dimensions, and the inspection camera stay as authored. Its transform saves with the project and components, and renders in PNG/video. These are flat visual planes, not imported 3D models or lighting effects. Very large perspective artwork uses bounded rasterization and may soften.
 
 ## Arrange layers in 3D
+
+![A single element with its own 3D pose](images/element-3d.png)
 
 Open **3D layers** and drag an element to change its X/Y position. Multiple selected unlocked elements move together; use Command/Ctrl-click on layer rows to change the selection. The X/Y fields offer precise placement, including in the edge-on Top view. Use **Layer order** for a single selected layer, or the forward/back buttons for a selection, to change which elements sit in front. A movement gesture takes one Undo step.
 

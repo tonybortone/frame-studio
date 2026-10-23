@@ -6,14 +6,14 @@
   min-height: 100px;
   overflow: hidden;
   background-color: var(--panel-soft);
-  background-image: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--muted) 31%, transparent) 0.9px,
-    transparent 1px
-  );
-  background-size: 20px 20px;
   touch-action: none;
   overscroll-behavior: contain;
+}
+
+.has-board-grid .canvas-surface.board-surface {
+  background-image:
+    radial-gradient(circle, #ffffff38 1px, transparent 1.3px),
+    radial-gradient(circle, #ffffff16 0.8px, transparent 1px);
 }
 
 .board-surface .artboard {

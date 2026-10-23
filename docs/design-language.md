@@ -53,6 +53,10 @@ Seven editable templates are provided: Blank canvas, Portrait title, Screen + ca
 
 ## Board and frame size
 
+The left Tools rail starts with names beside the icons. Collapse it to a compact rail without losing access to shapes, drawing tools, masks, templates, or components. Small anchored menus reveal choices only when needed and dismiss on Escape, outside click, or focus leaving the tools. A mask catalog explains available shapes before selection. The board fit leaves room for either rail width. Hide panels also collapses tool labels and restores their previous state when shown again.
+
+A subtle two-level dot grid gives the board scale and orientation. In 2D it follows pan and zoom; its visibility toggle changes only the workspace.
+
 The board supports direct selection and resizing, hand-tool or Space-drag panning, and pointer-centered zoom. Panning and zooming affect the workspace view, not the exported composition. A slim right rail gives Design, Motion, and Color their own menus. The selected menu opens beside the rail without shifting the board during a drag; clicking it again collapses the panel. The close button and Escape return focus to that menu while keeping the selection.
 
 Design holds layout and content controls, Motion holds animation presets and timing, and Color holds colors, looks, and image adjustments. Without a selection, Design shows project settings, Color edits the canvas background, and Motion explains how to select an element. Audio selections use Sound in place of Motion and disable Color. The rail stays out of the 3D workspace and hides with the other panels in focus mode.

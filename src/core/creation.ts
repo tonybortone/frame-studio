@@ -17,6 +17,8 @@ export const SHAPE_PRESETS = [
   { id: 'ellipse', name: 'Ellipse', path: 'M28 14A12 10 0 1 0 4 14A12 10 0 1 0 28 14Z' },
   { id: 'triangle', name: 'Triangle', path: 'M16 3L29 25H3Z' },
   { id: 'star', name: 'Star', path: 'M16 2L20 10L29 11L22 18L24 27L16 23L8 27L10 18L3 11L12 10Z' },
+  { id: 'diamond', name: 'Diamond', path: 'M16 2L30 14L16 26L2 14Z' },
+  { id: 'hexagon', name: 'Hexagon', path: 'M9 3H23L30 14L23 25H9L2 14Z' },
   { id: 'line', name: 'Line', path: 'M4 22L28 6' },
   { id: 'arrow', name: 'Arrow', path: 'M3 14H29M21 6L29 14L21 22' },
 ] as const;
@@ -57,6 +59,8 @@ export function createShapePreset(id: ShapePresetId, project: Project, time: num
     ellipse: 'M320 120A160 120 0 1 0 0 120A160 120 0 1 0 320 120Z',
     triangle: 'M160 0L320 240H0Z',
     star: 'M160 0L200 80L310 90L230 155L255 240L160 192L65 240L90 155L10 90L120 80Z',
+    diamond: 'M160 0L320 120L160 240L0 120Z',
+    hexagon: 'M80 0H240L320 120L240 240H80L0 120Z',
     line: 'M8 8H312',
     arrow: 'M8 28H304M280 8L304 28L280 48',
   };

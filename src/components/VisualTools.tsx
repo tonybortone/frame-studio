@@ -4,7 +4,7 @@ import './VisualTools.css';
 
 type Patch = (value: Partial<Layer>, record?: boolean) => void;
 const PALETTE = ['#2b2d42', '#8d99ae', '#edf2f4', '#ef233c', '#d90429'];
-const MASKS = ['none', 'rectangle', 'rounded', 'ellipse', 'diamond'] as const;
+export const MASKS = ['none', 'rectangle', 'rounded', 'ellipse', 'diamond'] as const;
 
 export function elementColorProperty(layer: Layer): 'fill' | 'stroke' {
   const outline =
@@ -128,7 +128,7 @@ function HexColor({
   );
 }
 
-function MaskIcon({ kind }: { kind: (typeof MASKS)[number] }) {
+export function MaskIcon({ kind }: { kind: (typeof MASKS)[number] }) {
   return (
     <svg
       viewBox="0 0 24 24"

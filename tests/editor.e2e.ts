@@ -2863,3 +2863,98 @@ test('element 3D layer view edits one pose and looping motion without changing t
     spacing,
   );
 });
+
+test('tool labels and the board grid collapse without changing project content', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1100, height: 800 });
+  const original = await saveProject(page);
+  const toolbar = page.getByRole('toolbar', { name: 'Canvas tools', exact: true });
+  await expect(
+    toolbar.locator('.creation-tool-label').filter({ hasText: /^Templates$/ }),
+  ).toBeVisible();
+  const expanded = (await toolbar.boundingBox())!;
+  const canvas = (await page.getByLabel('Composition canvas', { exact: true }).boundingBox())!;
+  expect(canvas.x).toBeGreaterThanOrEqual(expanded.x + expanded.width + 8);
+  await page.getByRole('button', { name: 'Collapse tools', exact: true }).click();
+  expect((await toolbar.boundingBox())!.width).toBeLessThan(expanded.width / 2);
+  await page.getByRole('button', { name: 'Show tool labels', exact: true }).click();
+  await page.getByRole('button', { name: 'Hide panels', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Show tool labels', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Show tool labels', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Collapse tools', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Show panels', exact: true }).click();
+  const board = page.getByRole('region', { name: 'Canvas board', exact: true });
+  expect(await board.evaluate((node) => getComputedStyle(node).backgroundImage)).toContain(
+    'radial-gradient',
+  );
+  const grid = page.getByRole('button', { name: 'Canvas grid', exact: true });
+  await grid.click();
+  expect(await board.evaluate((node) => getComputedStyle(node).backgroundImage)).toBe('none');
+  await grid.click();
+  expect(await saveProject(page)).toEqual(original);
+});
+
+test('shape keyboard choices, mask discovery and menu focus dismissal work together', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  await page.getByRole('button', { name: 'Masks and effects', exact: true }).click();
+  const masks = page.getByRole('dialog', { name: 'Masks & adjustments', exact: true });
+  await expect(masks.getByLabel('Available mask shapes')).toBeVisible();
+  await expect(masks.getByText('Diamond', { exact: true })).toBeVisible();
+  await masks.getByRole('button', { name: 'Choose an element', exact: true }).click();
+  await expect(masks).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add shape', exact: true }).click();
+  const shapes = page.getByRole('dialog', { name: 'Shapes', exact: true });
+  await expect(shapes.locator('.canvas-shape-grid button')).toHaveCount(9);
+  await shapes.getByRole('button', { name: 'Add rectangle', exact: true }).focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(shapes.getByRole('button', { name: 'Add diamond', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  const authored = await saveProject(page);
+  expect(authored.layers.at(-1)).toMatchObject({
+    name: 'Diamond',
+    kind: 'svg',
+    path: 'M160 0L320 120L160 240L0 120Z',
+  });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
+  await page.getByRole('button', { name: 'Drawing tools', exact: true }).click();
+  const drawing = page.getByRole('dialog', { name: 'Drawing tools', exact: true });
+  await expect(
+    drawing.getByRole('img', { name: 'Drawing stroke preview', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Import', exact: true }).focus();
+  await expect(drawing).toHaveCount(0);
+});
+
+test('color and background action from the 3D view opens the selected image color menu', async ({
+  page,
+}) => {
+  const fixture = await imageToolsFixture(page);
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: '3D layers', exact: true }).click();
+  await page.getByRole('button', { name: 'Select 3D layer Two colors', exact: true }).click();
+  await page.getByRole('button', { name: 'Masks and effects', exact: true }).click();
+  const masks = page.getByRole('dialog', { name: 'Masks & adjustments', exact: true });
+  await masks.getByRole('button', { name: /^Color & background/ }).click();
+  await expect(masks).toHaveCount(0);
+  await expect(page.getByRole('region', { name: '3D layer view', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Composition canvas', { exact: true })).toBeVisible();
+  await expect(editingMenu(page, 'Color')).toHaveAttribute('aria-pressed', 'true');
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await expect(
+    inspector.getByRole('heading', { name: 'Color', exact: true, level: 2 }),
+  ).toBeVisible();
+  await expect(
+    inspector.getByRole('button', { name: 'Remove solid background', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Timeline clip Two colors', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+});

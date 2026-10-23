@@ -7,6 +7,18 @@
     transparent 65%
   );
 }
+.has-board-grid .layer-depth-stage {
+  background-color: var(--panel-soft);
+  background-image:
+    radial-gradient(circle, #ffffff30 1px, transparent 1.3px),
+    radial-gradient(circle, #ffffff12 0.8px, transparent 1px);
+  background-size:
+    100px 100px,
+    20px 20px;
+}
+.tools-expanded :is(.depth-topline, .depth-viewport, .depth-bottom-controls, .depth-export-note) {
+  left: 166px;
+}
 .depth-topline {
   position: absolute;
   top: 57px;

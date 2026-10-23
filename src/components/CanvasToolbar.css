@@ -21,6 +21,57 @@
 .creation-toolbar::-webkit-scrollbar {
   width: 0;
 }
+.creation-tool-label {
+  display: none;
+}
+.creation-toolbar.is-expanded {
+  width: 138px;
+  align-items: stretch;
+}
+.creation-toolbar.is-expanded > button {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  height: 33px;
+  min-height: 33px;
+  padding: 0 8px;
+}
+.creation-toolbar.is-expanded > button > svg,
+.creation-toolbar.is-expanded > button > .tool-glyph {
+  flex-shrink: 0;
+  width: 19px;
+  height: 19px;
+}
+.creation-toolbar.is-expanded .creation-tool-label {
+  display: inline;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.creation-toolbar.is-expanded .creation-menu-caret {
+  width: 8px;
+  height: 8px;
+  right: 4px;
+  bottom: 5px;
+}
+.creation-toolbar.is-expanded .creation-divider {
+  width: calc(100% - 16px);
+  margin: 4px 8px;
+}
+.creation-toolbar > .creation-rail-toggle {
+  height: 25px;
+  min-height: 25px;
+  color: var(--muted);
+}
+.creation-rail-chevron {
+  transform: rotate(-90deg);
+}
+.creation-toolbar.is-expanded .creation-rail-toggle {
+  justify-content: space-between;
+}
+.creation-toolbar.is-expanded .creation-rail-chevron {
+  transform: rotate(90deg);
+}
 .creation-toolbar > button {
   position: relative;
   display: grid;
@@ -208,6 +259,40 @@
   margin-top: 11px;
   padding-top: 12px;
   border-top: 1px solid color-mix(in srgb, var(--muted) 15%, transparent);
+}
+.canvas-stroke-preview {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+.canvas-mask-catalog {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.canvas-mask-catalog > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+}
+.canvas-mask-catalog small {
+  font-size: 9px;
+}
+.canvas-mask-select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
 }
 .canvas-stroke-field {
   display: flex;

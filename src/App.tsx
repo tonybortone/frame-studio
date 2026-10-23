@@ -25,6 +25,7 @@ import {
   EyeOff,
   LockKeyhole,
   UnlockKeyhole,
+  Grid3X3,
 } from './icons';
 import Sidebar from './components/Sidebar';
 import Inspector, { type InspectorTab } from './components/Inspector';
@@ -63,7 +64,10 @@ export default function App() {
   const [tool, setTool] = useState<CanvasTool>('select');
   const [drawingStyle, setDrawingStyle] = useState(DEFAULT_DRAWING_STYLE);
   const [panelsHidden, setPanelsHidden] = useState(false);
-  const panelsBeforeFocus = useRef({ library: true, inspector: false });
+  const [toolsExpanded, setToolsExpanded] = useState(true);
+  const [showBoardGrid, setShowBoardGrid] = useState(true);
+  const expandedTools = toolsExpanded;
+  const panelsBeforeFocus = useRef({ library: true, inspector: false, tools: true });
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('design');
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [viewMode, setViewMode] = useState<'canvas' | 'depth'>('canvas');
@@ -631,7 +635,9 @@ export default function App() {
             close={() => setLibraryOpen(false)}
           />
         )}
-        <section className={`canvas-workspace ${viewMode === 'depth' ? 'is-depth-view' : ''}`}>
+        <section
+          className={`canvas-workspace ${viewMode === 'depth' ? 'is-depth-view' : ''} ${expandedTools ? 'tools-expanded' : ''} ${showBoardGrid ? 'has-board-grid' : ''}`}
+        >
           <div className="board-topbar">
             <div className="board-view-controls">
               <button
@@ -670,6 +676,15 @@ export default function App() {
             </div>
             <div className="board-options">
               <button
+                className={`board-chip ${showBoardGrid ? 'active' : ''}`}
+                aria-label="Canvas grid"
+                aria-pressed={showBoardGrid}
+                title={showBoardGrid ? 'Hide canvas grid' : 'Show canvas grid'}
+                onClick={() => setShowBoardGrid((shown) => !shown)}
+              >
+                <Grid3X3 size={15} />
+              </button>
+              <button
                 className={`board-chip ${panelsHidden ? 'active' : ''}`}
                 aria-label={panelsHidden ? 'Show panels' : 'Hide panels'}
                 title={panelsHidden ? 'Show panels' : 'Hide panels to focus on the canvas'}
@@ -678,11 +693,17 @@ export default function App() {
                   if (panelsHidden) {
                     setLibraryOpen(panelsBeforeFocus.current.library);
                     setInspectorOpen(panelsBeforeFocus.current.inspector);
+                    setToolsExpanded(panelsBeforeFocus.current.tools);
                     setPanelsHidden(false);
                   } else {
-                    panelsBeforeFocus.current = { library: libraryOpen, inspector: inspectorOpen };
+                    panelsBeforeFocus.current = {
+                      library: libraryOpen,
+                      inspector: inspectorOpen,
+                      tools: toolsExpanded,
+                    };
                     setLibraryOpen(false);
                     setInspectorOpen(false);
+                    setToolsExpanded(false);
                     setPanelsHidden(true);
                   }
                 }}
@@ -716,6 +737,8 @@ export default function App() {
             </div>
           </div>
           <CanvasToolbar
+            expanded={expandedTools}
+            onExpandedChange={setToolsExpanded}
             tool={tool}
             drawingStyle={drawingStyle}
             onToolChange={(next) => {
@@ -764,6 +787,7 @@ export default function App() {
                 return;
               }
               setPanelsHidden(false);
+              setViewMode('canvas');
               setInspectorOpen(true);
               setInspectorTab('color');
             }}
@@ -779,6 +803,7 @@ export default function App() {
               tool={tool}
               drawingStyle={drawingStyle}
               zoom={canvasZoom}
+              leftInset={expandedTools ? 166 : 88}
               onZoomChange={setCanvasZoom}
               resetViewKey={resetViewKey}
               select={selectLayers}
