@@ -18,20 +18,8 @@ import {
 } from '../core/keyframes';
 import KeyframeCurveEditor from './KeyframeCurveEditor';
 import KeyframeMotionPreview from './KeyframeMotionPreview';
-import {
-  MoveHorizontal,
-  Maximize,
-  RotateCw,
-  Eye,
-  Layers3,
-  Sparkles,
-  Square,
-  Type,
-  Plus,
-  SlidersHorizontal,
-  Trash2,
-  X,
-} from '../icons';
+import { SlidersHorizontal, Trash2, X } from '../icons';
+import CompactSelect from './CompactSelect';
 import './TimelineKeyframeEditor.css';
 
 const GROUPS = [
@@ -52,7 +40,6 @@ const GROUPS = [
   { id: 'text', name: 'Text reveal', properties: ['textReveal'], labels: ['value'], unit: '%' },
 ] as const;
 type Group = (typeof GROUPS)[number];
-const BASIC_GROUPS = new Set(['position', 'size', 'rotation', 'opacity']);
 const displayScale = (property: KeyframeProperty) =>
   ['opacity', 'reveal', 'textReveal'].includes(property) ? 100 : 1;
 interface GroupKey {
@@ -70,7 +57,7 @@ interface Props {
   compositionDuration: number;
   pixels: number;
   laneWidth: number;
-  seek: (time: number) => void;
+  seek: (time: number, reveal?: boolean) => void;
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   checkpoint: () => void;
 }
@@ -111,10 +98,11 @@ export default function TimelineKeyframeEditor({
 }: Props) {
   const [selected, setSelected] = useState<{ group: Group['id']; id: string } | null>(null);
   const [error, setError] = useState('');
-  const [extraGroups, setExtraGroups] = useState<string[]>([]);
-  const [activeGroup, setActiveGroup] = useState<Group['id']>('position');
+  const initialGroup = () =>
+    GROUPS.find((item) => item.properties.some((property) => layer.keyframes?.[property]?.length))
+      ?.id ?? 'position';
+  const [activeGroup, setActiveGroup] = useState<Group['id']>(initialGroup);
   const [adjust, setAdjust] = useState(false);
-  const [more, setMore] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0.5);
   const gesture = useRef<(() => void) | null>(null);
   const expectedSeek = useRef<number | null>(null);
@@ -132,18 +120,16 @@ export default function TimelineKeyframeEditor({
   useEffect(() => {
     setSelected(null);
     setError('');
-    setExtraGroups([]);
-    setActiveGroup('position');
+    setActiveGroup(initialGroup());
     setAdjust(false);
-    setMore(false);
     gesture.current?.();
   }, [layer.id]);
   useEffect(() => {
     if (expectedSeek.current !== null && !near(time, expectedSeek.current)) setSelected(null);
   }, [time]);
-  const seekKeyTime = (at: number) => {
+  const seekKeyTime = (at: number, reveal = true) => {
     expectedSeek.current = Math.max(0, Math.min(layer.start + at, compositionDuration - 1 / fps));
-    seek(layer.start + at);
+    seek(layer.start + at, reveal);
   };
   const beginNumberEdit = () => {
     if (!numberGesture.current) {
@@ -220,10 +206,10 @@ export default function TimelineKeyframeEditor({
     edit(movePatch(target, entry, next), record);
     seekKeyTime(next);
   };
-  const selectKey = (target: Group, entry: GroupKey) => {
+  const selectKey = (target: Group, entry: GroupKey, reveal = true) => {
     setActiveGroup(target.id);
     setSelected({ group: target.id, id: entry.id });
-    seekKeyTime(entry.time);
+    seekKeyTime(entry.time, reveal);
   };
   const startDrag = (
     event: PointerEvent<HTMLButtonElement>,
@@ -232,7 +218,7 @@ export default function TimelineKeyframeEditor({
   ) => {
     if (event.button !== 0) return;
     event.stopPropagation();
-    selectKey(targetGroup, entry);
+    selectKey(targetGroup, entry, false);
     if (locked) return;
     gesture.current?.();
     const target = event.currentTarget;
@@ -249,15 +235,16 @@ export default function TimelineKeyframeEditor({
       }
       previous = nextTime;
       edit(movePatch(targetGroup, entry, nextTime), false);
-      seekKeyTime(nextTime);
+      seekKeyTime(nextTime, false);
     };
-    const end = () => {
+    const end = (endingEvent?: globalThis.Event) => {
       target.removeEventListener('pointermove', move);
       target.removeEventListener('pointerup', end);
       target.removeEventListener('pointercancel', end);
       target.removeEventListener('lostpointercapture', end);
       if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
       gesture.current = null;
+      if (endingEvent?.type === 'pointerup') seekKeyTime(previous);
     };
     target.addEventListener('pointermove', move);
     target.addEventListener('pointerup', end);
@@ -296,29 +283,54 @@ export default function TimelineKeyframeEditor({
       : key.time
     : (entries[0]?.time ?? 0);
   const previewTo = key ? (nextKey?.time ?? key.time) : (entries.at(-1)?.time ?? layer.duration);
-  const icons = {
-    position: MoveHorizontal,
-    size: Maximize,
-    rotation: RotateCw,
-    opacity: Eye,
-    tilt: Layers3,
-    depth: Layers3,
-    blur: Sparkles,
-    reveal: Square,
-    text: Type,
+  const curveKey = key ? (nextKey ? key : beforeSelected) : undefined;
+  const curveEnd = curveKey
+    ? entries.find((entry) => entry.time > curveKey.time + 0.000001)
+    : undefined;
+  const samePose =
+    curveKey &&
+    curveEnd &&
+    target.properties.every((property) =>
+      near(
+        evaluateKeyframeProperty(layer, property, curveKey.time),
+        evaluateKeyframeProperty(layer, property, curveEnd.time),
+      ),
+    );
+  const editInstruction =
+    target.id === 'position'
+      ? 'move the element'
+      : target.id === 'size'
+        ? 'resize the element'
+        : target.id === 'rotation'
+          ? 'rotate the element'
+          : 'change its value in Adjust';
+  // Crowded points get separate rows instead of hiding underneath each other.
+  const rowEnds: number[] = [];
+  const pointRows = entries.map((entry) => {
+    const x = Math.max(16, Math.min(laneWidth - 16, (layer.start + entry.time) * pixels));
+    let row = rowEnds.findIndex((end) => x - end >= 34);
+    if (row < 0) row = rowEnds.length;
+    rowEnds[row] = x;
+    return row;
+  });
+  const crowded = rowEnds.length > 1;
+  const laneHeight = crowded ? 8 + rowEnds.length * 28 : 40;
+  const addNextPoint = () => {
+    const from = key?.time ?? entries.at(-1)?.time ?? localTime;
+    const step = Math.max(1 / fps, Math.min(1, layer.duration / 3));
+    const end = Math.max(0, layer.duration - 1 / fps);
+    const at = snap(
+      from + step <= end ? from + step : Math.max(0, from - step),
+      fps,
+      layer.duration,
+    );
+    if (!near(at, from)) applyGroup(target, at);
   };
-  const visibleGroups = GROUPS.filter(
-    (item) =>
-      BASIC_GROUPS.has(item.id) ||
-      extraGroups.includes(item.id) ||
-      item.properties.some((property) => layer.keyframes?.[property]?.length),
-  );
   const activate = (id: Group['id']) => {
     setActiveGroup(id);
     setSelected(null);
     expectedSeek.current = null;
     setAdjust(false);
-    setMore(false);
   };
   return (
     <div
@@ -335,40 +347,23 @@ export default function TimelineKeyframeEditor({
     >
       <div className="keyframe-property-bar">
         {modeSwitch}
-        <div
-          className="keyframe-property-chips"
-          role="group"
-          aria-label={`Animated properties for ${layer.name}`}
-        >
-          {visibleGroups.map((item) => {
-            const Icon = icons[item.id];
-            const count = groupKeys(layer, item).length;
-            return (
-              <button
-                type="button"
-                key={item.id}
-                aria-label={`Show ${item.name} keyframes for ${layer.name}`}
-                aria-pressed={activeGroup === item.id}
-                onClick={() => activate(item.id)}
-              >
-                <Icon size={13} />
-                <span>{item.name}</span>
-                {count > 0 && <small>{count}</small>}
-              </button>
-            );
-          })}
-        </div>
-        <button
-          type="button"
-          className="keyframe-more-toggle"
-          aria-label={`More animated properties for ${layer.name}`}
-          aria-expanded={more}
-          onClick={() => setMore(!more)}
-        >
-          <Plus size={12} /> More
-        </button>
-        <span className="keyframe-canvas-hint">
-          Add a point, move time, then edit your element.
+        <span className="keyframe-target-name" title={layer.name}>
+          {layer.name}
+        </span>
+        <CompactSelect
+          label={`Animated property for ${layer.name}`}
+          value={activeGroup}
+          options={GROUPS.filter((item) => item.id !== 'text' || layer.kind === 'text').map(
+            (item) => ({
+              value: item.id,
+              label: item.name,
+              hint: `${groupKeys(layer, item).length} points`,
+            }),
+          )}
+          onChange={(id) => activate(id as Group['id'])}
+        />
+        <span className="keyframe-count" aria-live="polite">
+          {entries.length} {entries.length === 1 ? 'point' : 'points'}
         </span>
         <button
           type="button"
@@ -397,38 +392,9 @@ export default function TimelineKeyframeEditor({
       {!inside && (
         <div className="keyframe-message">Move the playhead inside this clip to add a point.</div>
       )}
-      {more && (
-        <div className="keyframe-more-tools">
-          <label>
-            <span>Add a property</span>
-            <select
-              aria-label={`Add animated property for ${layer.name}`}
-              value=""
-              disabled={locked}
-              onChange={(event) => {
-                const id = event.currentTarget.value as Group['id'];
-                if (id) {
-                  setExtraGroups((groups) => [...new Set([...groups, id])]);
-                  activate(id);
-                }
-              }}
-            >
-              <option value="">Choose a property…</option>
-              {GROUPS.filter(
-                (item) =>
-                  !visibleGroups.includes(item) && (item.id !== 'text' || layer.kind === 'text'),
-              ).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <small>Depth, blur, masks, and text reveals use the same points.</small>
-        </div>
-      )}
       <div
-        className={`keyframe-row ${key ? 'is-selected' : ''}`}
+        className={`keyframe-row ${key ? 'is-selected' : ''} ${crowded ? 'is-crowded' : ''}`}
+        style={{ height: laneHeight }}
         role="group"
         aria-label={`${target.name} keyframes for ${layer.name}`}
       >
@@ -465,9 +431,17 @@ export default function TimelineKeyframeEditor({
         </div>
         <div
           className="track-lane keyframe-lane"
-          style={{ width: laneWidth }}
+          style={{ width: laneWidth, height: laneHeight }}
+          onClick={(event) => {
+            if ((event.target as HTMLElement).closest('.keyframe-diamond')) return;
+            const at =
+              (event.clientX - event.currentTarget.getBoundingClientRect().left) / pixels -
+              layer.start;
+            setSelected(null);
+            seekKeyTime(snap(at, fps, layer.duration));
+          }}
           onDoubleClick={(event) => {
-            if (locked || event.target !== event.currentTarget) return;
+            if (locked || (event.target as HTMLElement).closest('.keyframe-diamond')) return;
             const at =
               (event.clientX - event.currentTarget.getBoundingClientRect().left) / pixels -
               layer.start;
@@ -480,7 +454,7 @@ export default function TimelineKeyframeEditor({
           />
           {!entries.length && (
             <span className="keyframe-empty" style={{ left: layer.start * pixels + 14 }}>
-              Add your first point here
+              Click here to move time
             </span>
           )}
           {entries.slice(0, -1).map((entry, index) => {
@@ -492,26 +466,22 @@ export default function TimelineKeyframeEditor({
                 `${i ? 'L' : 'M'}${(i / 24) * 100},${14 - evaluateKeyframeProgress(firstFrame(entry), i / 24) * 10}`,
             ).join(' ');
             return (
-              <button
-                type="button"
+              <div
                 key={`segment-${entry.id}`}
                 className={`keyframe-segment ${key?.id === entry.id ? 'is-selected' : ''}`}
-                aria-label={`Edit curve between ${entry.time.toFixed(2)} and ${end.time.toFixed(2)} seconds for ${layer.name}`}
-                title="Click the line to shape this move"
+                aria-hidden="true"
                 style={{
                   left: (layer.start + entry.time) * pixels + 14,
                   width: Math.max(0, width - 28),
                 }}
-                disabled={width < 36}
-                onClick={() => selectKey(target, entry)}
               >
                 <svg viewBox="0 0 100 18" preserveAspectRatio="none" aria-hidden="true">
                   <path d={path} />
                 </svg>
-              </button>
+              </div>
             );
           })}
-          {entries.map((entry) => {
+          {entries.map((entry, index) => {
             const chosen = Object.values(entry.frames).some((frame) => frame.id === selected?.id);
             return (
               <button
@@ -523,7 +493,7 @@ export default function TimelineKeyframeEditor({
                 aria-pressed={chosen}
                 title={`${target.name} · ${entry.time.toFixed(2)}s · Drag to move · Delete to remove`}
                 style={{
-                  // Keep the whole drag target reachable at the timeline boundaries.
+                  top: 4 + pointRows[index] * 28,
                   left: Math.max(16, Math.min(laneWidth - 16, (layer.start + entry.time) * pixels)),
                 }}
                 onPointerDown={(event) => startDrag(event, target, entry)}
@@ -653,31 +623,24 @@ export default function TimelineKeyframeEditor({
         </div>
       )}
       <div className="keyframe-selection-panel">
-        {key && group ? (
+        {key && group && curveKey ? (
           <KeyframeCurveEditor
-            key={key.id}
-            frame={firstFrame(!nextKey && beforeSelected ? beforeSelected : key)}
+            key={curveKey.id}
+            frame={firstFrame(curveKey)}
             name={layer.name}
-            disabled={locked || !nextKey}
-            disabledReason={
-              locked
-                ? 'Unlock this element to change its curve.'
-                : !nextKey
-                  ? beforeSelected
-                    ? 'Incoming curve. Select the previous point to change this move.'
-                    : 'Add another point to create a move.'
-                  : undefined
-            }
+            disabled={locked}
+            hint={samePose ? `These points match — ${editInstruction} to make a move.` : undefined}
+            disabledReason={locked ? 'Unlock this element to change its curve.' : undefined}
             progress={previewTo > previewFrom ? previewProgress : undefined}
             checkpoint={checkpoint}
             change={(patch, record = true) => {
               let draft = layer;
               for (const property of group.properties) {
-                const frame = key.frames[property];
+                const frame = curveKey.frames[property];
                 if (frame)
                   draft = {
                     ...draft,
-                    ...upsertKeyframe(draft, property, key.time, frame.value, {
+                    ...upsertKeyframe(draft, property, curveKey.time, frame.value, {
                       id: frame.id,
                       ...patch,
                     }),
@@ -706,9 +669,21 @@ export default function TimelineKeyframeEditor({
               </strong>
               <p>
                 {entries.length > 1
-                  ? 'Choose a point or the line between them to change the curve.'
-                  : 'Add a point, move the playhead, then move or resize your element on the canvas.'}
+                  ? 'Choose either point to change the curve.'
+                  : entries.length === 1
+                    ? `Click later in the row, then ${editInstruction}.`
+                    : `Add a first point to animate ${target.name.toLowerCase()}.`}
               </p>
+              {entries.length === 1 && (
+                <button
+                  type="button"
+                  aria-label={`Add next ${target.name} point for ${layer.name}`}
+                  disabled={locked || layer.duration <= 1 / fps}
+                  onClick={addNextPoint}
+                >
+                  Add next point →
+                </button>
+              )}
               {entries.length > 1 && (
                 <button type="button" onClick={() => selectKey(target, entries[0])}>
                   Edit first curve →

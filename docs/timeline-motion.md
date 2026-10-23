@@ -6,7 +6,7 @@ The timeline groups playback, editing, and zoom. Controls and clip rows use larg
 
 Select one layer and click **Motion** in the toolbar, or expand its row. The expanded editor has **Preview**, **Reset**, and **Close**. Preview plays the composition over that clip's time span and stops at its last frame. It changes the view only. Reset presets removes preset motion in one undoable edit while retaining the element's position and 3D pose. Locked layers remain readable but cannot be changed.
 
-Choose **Keyframes** for editable property tracks and curves; see the [keyframe guide](keyframes.md). **Presets** shows one phase at a time: **Enter**, **Loop**, or **Exit**. Each phase button also summarizes its current style and duration. Both systems can be combined.
+Choose **Keyframes** for editable property tracks and curves. One property dropdown controls a single lane; close points separate vertically to stay selectable. Click the lane to seek, or use Add next point after the first point, then change the second pose. The editor follows the selected layer and initially shows an already animated property when available. Movement keeps named curves in a compact dropdown beside the graph and composition preview; selecting a final point edits its incoming segment. Adjust holds exact values. See the [keyframe guide](keyframes.md). **Presets** shows one phase at a time: **Enter**, **Loop**, or **Exit**. Each phase button also summarizes its current style and duration. Both systems can be combined.
 
 ## Pick, preview, adjust
 
@@ -14,6 +14,8 @@ Choose **Keyframes** for editable property tracks and curves; see the [keyframe 
 2. Hover or keyboard-focus a visual tile to preview it; click to apply. Only one tile animates at a time, and reduced-motion preferences use still previews.
 3. Drag **Duration** (or **Period**) or enter an exact value. Enter also has **Start after**.
 4. Open **Adjust** only when you need movement distance, easing, loop amount, or 3D motion.
+
+The right inspector also provides **Choose animation preset** to open this picker. Its larger **Motion library** and **Advanced timing** controls are collapsed by default.
 
 The matching timing strip appears beneath the picker; the other phases remain summarized above. Close the editor to return to the compact clip rows and restore the canvas space. Switching back from Keyframes also returns to the compact preset height. If you manually resize the timeline, your chosen height is retained.
 
@@ -46,3 +48,7 @@ Position, size, rotation and opacity now have real keyframes with temporal Bézi
 ## CapCut workflow study
 
 The compact picker adapts interaction patterns documented in CapCut's official guides: [phase categories](https://www.capcut.com/resource/text-animation-in-daVinci-resolve), [visual animation choices](https://www.capcut.com/resource/how-to-add-voice-in-a-video), [duration after choosing a preset](https://www.capcut.com/resource/fade-in-text-in-after-effects), and [property keyframes](https://www.capcut.com/resource/how-to-add-keyframes-in-capcut). The phase summaries, on-demand previews, and Adjust disclosure are Frame Studio design decisions. This is a study of public documentation, not an audit of an installed CapCut build.
+
+## Menu pattern study
+
+The alpha21 workspace follows the public Figma toolbar, layers, and contextual-properties patterns documented in the [design language](design-language.md#inspiration-and-originality). The supplied [Pinterest dropdown reference](https://it.pinterest.com/pin/1107181889671272585/) informed compact menu rows with clear hover and selection states. These visible patterns guide Frame Studio's own implementation; this is not internal reverse engineering or a feature-parity claim.

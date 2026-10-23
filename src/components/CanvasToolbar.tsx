@@ -5,9 +5,19 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Group, LayoutTemplate, PenTool, Plus, SlidersHorizontal, X } from '../icons';
+import {
+  Check,
+  ChevronDown,
+  Group,
+  LayoutTemplate,
+  PenTool,
+  Plus,
+  SlidersHorizontal,
+  X,
+} from '../icons';
 import {
   SHAPE_PRESETS,
   type CanvasTool,
@@ -40,13 +50,15 @@ interface Props {
   onExpandedChange: (expanded: boolean) => void;
 }
 
-type Menu = 'shapes' | 'drawing' | 'masks';
+type Menu = 'selection' | 'shapes' | 'drawing' | 'masks' | 'insert';
 const TITLES: Record<Menu, string> = {
+  selection: 'Selection tools',
+  insert: 'Insert',
   shapes: 'Shapes',
   drawing: 'Drawing tools',
   masks: 'Masks & adjustments',
 };
-const PALETTE = ['#2b2d42', '#8d99ae', '#edf2f4', '#ef233c', '#d90429'];
+const PALETTE = ['#242424', '#858585', '#f5f5f5', '#f0ba70', '#8eb6d9'];
 const DRAWING_TOOLS = [
   { tool: 'draw', name: 'Pencil', shortcut: 'P', description: 'Draw a freehand line', width: 4 },
   { tool: 'brush', name: 'Brush', shortcut: '', description: 'Paint a bolder stroke', width: 14 },
@@ -104,13 +116,51 @@ function MaskGlyph() {
 }
 
 function navigateChoices(event: ReactKeyboardEvent<HTMLDivElement>, columns: number) {
-  const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
+  const buttons = Array.from(
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
+  );
   const index = buttons.indexOf(event.target as HTMLButtonElement);
   const delta = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: columns, ArrowUp: -columns }[event.key];
   if (index < 0 || (delta === undefined && !['Home', 'End'].includes(event.key))) return;
   event.preventDefault();
   const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : index + delta!;
   buttons[Math.max(0, Math.min(buttons.length - 1, next))]?.focus();
+}
+
+/** A single quiet highlight follows pointer and keyboard focus through a menu. */
+function ChoiceList({ children }: { children: ReactNode }) {
+  const container = useRef<HTMLDivElement>(null);
+  const [highlight, setHighlight] = useState<{ top: number; height: number } | null>(null);
+  const follow = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) return;
+    const button = target.closest<HTMLButtonElement>('button');
+    if (!button || button.disabled || !container.current?.contains(button)) return;
+    setHighlight({ top: button.offsetTop, height: button.offsetHeight });
+  };
+  return (
+    <div
+      ref={container}
+      className="canvas-menu-choices"
+      onPointerMove={(event) => follow(event.target)}
+      onPointerLeave={() => {
+        if (container.current?.contains(document.activeElement)) follow(document.activeElement);
+        else setHighlight(null);
+      }}
+      onFocusCapture={(event) => follow(event.target)}
+      onKeyDown={(event) => navigateChoices(event, 1)}
+    >
+      <span
+        aria-hidden="true"
+        className="canvas-menu-highlight"
+        style={{
+          opacity: highlight ? 1 : 0,
+          height: highlight?.height ?? 0,
+          transform: `translateY(${highlight?.top ?? 0}px)`,
+        }}
+      />
+      {children}
+    </div>
+  );
 }
 
 export default function CanvasToolbar({
@@ -163,7 +213,7 @@ export default function CanvasToolbar({
     }
   };
   const run = (action: () => void) => {
-    setMenu(null);
+    dismiss();
     action();
   };
 
@@ -175,10 +225,18 @@ export default function CanvasToolbar({
       if (!anchor || !panel) return;
       const width = panel.offsetWidth;
       const height = panel.offsetHeight;
-      const desiredLeft = anchor.right + 13;
+      const desiredLeft = anchor.left + anchor.width / 2 - width / 2;
+      const above = anchor.top - height - 14;
+      const below = anchor.bottom + 14;
       setPosition({
         left: Math.max(10, Math.min(desiredLeft, window.innerWidth - width - 10)),
-        top: Math.max(10, Math.min(anchor.top - 12, window.innerHeight - height - 10)),
+        top: Math.max(
+          10,
+          Math.min(
+            above >= 10 ? above : below + height <= window.innerHeight - 10 ? below : above,
+            window.innerHeight - height - 10,
+          ),
+        ),
       });
     };
     align();
@@ -188,7 +246,10 @@ export default function CanvasToolbar({
     )?.focus();
     const observer = new ResizeObserver(align);
     if (popover.current) observer.observe(popover.current);
-    if (rail.current) observer.observe(rail.current);
+    if (rail.current) {
+      observer.observe(rail.current);
+      if (rail.current.parentElement) observer.observe(rail.current.parentElement);
+    }
     window.addEventListener('resize', align);
     window.addEventListener('scroll', align, true);
     return () => {
@@ -234,7 +295,7 @@ export default function CanvasToolbar({
   }, [menu]);
 
   useEffect(() => {
-    if (depthView && menu === 'drawing') setMenu(null);
+    if (depthView && (menu === 'drawing' || menu === 'selection')) setMenu(null);
   }, [depthView, menu]);
 
   const menuProps = (name: Menu) => ({
@@ -245,6 +306,12 @@ export default function CanvasToolbar({
     'aria-expanded': menu === name,
     'aria-controls': menu === name ? dialogId : undefined,
     onClick: () => toggle(name),
+    onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (menu !== name) toggle(name);
+    },
   });
 
   return (
@@ -254,46 +321,39 @@ export default function CanvasToolbar({
         className={`creation-toolbar ${expanded ? 'is-expanded' : ''}`}
         role="toolbar"
         aria-label="Canvas tools"
-        aria-orientation="vertical"
+        aria-orientation="horizontal"
+        onKeyDown={(event) => {
+          if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+            navigateChoices(event, 1);
+            event.stopPropagation();
+          }
+        }}
       >
-        <button
-          type="button"
-          className="creation-rail-toggle"
-          title={expanded ? 'Collapse tools' : 'Show tool labels'}
-          aria-label={expanded ? 'Collapse tools' : 'Show tool labels'}
-          aria-expanded={expanded}
-          onClick={() => {
-            dismiss(false);
-            onExpandedChange(!expanded);
-          }}
-        >
-          <span className="creation-tool-label">Tools</span>
-          <ChevronDown size={14} className="creation-rail-chevron" aria-hidden="true" />
-        </button>
         {!depthView && (
           <>
-            <button
-              type="button"
-              title="Select (V)"
-              aria-label="Select tool"
-              aria-pressed={tool === 'select'}
-              className={tool === 'select' ? 'active' : ''}
-              onClick={() => run(() => onToolChange('select'))}
+            <div
+              className={`creation-tool-split ${tool === 'select' || tool === 'hand' ? 'active' : ''}`}
             >
-              <ToolGlyph kind="select" />
-              <span className="creation-tool-label">Select</span>
-            </button>
-            <button
-              type="button"
-              title="Hand (H) · drag to pan"
-              aria-label="Hand tool"
-              aria-pressed={tool === 'hand'}
-              className={tool === 'hand' ? 'active' : ''}
-              onClick={() => run(() => onToolChange('hand'))}
-            >
-              <ToolGlyph kind="hand" />
-              <span className="creation-tool-label">Move view</span>
-            </button>
+              <button
+                type="button"
+                title={tool === 'hand' ? 'Hand (H) · drag to pan' : 'Select (V)'}
+                aria-label={tool === 'hand' ? 'Hand tool' : 'Select tool'}
+                aria-pressed={tool === 'select' || tool === 'hand'}
+                onClick={() => run(() => onToolChange(tool === 'hand' ? 'hand' : 'select'))}
+              >
+                <ToolGlyph kind={tool === 'hand' ? 'hand' : 'select'} />
+                <span className="creation-tool-label">{tool === 'hand' ? 'Hand' : 'Select'}</span>
+              </button>
+              <button
+                type="button"
+                className="creation-split-caret"
+                title="Selection tools"
+                aria-label="Selection tools"
+                {...menuProps('selection')}
+              >
+                <ChevronDown size={10} aria-hidden="true" />
+              </button>
+            </div>
             <span className="creation-divider" aria-hidden="true" />
           </>
         )}
@@ -307,7 +367,7 @@ export default function CanvasToolbar({
         >
           <ToolGlyph kind="shape" />
           <span className="creation-tool-label">Shapes</span>
-          <ChevronDown className="creation-menu-caret" size={8} aria-hidden="true" />
+          <ChevronDown className="creation-menu-caret" size={10} aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -329,10 +389,8 @@ export default function CanvasToolbar({
             {...menuProps('drawing')}
           >
             <DrawingIcon kind={drawing ? tool : 'pen'} />
-            <span className="creation-tool-label">
-              {drawing ? DRAWING_TOOLS.find((item) => item.tool === tool)?.name : 'Draw & pen'}
-            </span>
-            <ChevronDown className="creation-menu-caret" size={8} aria-hidden="true" />
+            <span className="creation-tool-label">Draw</span>
+            <ChevronDown className="creation-menu-caret" size={10} aria-hidden="true" />
           </button>
         )}
         <button
@@ -344,51 +402,20 @@ export default function CanvasToolbar({
         >
           <MaskGlyph />
           <span className="creation-tool-label">Masks</span>
-          <ChevronDown className="creation-menu-caret" size={8} aria-hidden="true" />
+          <ChevronDown className="creation-menu-caret" size={10} aria-hidden="true" />
         </button>
         <span className="creation-divider" aria-hidden="true" />
         <button
           type="button"
-          title="Templates"
-          aria-label="Templates"
-          onClick={() => run(onTemplates)}
+          title="Insert templates & components"
+          aria-label="Insert menu"
+          className={menu === 'insert' ? 'is-open' : ''}
+          {...menuProps('insert')}
         >
-          <LayoutTemplate size={20} strokeWidth={1.7} aria-hidden="true" />
-          <span className="creation-tool-label">Templates</span>
+          <Plus size={20} strokeWidth={1.7} aria-hidden="true" />
+          <span className="creation-tool-label">Insert</span>
+          <ChevronDown className="creation-menu-caret" size={10} aria-hidden="true" />
         </button>
-        <button
-          type="button"
-          title="Components & mockups"
-          aria-label="Saved components"
-          onClick={() => run(onComponents)}
-        >
-          <ToolGlyph kind="component" />
-          <span className="creation-tool-label">Components</span>
-        </button>
-        {selectedLayers.length > 0 && (
-          <button
-            type="button"
-            title="Save selection as component"
-            aria-label="Save component"
-            disabled={busy}
-            onClick={() => run(onSaveComponent)}
-          >
-            <Plus size={18} aria-hidden="true" />
-            <span className="creation-tool-label">Save component</span>
-          </button>
-        )}
-        {selectedLayers.length > 1 && (
-          <button
-            type="button"
-            title="Group (⌘G)"
-            aria-label="Group selection"
-            disabled={busy || selectedLayers.some((item) => item.locked)}
-            onClick={() => run(onGroup)}
-          >
-            <Group size={18} aria-hidden="true" />
-            <span className="creation-tool-label">Group</span>
-          </button>
-        )}
       </div>
       {menu &&
         createPortal(
@@ -411,6 +438,98 @@ export default function CanvasToolbar({
                 <X size={14} aria-hidden="true" />
               </button>
             </div>
+            {menu === 'selection' && (
+              <ChoiceList>
+                <button
+                  type="button"
+                  data-autofocus=""
+                  aria-label="Select tool"
+                  aria-pressed={tool === 'select'}
+                  onClick={() => run(() => onToolChange('select'))}
+                >
+                  <ToolGlyph kind="select" />
+                  <span>Select</span>
+                  <kbd>V</kbd>
+                  {tool === 'select' && <Check size={13} aria-hidden="true" />}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Hand tool"
+                  aria-pressed={tool === 'hand'}
+                  onClick={() => run(() => onToolChange('hand'))}
+                >
+                  <ToolGlyph kind="hand" />
+                  <span>Hand</span>
+                  <kbd>H</kbd>
+                  {tool === 'hand' && <Check size={13} aria-hidden="true" />}
+                </button>
+              </ChoiceList>
+            )}
+            {menu === 'insert' && (
+              <>
+                <ChoiceList>
+                  <button
+                    type="button"
+                    data-autofocus=""
+                    aria-label="Templates"
+                    onClick={() => run(onTemplates)}
+                  >
+                    <LayoutTemplate size={18} aria-hidden="true" />
+                    <span>
+                      Templates<small>Ready-made scenes</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Saved components"
+                    onClick={() => run(onComponents)}
+                  >
+                    <ToolGlyph kind="component" />
+                    <span>
+                      Components<small>Mockups & reusable designs</small>
+                    </span>
+                  </button>
+                  <span className="canvas-menu-divider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    aria-label="Save component"
+                    disabled={busy || selectedLayers.length === 0}
+                    onClick={() => run(onSaveComponent)}
+                  >
+                    <Plus size={18} aria-hidden="true" />
+                    <span>Save as component</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Group selection"
+                    disabled={
+                      busy ||
+                      selectedLayers.length < 2 ||
+                      selectedLayers.some((item) => item.locked)
+                    }
+                    onClick={() => run(onGroup)}
+                  >
+                    <Group size={18} aria-hidden="true" />
+                    <span>Group selection</span>
+                    <kbd>⌘G</kbd>
+                  </button>
+                </ChoiceList>
+                <div className="canvas-menu-footer">
+                  <button
+                    type="button"
+                    aria-label={expanded ? 'Collapse tools' : 'Show tool labels'}
+                    aria-pressed={expanded}
+                    onClick={() => onExpandedChange(!expanded)}
+                  >
+                    <span>Show tool labels</span>
+                    <span
+                      className={`canvas-menu-switch ${expanded ? 'is-on' : ''}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+              </>
+            )}
             {menu === 'shapes' && (
               <>
                 <div className="canvas-shape-grid" onKeyDown={(event) => navigateChoices(event, 3)}>
@@ -420,6 +539,7 @@ export default function CanvasToolbar({
                       type="button"
                       data-autofocus={index === 0 ? '' : undefined}
                       aria-label={`Add ${shape.name.toLowerCase()}`}
+                      disabled={busy}
                       onClick={() => {
                         dismiss();
                         onAddShape(shape.id);
@@ -450,16 +570,14 @@ export default function CanvasToolbar({
             )}
             {menu === 'drawing' && (
               <>
-                <div
-                  className="canvas-drawing-options"
-                  onKeyDown={(event) => navigateChoices(event, 1)}
-                >
+                <ChoiceList>
                   {DRAWING_TOOLS.map((item, index) => (
                     <button
                       key={item.tool}
                       type="button"
                       data-autofocus={index === 0 ? '' : undefined}
                       aria-label={`${item.name} tool`}
+                      disabled={busy}
                       aria-pressed={tool === item.tool}
                       onClick={() => {
                         onDrawingStyleChange({
@@ -478,83 +596,89 @@ export default function CanvasToolbar({
                       {item.shortcut && <kbd>{item.shortcut}</kbd>}
                     </button>
                   ))}
-                </div>
-                <div className="canvas-drawing-style">
-                  <svg
-                    className="canvas-stroke-preview"
-                    viewBox="0 0 230 38"
-                    role="img"
-                    aria-label="Drawing stroke preview"
-                  >
-                    <path
-                      d="M12 26C55 -4 70 45 116 17S178 12 218 18"
-                      fill="none"
-                      stroke={drawingStyle.color}
-                      strokeWidth={Math.min(18, drawingStyle.width)}
-                      strokeLinecap="round"
+                </ChoiceList>
+                <details className="canvas-drawing-style">
+                  <summary>
+                    Stroke & color
+                    <ChevronDown size={12} aria-hidden="true" />
+                  </summary>
+                  <div className="canvas-drawing-style-fields">
+                    <svg
+                      className="canvas-stroke-preview"
+                      viewBox="0 0 230 38"
+                      role="img"
+                      aria-label="Drawing stroke preview"
+                    >
+                      <path
+                        d="M12 26C55 -4 70 45 116 17S178 12 218 18"
+                        fill="none"
+                        stroke={drawingStyle.color}
+                        strokeWidth={Math.min(18, drawingStyle.width)}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <label className="canvas-stroke-field">
+                      <span>Stroke</span>
+                      <span className="canvas-stroke-input">
+                        <input
+                          type="color"
+                          aria-label="Drawing color"
+                          value={drawingStyle.color}
+                          onChange={(event) =>
+                            onDrawingStyleChange({ ...drawingStyle, color: event.target.value })
+                          }
+                        />
+                        <span>{drawingStyle.color.toUpperCase()}</span>
+                      </span>
+                    </label>
+                    <div
+                      className="canvas-drawing-palette"
+                      role="group"
+                      aria-label="Drawing color palette"
+                    >
+                      {PALETTE.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          aria-label={`Drawing color ${color}`}
+                          aria-pressed={drawingStyle.color.toLowerCase() === color}
+                          style={{ background: color }}
+                          onClick={() => onDrawingStyleChange({ ...drawingStyle, color })}
+                        />
+                      ))}
+                    </div>
+                    <label className="canvas-stroke-field">
+                      <span>Width</span>
+                      <span className="canvas-stroke-width">
+                        <input
+                          type="number"
+                          aria-label="Drawing stroke width"
+                          min="1"
+                          max="64"
+                          step="1"
+                          value={drawingStyle.width}
+                          onChange={(event) => {
+                            const width = Number(event.target.value);
+                            if (Number.isFinite(width) && width >= 1 && width <= 64)
+                              onDrawingStyleChange({ ...drawingStyle, width });
+                          }}
+                        />
+                        <span>px</span>
+                      </span>
+                    </label>
+                    <input
+                      type="range"
+                      aria-label="Drawing width"
+                      min="1"
+                      max="64"
+                      step="1"
+                      value={drawingStyle.width}
+                      onChange={(event) =>
+                        onDrawingStyleChange({ ...drawingStyle, width: Number(event.target.value) })
+                      }
                     />
-                  </svg>
-                  <label className="canvas-stroke-field">
-                    <span>Stroke</span>
-                    <span className="canvas-stroke-input">
-                      <input
-                        type="color"
-                        aria-label="Drawing color"
-                        value={drawingStyle.color}
-                        onChange={(event) =>
-                          onDrawingStyleChange({ ...drawingStyle, color: event.target.value })
-                        }
-                      />
-                      <span>{drawingStyle.color.toUpperCase()}</span>
-                    </span>
-                  </label>
-                  <div
-                    className="canvas-drawing-palette"
-                    role="group"
-                    aria-label="Drawing color palette"
-                  >
-                    {PALETTE.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        aria-label={`Drawing color ${color}`}
-                        aria-pressed={drawingStyle.color.toLowerCase() === color}
-                        style={{ background: color }}
-                        onClick={() => onDrawingStyleChange({ ...drawingStyle, color })}
-                      />
-                    ))}
                   </div>
-                  <label className="canvas-stroke-field">
-                    <span>Width</span>
-                    <span className="canvas-stroke-width">
-                      <input
-                        type="number"
-                        aria-label="Drawing stroke width"
-                        min="1"
-                        max="64"
-                        step="1"
-                        value={drawingStyle.width}
-                        onChange={(event) => {
-                          const width = Number(event.target.value);
-                          if (Number.isFinite(width) && width >= 1 && width <= 64)
-                            onDrawingStyleChange({ ...drawingStyle, width });
-                        }}
-                      />
-                      <span>px</span>
-                    </span>
-                  </label>
-                  <input
-                    type="range"
-                    aria-label="Drawing width"
-                    min="1"
-                    max="64"
-                    step="1"
-                    value={drawingStyle.width}
-                    onChange={(event) =>
-                      onDrawingStyleChange({ ...drawingStyle, width: Number(event.target.value) })
-                    }
-                  />
-                </div>
+                </details>
                 <p className="canvas-tool-hint">
                   Pen: click for corners, drag for curves. Enter to finish; click the first point to
                   close.

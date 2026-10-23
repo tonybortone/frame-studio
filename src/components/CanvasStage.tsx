@@ -18,16 +18,17 @@ import { animationState, MediaCache, renderFrame } from '../engine/renderer';
 import './CanvasStage.css';
 
 // Keep the creation tools, view switch, and canvas zoom clear at Fit zoom.
-const BOARD_INSETS = { left: 88, right: 32, top: 72, bottom: 56 } as const;
+const BOARD_INSETS = { left: 32, right: 32, top: 72, bottom: 72 } as const;
 function boardGeometry(
   size: { width: number; height: number },
   leftInset: number = BOARD_INSETS.left,
 ) {
+  const bottomInset = size.width <= 680 ? 112 : BOARD_INSETS.bottom;
   return {
     centerX: (size.width + leftInset - BOARD_INSETS.right) / 2,
-    centerY: (size.height + BOARD_INSETS.top - BOARD_INSETS.bottom) / 2,
+    centerY: (size.height + BOARD_INSETS.top - bottomInset) / 2,
     width: Math.max(1, size.width - leftInset - BOARD_INSETS.right),
-    height: Math.max(1, size.height - BOARD_INSETS.top - BOARD_INSETS.bottom),
+    height: Math.max(1, size.height - BOARD_INSETS.top - bottomInset),
   };
 }
 

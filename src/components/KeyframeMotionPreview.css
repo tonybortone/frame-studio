@@ -101,7 +101,7 @@
 
 @media (max-height: 800px) {
   .keyframe-motion-preview {
-    height: 96px;
+    height: 84px;
     padding-block: 4px;
     gap: 2px;
   }

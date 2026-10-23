@@ -27,10 +27,11 @@ interface Props {
   laneWidth: number;
   time: number;
   compositionDuration: number;
-  seek: (time: number) => void;
+  seek: (time: number, reveal?: boolean) => void;
   onKeyframesOpen: () => void;
   onPresetsOpen: () => void;
-  keyframesRequest?: number;
+  initialKeyframes?: boolean;
+  modeRequest?: { id: number; keyframes: boolean };
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   checkpoint: () => void;
   onClose: () => void;
@@ -96,7 +97,8 @@ export default function TimelineMotionEditor({
   seek,
   onKeyframesOpen,
   onPresetsOpen,
-  keyframesRequest = 0,
+  initialKeyframes = false,
+  modeRequest,
   change,
   checkpoint,
   onClose,
@@ -106,13 +108,14 @@ export default function TimelineMotionEditor({
   useEffect(() => () => gesture.current?.(), []);
   const audio = layer.kind === 'audio';
   const [mode, setMode] = useState<'presets' | 'keyframes'>(() =>
-    keyframesRequest > 0 || Object.values(layer.keyframes ?? {}).some((track) => track?.length)
-      ? 'keyframes'
-      : 'presets',
+    initialKeyframes ? 'keyframes' : 'presets',
   );
+  const previousModeRequest = useRef(modeRequest?.id);
   useEffect(() => {
-    if (keyframesRequest > 0) setMode('keyframes');
-  }, [keyframesRequest]);
+    if (!modeRequest || modeRequest.id === previousModeRequest.current) return;
+    previousModeRequest.current = modeRequest.id;
+    setMode(modeRequest.keyframes ? 'keyframes' : 'presets');
+  }, [modeRequest]);
   const [phase, setPhase] = useState<'entrance' | 'loop' | 'exit'>('entrance');
   const timing = getMotionTiming(layer);
   const motion3d = layer.transform3d?.enabled ? layer.transform3d.motion : 'none';

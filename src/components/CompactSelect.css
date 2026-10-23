@@ -1,0 +1,95 @@
+.compact-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  height: 28px;
+  min-width: 112px;
+  padding: 0 9px;
+  border: 1px solid #ffffff1b;
+  border-radius: 6px;
+  background: #292929;
+  color: #eee;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.compact-select-trigger:hover,
+.compact-select-trigger[aria-expanded='true'] {
+  border-color: #666;
+  background: #333;
+}
+.compact-select-trigger:focus-visible {
+  outline: 2px solid #b9d7ff;
+  outline-offset: 2px;
+}
+.compact-select-menu {
+  position: fixed;
+  z-index: 1000;
+  isolation: isolate;
+  width: 218px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid #454545;
+  border-radius: 10px;
+  background: #242424;
+  box-shadow: 0 12px 30px #0008;
+  animation: compact-select-open 140ms ease-out;
+}
+.compact-select-menu > button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: #ccc;
+  font-size: 12px;
+  text-align: left;
+  outline: none;
+}
+.compact-select-menu > button[aria-selected='true'] {
+  color: white;
+}
+.compact-select-menu > button > small {
+  margin-left: auto;
+  color: #969696;
+  font-size: 10px;
+}
+.compact-select-menu > button > svg {
+  margin-left: auto;
+}
+.compact-select-highlight {
+  position: absolute;
+  inset: 5px 5px auto;
+  height: 34px;
+  background: #3c3c3c;
+  border: 1px solid #ffffff09;
+  border-radius: 5px;
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 100ms;
+  pointer-events: none;
+}
+@keyframes compact-select-open {
+  from {
+    opacity: 0;
+    translate: 0 -3px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .compact-select-menu {
+    animation: none;
+  }
+  .compact-select-highlight {
+    transition: none;
+  }
+}

@@ -1,10 +1,10 @@
 .inspector {
   position: absolute;
   top: 58px;
-  right: 76px;
+  right: 12px;
   bottom: 12px;
   width: 280px;
-  max-width: calc(100% - 96px);
+  max-width: calc(100% - 24px);
   z-index: 8;
   display: flex;
   flex-direction: column;
@@ -19,22 +19,11 @@
 .inspector .inspector-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   flex-shrink: 0;
-  min-height: 47px;
-  padding: 10px 12px;
+  min-height: 46px;
+  padding: 7px;
   border-bottom: 1px solid var(--border);
-}
-.inspector .inspector-header > svg {
-  color: var(--muted);
-}
-.inspector .inspector-header h2 {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.5;
 }
 .inspector .inspector-body {
   flex: 1;
@@ -48,13 +37,13 @@
   display: flex;
   gap: 9px;
   align-items: center;
-  padding: 14px 0;
+  padding: 11px 0;
 }
 .inspector .inspector-title > div:first-child {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 27px;
+  height: 27px;
   flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -74,8 +63,8 @@
 }
 .inspector .inspector-title span {
   display: block;
-  margin-top: 3px;
-  font-size: 11px;
+  margin-top: 2px;
+  font-size: 10px;
   color: var(--muted);
 }
 .inspector .inspector-header > button {
@@ -636,4 +625,126 @@
 .inspector fieldset:disabled .number-field {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Secondary tools open only when they are needed. */
+.inspector .inspector-section-disclosure {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+.inspector .inspector-section-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin: 0;
+  padding: 9px 0;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+.inspector .inspector-section-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.inspector .inspector-section-disclosure > summary::after {
+  width: 5px;
+  height: 5px;
+  margin: 0 3px 0 auto;
+  border-right: 1px solid var(--muted);
+  border-bottom: 1px solid var(--muted);
+  transform: rotate(-45deg);
+  content: '';
+}
+.inspector .inspector-section-disclosure[open] > summary::after {
+  transform: rotate(45deg);
+}
+.inspector .inspector-section-disclosure > summary:hover {
+  color: var(--text);
+  background: var(--panel-soft);
+}
+.inspector .inspector-section-disclosure > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.inspector .inspector-section-disclosure[open] {
+  padding-bottom: 10px;
+}
+.inspector .inspector-section-disclosure > .element-3d-controls,
+.inspector .inspector-section-disclosure > .property-section,
+.inspector .inspector-section-disclosure > fieldset > .property-section {
+  padding-top: 0;
+  border-top: 0;
+}
+.inspector .inspector-motion-start {
+  padding: 12px 0 16px;
+  border-top: 1px solid var(--border);
+}
+.inspector .inspector-motion-start > .helper-copy:first-child {
+  margin-top: 0;
+}
+.inspector .inspector-keyframe-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.inspector .inspector-keyframe-summary svg {
+  width: 62px;
+  height: 24px;
+  color: var(--text);
+  fill: var(--panel);
+  stroke: currentColor;
+  stroke-width: 1.25;
+}
+.inspector .inspector-keyframe-summary svg path:first-child {
+  opacity: 0.35;
+}
+.inspector .inspector-keyframes-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 11px;
+  border: 1px solid var(--text);
+  border-radius: 7px;
+  background: var(--text);
+  color: var(--panel);
+  font-size: 12px;
+  font-weight: 550;
+}
+.inspector .inspector-keyframes-action:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.inspector .inspector-motion-start .secondary.wide {
+  justify-content: flex-start;
+  min-height: 34px;
+  margin-top: 14px;
+  padding-left: 10px;
+}
+.inspector .inspector-motion-library .motion-recipes {
+  padding: 0;
+  border-bottom: 0;
+}
+@media (max-height: 800px) {
+  .inspector .inspector-title {
+    padding: 9px 0;
+  }
+  .inspector .property-section {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .inspector .inspector-motion-start {
+    padding-top: 10px;
+    padding-bottom: 12px;
+  }
 }

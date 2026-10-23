@@ -93,70 +93,15 @@
   flex: 1;
   min-width: 0;
 }
-.keyframe-curve-presets {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-}
-.keyframe-curve-choice {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  min-width: 0;
-  height: 39px;
-  padding: 2px 4px;
-  color: #bbb;
-  background: #262626;
-  border: 1px solid #ffffff18;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.keyframe-curve-choice svg {
+.keyframe-curve-caption {
   display: block;
-  width: 38px;
-  height: 19px;
-}
-.keyframe-curve-choice path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-}
-.keyframe-curve-choice .keyframe-curve-choice-guide {
-  stroke: #ffffff19;
-  stroke-width: 1;
-}
-.keyframe-curve-choice span {
+  margin-bottom: 6px;
+  color: #a8a8a8;
   font-size: 10px;
-  line-height: 13px;
-  white-space: nowrap;
 }
-.keyframe-curve-choice:hover {
-  color: #fff;
-  border-color: #777;
-}
-.keyframe-curve-choice.is-selected {
-  color: #f5e6c1;
-  border-color: #c4ae7b;
-  background: #343025;
-}
-.keyframe-curve-choice:focus-visible {
-  outline: 2px solid #eee;
-  outline-offset: 1px;
-}
-.keyframe-curve-custom {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px 5px;
-  color: #999;
-  font-size: 10px;
-  text-align: center;
-  line-height: 13px;
-}
-.keyframe-curve-custom.is-active {
-  color: #ebd294;
+.keyframe-curve-choices .compact-select-trigger {
+  width: 150px;
+  max-width: 100%;
 }
 .keyframe-curve-help {
   margin: 5px 0 0;
@@ -166,10 +111,6 @@
 }
 .keyframe-curve-editor.is-disabled .keyframe-curve-chart {
   opacity: 0.45;
-}
-.keyframe-curve-editor.is-disabled .keyframe-curve-choice {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 .keyframe-curve-editor.is-disabled .keyframe-curve-handle {
   cursor: not-allowed;
@@ -185,23 +126,7 @@
 }
 @media (max-height: 800px) {
   .keyframe-curve-chart {
-    height: 92px;
-  }
-  .keyframe-curve-choice {
-    height: 30px;
-    gap: 0;
-    padding: 1px 4px;
-  }
-  .keyframe-curve-choice svg {
-    width: 34px;
-    height: 15px;
-  }
-  .keyframe-curve-choice span {
-    line-height: 11px;
-  }
-  .keyframe-curve-custom {
-    font-size: 9px;
-    line-height: 11px;
+    height: 80px;
   }
   .keyframe-curve-help {
     margin-top: 4px;

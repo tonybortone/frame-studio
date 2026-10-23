@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowUpFromLine, Plus, Component, Group, EyeOff, LockKeyhole, X } from '../icons';
+import { ArrowUpFromLine, Plus, Component, ChevronDown, X } from '../icons';
 import { LAYER_LABELS, type Layer, type Project } from '../core/types';
 import { ASSET_FOLDERS, type AssetFolder, type AssetFolderId } from '../core/libraryAssets';
 import { createLayer } from '../core/project';
 import { COMPONENT_PRESETS } from '../core/componentPresets';
 import ComponentLibrary from './ComponentLibrary';
+import LayerList from './LayerList';
 import { TEMPLATES } from '../core/templates';
 import { kindIcons } from './Timeline';
 import TemplatePreview from './TemplatePreview';
@@ -23,6 +24,8 @@ interface Props {
   insertComponent: (id: string) => void;
   saveComponent: () => void;
   group: () => void;
+  change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
+  reorder?: (direction: number) => void;
   libraryRequest?: { tab: LibraryTab; nonce: number } | null;
 }
 
@@ -59,9 +62,11 @@ export default function Sidebar({
   insertComponent,
   saveComponent,
   group,
+  change,
+  reorder,
   libraryRequest,
 }: Props) {
-  const [panel, setPanel] = useState<'files' | 'layers' | 'templates'>('files');
+  const [panel, setPanel] = useState<'files' | 'layers' | 'templates'>('layers');
   const [folder, setFolder] = useState<AssetFolderId | null>(null);
   const previews = useMemo(
     () => TEMPLATES.map((template) => ({ ...template, preview: template.project() })),
@@ -140,35 +145,40 @@ export default function Sidebar({
       </button>
     );
   }
-  function renderLayer(layer: Layer) {
-    const Icon = kindIcons[layer.kind];
-    return (
-      <button
-        key={layer.id}
-        className={`fs-library-layer ${selected.includes(layer.id) ? 'is-selected' : ''}`}
-        title={layer.name}
-        onClick={(event) =>
-          select(event.shiftKey ? Array.from(new Set([...selected, layer.id])) : [layer.id])
-        }
-      >
-        <Icon size={14} />
-        <span>{layer.name}</span>
-        {layer.groupId && <Group size={11} />}
-        {layer.hidden && <EyeOff size={11} />}
-        {layer.locked && <LockKeyhole size={11} />}
-      </button>
-    );
-  }
 
   return (
     <aside className="sidebar fs-library" aria-label="Library">
       <div className="fs-library-header">
         <div className="fs-library-tabs" role="tablist" aria-label="Sidebar">
-          {(['files', 'layers', 'templates'] as const).map((item) => (
+          {(['layers', 'files', 'templates'] as const).map((item) => (
             <button
               key={item}
               role="tab"
+              id={`library-tab-${item}`}
+              aria-controls={`library-panel-${item}`}
               aria-selected={panel === item}
+              tabIndex={panel === item ? 0 : -1}
+              onKeyDown={(event) => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const tabs = ['layers', 'files', 'templates'] as const;
+                const current = tabs.indexOf(item);
+                const next =
+                  event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? 2
+                      : (current + (event.key === 'ArrowLeft' ? -1 : 1) + tabs.length) %
+                        tabs.length;
+                setPanel(tabs[next]);
+                if (tabs[next] === 'files') setFolder(null);
+                const buttons =
+                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                    '[role="tab"]',
+                  );
+                buttons?.[next].focus();
+              }}
               className={panel === item ? 'is-active' : ''}
               onClick={() => {
                 setPanel(item);
@@ -189,7 +199,12 @@ export default function Sidebar({
           <X size={14} />
         </button>
       </div>
-      <div className="fs-library-scroll">
+      <div
+        className="fs-library-scroll"
+        role="tabpanel"
+        id={`library-panel-${panel}`}
+        aria-labelledby={`library-tab-${panel}`}
+      >
         {panel === 'files' && !folder && (
           <>
             {(['media', 'create'] as const).map((section) => (
@@ -240,7 +255,7 @@ export default function Sidebar({
                 title="Back to files"
                 onClick={() => setFolder(null)}
               >
-                ‹
+                <ChevronDown size={14} />
               </button>
               <FolderIcon folder={activeFolder} />
               <strong>{activeFolder.label}</strong>
@@ -356,40 +371,14 @@ export default function Sidebar({
         )}
 
         {panel === 'layers' && (
-          <>
-            <div className="fs-library-heading">
-              <span>Board layers</span>
-              <button
-                title="Group selection"
-                aria-label="Group selection"
-                onClick={group}
-                disabled={selected.length < 2}
-              >
-                <Group size={15} />
-              </button>
-            </div>
-            {(['visuals', 'audio'] as const).map((section) => {
-              const layers = [...project.layers]
-                .reverse()
-                .filter((layer) =>
-                  section === 'audio' ? layer.kind === 'audio' : layer.kind !== 'audio',
-                );
-              return (
-                <section className="fs-library-track-section" key={section}>
-                  <div className="fs-library-section-label">
-                    <span>{section === 'audio' ? 'Audio' : 'Visuals'}</span>
-                    <span>{layers.length}</span>
-                  </div>
-                  <div className="fs-library-layer-list">{layers.map(renderLayer)}</div>
-                  {!layers.length && (
-                    <p className="fs-library-layer-empty">
-                      {section === 'audio' ? 'No audio clips' : 'No visual layers'}
-                    </p>
-                  )}
-                </section>
-              );
-            })}
-          </>
+          <LayerList
+            layers={project.layers}
+            selected={selected}
+            select={select}
+            change={change}
+            group={group}
+            reorder={reorder}
+          />
         )}
 
         {panel === 'templates' && (

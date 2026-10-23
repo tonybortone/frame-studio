@@ -1,6 +1,6 @@
 # Motion recipes and scene animation
 
-Select an element or several elements, then open **Motion** on the right.
+Select an element or several elements, then open **Motion → Motion library** in the right inspector. The library is collapsed by default; Edit keyframes and Choose animation preset are the main actions for a single selected visual layer.
 
 ![Motion recipes beside an original editable product scene](images/motion-recipes.png)
 
@@ -33,7 +33,7 @@ Recipes replace their affected channels inside the chosen time range and clear p
 
 ## Extra keyframe properties
 
-In **Timeline → Motion → Keyframes**, use **+ Add property** to reveal additional lanes:
+In **Timeline → Motion → Keyframes**, use the animation-property dropdown to focus an extra property in the same lane:
 
 - **3D tilt:** X/Y perspective angles.
 - **Depth:** normalized distance, from −100 farther away to +100 closer.
@@ -41,7 +41,7 @@ In **Timeline → Motion → Keyframes**, use **+ Add property** to reveal addit
 - **Mask reveal:** 0–100%, from an edge or the center, combined with the existing shape mask.
 - **Text reveal:** 0–100% by character or word. Text keeps its layout while revealing.
 
-Properties with keys appear automatically. **Animated only** hides unused rows. The existing diamond, timing, curve, keyboard, and undo controls work on these properties too. Editing a tracked 3D slider changes only that axis's key at the current frame.
+The dropdown shows point counts, and the editor initially chooses an already animated property when available. One lane is shown at a time; nearby points separate vertically to remain selectable. Adjust contains values and reveal options. The same diamond, timing, curve, keyboard, and undo controls work on these properties. Editing a tracked 3D slider changes only that axis's key at the current frame.
 
 Grouped perspective recipes store a common origin and perspective distance. The pieces remain editable layers and project onto one plane. This is a perspective treatment of flat artwork, not a mesh/model editor, light rig, or hierarchical 3D scene.
 

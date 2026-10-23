@@ -70,10 +70,10 @@ export default function App() {
   const [tool, setTool] = useState<CanvasTool>('select');
   const [drawingStyle, setDrawingStyle] = useState(DEFAULT_DRAWING_STYLE);
   const [panelsHidden, setPanelsHidden] = useState(false);
-  const [toolsExpanded, setToolsExpanded] = useState(true);
+  const [toolsExpanded, setToolsExpanded] = useState(false);
   const [showBoardGrid, setShowBoardGrid] = useState(true);
   const expandedTools = toolsExpanded;
-  const panelsBeforeFocus = useRef({ library: true, inspector: false, tools: true });
+  const panelsBeforeFocus = useRef({ library: true, inspector: false, tools: false });
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('design');
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [viewMode, setViewMode] = useState<'canvas' | 'depth'>('canvas');
@@ -99,7 +99,9 @@ export default function App() {
   const activeInspectorTab = audioSelection && inspectorTab === 'color' ? 'design' : inspectorTab;
   const closeInspector = () => {
     setInspectorOpen(false);
-    document.getElementById(`inspector-menu-${activeInspectorTab}`)?.focus();
+    requestAnimationFrame(() =>
+      document.getElementById(`inspector-menu-${activeInspectorTab}`)?.focus(),
+    );
   };
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [libraryRequest, setLibraryRequest] = useState<{
@@ -715,6 +717,8 @@ export default function App() {
             insertComponent={insertComponent}
             saveComponent={saveComponent}
             group={group}
+            change={change}
+            reorder={reorder}
             libraryRequest={libraryRequest}
             close={() => setLibraryOpen(false)}
           />
@@ -887,7 +891,7 @@ export default function App() {
               tool={tool}
               drawingStyle={drawingStyle}
               zoom={canvasZoom}
-              leftInset={expandedTools ? 166 : 88}
+              leftInset={32}
               onZoomChange={setCanvasZoom}
               resetViewKey={resetViewKey}
               select={selectLayers}
@@ -947,7 +951,7 @@ export default function App() {
             </div>
           )}
         </section>
-        {inspectorRailVisible && (
+        {inspectorRailVisible && !inspectorOpen && (
           <InspectorRail
             tab={activeInspectorTab}
             open={inspectorOpen}
@@ -955,7 +959,7 @@ export default function App() {
             onClose={closeInspector}
             onSelect={(tab) => {
               setInspectorTab(tab);
-              setInspectorOpen(!inspectorOpen || activeInspectorTab !== tab);
+              setInspectorOpen(true);
             }}
           />
         )}
@@ -963,6 +967,7 @@ export default function App() {
           <Inspector
             close={closeInspector}
             tab={activeInspectorTab}
+            onTabChange={setInspectorTab}
             project={project}
             time={time}
             selected={selected}
@@ -975,6 +980,11 @@ export default function App() {
               setPlaying(false);
               setSelected([id]);
               setTimelineMotionRequest((request) => ({ id: request.id + 1, keyframes: true }));
+            }}
+            editPresets={(id) => {
+              setPlaying(false);
+              setSelected([id]);
+              setTimelineMotionRequest((request) => ({ id: request.id + 1, keyframes: false }));
             }}
             duplicate={duplicate}
             remove={remove}

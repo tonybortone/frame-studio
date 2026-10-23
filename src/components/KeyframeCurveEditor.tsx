@@ -1,6 +1,7 @@
 import { useEffect, useRef, type PointerEvent } from 'react';
 import type { PropertyKeyframe } from '../core/types';
 import { evaluateKeyframeProgress, getKeyframeCurve } from '../core/keyframes';
+import CompactSelect from './CompactSelect';
 import './KeyframeCurveEditor.css';
 
 type Curve = [number, number, number, number];
@@ -9,6 +10,7 @@ interface Props {
   name: string;
   disabled: boolean;
   disabledReason?: string;
+  hint?: string;
   /** Normalized time within this keyframe's outgoing segment. */
   progress?: number;
   change: (patch: Pick<PropertyKeyframe, 'easing' | 'curve'>, record?: boolean) => void;
@@ -30,6 +32,7 @@ export default function KeyframeCurveEditor({
   name,
   disabled,
   disabledReason,
+  hint,
   progress,
   change,
   checkpoint,
@@ -194,54 +197,28 @@ export default function KeyframeCurveEditor({
           ))}
       </div>
       <div className="keyframe-curve-choices">
-        <div
-          className="keyframe-curve-presets"
-          role="group"
-          aria-label={`Curve choices for ${name}`}
-        >
-          {CHOICES.map(({ easing, label }) => {
-            const presetCurve = getKeyframeCurve({ easing });
-            const tx = (value: number) => 3 + value * 42;
-            const ty = (value: number) => 21 - value * 18;
-            return (
-              <button
-                key={easing}
-                type="button"
-                className={`keyframe-curve-choice ${frame.easing === easing ? 'is-selected' : ''}`}
-                aria-label={`Use ${label} curve for ${name}`}
-                aria-pressed={frame.easing === easing}
-                disabled={disabled}
-                onClick={() => {
-                  if (!disabled && frame.easing !== easing) change({ easing, curve: undefined });
-                }}
-              >
-                <svg viewBox="0 0 48 24" aria-hidden="true">
-                  <path className="keyframe-curve-choice-guide" d="M3 3V21H45" />
-                  <path
-                    d={
-                      easing === 'hold'
-                        ? 'M3 21H45V3'
-                        : `M3 21C${tx(presetCurve[0])} ${ty(presetCurve[1])} ${tx(presetCurve[2])} ${ty(presetCurve[3])} 45 3`
-                    }
-                  />
-                </svg>
-                <span>{label}</span>
-              </button>
-            );
-          })}
-          <span
-            className={`keyframe-curve-custom ${frame.easing === 'custom' ? 'is-active' : ''}`}
-            aria-live="polite"
-          >
-            {frame.easing === 'custom' ? 'Custom curve' : 'Or drag a handle'}
-          </span>
-        </div>
+        <span className="keyframe-curve-caption">Movement</span>
+        <CompactSelect
+          label={`Curve style for ${name}`}
+          value={frame.easing}
+          disabled={disabled}
+          options={[
+            ...CHOICES.map(({ easing, label }) => ({ value: easing, label })),
+            ...(frame.easing === 'custom' ? [{ value: 'custom', label: 'Custom curve' }] : []),
+          ]}
+          onChange={(easing) => {
+            if (!disabled && easing !== frame.easing && easing !== 'custom')
+              change({ easing: easing as PropertyKeyframe['easing'], curve: undefined });
+          }}
+        />
         <p className="keyframe-curve-help">
           {disabled
             ? (disabledReason ?? 'Add a later point to shape the movement.')
-            : held
-              ? 'Keep still, then jump at the next point.'
-              : 'Drag the dots to fine-tune the movement.'}
+            : hint
+              ? hint
+              : held
+                ? 'Keep still, then jump at the next point.'
+                : 'Drag the dots to fine-tune the movement.'}
         </p>
       </div>
     </div>

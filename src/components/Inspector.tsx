@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   SlidersHorizontal,
   Sparkles,
-  Sliders,
   X,
   MoveHorizontal,
   RotateCw,
@@ -12,6 +11,7 @@ import {
   Trash2,
   Copy,
   Volume2,
+  ArrowUpRight,
 } from '../icons';
 import type {
   Layer,
@@ -49,10 +49,12 @@ import { Element3DControls, Element3DMotionControls } from './Element3DControls'
 import './Inspector.css';
 import { evaluateKeyframedLayer } from '../core/keyframes';
 import MotionRecipes from './MotionRecipes';
+import InspectorRail from './InspectorRail';
 export type InspectorTab = 'design' | 'motion' | 'color';
 
 interface Props {
   tab: InspectorTab;
+  onTabChange: (tab: InspectorTab) => void;
   close: () => void;
   project: Project;
   time: number;
@@ -60,6 +62,7 @@ interface Props {
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   updateProject: (patch: Partial<Project>) => void;
   editKeys: (id: string) => void;
+  editPresets: (id: string) => void;
   duplicate: () => void;
   remove: () => void;
   group: () => void;
@@ -156,6 +159,7 @@ function SoundControls({ layer, patch }: { layer: Layer; patch: (value: Partial<
 
 export default function Inspector({
   tab,
+  onTabChange,
   close,
   project,
   time,
@@ -163,6 +167,7 @@ export default function Inspector({
   change,
   updateProject,
   editKeys,
+  editPresets,
   duplicate,
   remove,
   group,
@@ -172,6 +177,7 @@ export default function Inspector({
   transformSelection,
   autoRemoveBackground,
 }: Props) {
+  const [motionLibraryOpen, setMotionLibraryOpen] = useState(false);
   const lookStrengthGesture = useRef({ active: false, recorded: false });
   const resetLookStrengthGesture = () => {
     lookStrengthGesture.current = { active: false, recorded: false };
@@ -286,11 +292,14 @@ export default function Inspector({
       </fieldset>
     ) : null;
   const Icon = layer ? kindIcons[layer.kind] : SlidersHorizontal;
-  const category = {
-    design: { label: 'Design', icon: SlidersHorizontal },
-    motion: { label: isAudio ? 'Sound' : 'Motion', icon: isAudio ? Volume2 : Sparkles },
-    color: { label: 'Color', icon: Sliders },
-  }[activeTab];
+  const pointCount = singleVisual
+    ? new Set(
+        Object.values(singleVisual.keyframes ?? {})
+          .flat()
+          .map((frame) => frame.time - (singleVisual.keyframeOffset ?? 0))
+          .filter((pointTime) => pointTime >= 0 && pointTime <= singleVisual.duration),
+      ).size
+    : 0;
   return (
     <aside
       id="inspector-panel"
@@ -304,8 +313,14 @@ export default function Inspector({
       }}
     >
       <header className="inspector-header">
-        <category.icon size={15} />
-        <h2>{category.label}</h2>
+        <InspectorRail
+          inline
+          tab={activeTab}
+          open
+          audioSelection={Boolean(isAudio)}
+          onSelect={onTabChange}
+          onClose={close}
+        />
         <button aria-label="Close properties" title="Close properties" onClick={close}>
           <X size={15} />
         </button>
@@ -543,17 +558,6 @@ export default function Inspector({
                       )}
                     </section>
                   )}
-                  <Element3DControls
-                    key={`3d-${singleVisual?.id ?? 'selection'}`}
-                    layer={singleVisual}
-                    onChange={change}
-                    checkpoint={checkpoint}
-                    emptyMessage={
-                      isAudio
-                        ? 'Select a visual element to give it depth.'
-                        : 'Select one element to edit its 3D pose.'
-                    }
-                  />
                   {layer.kind === 'text' && selected.length === 1 && (
                     <section className="property-section">
                       <h4>Typography</h4>
@@ -587,11 +591,6 @@ export default function Inspector({
                       </div>
                     </section>
                   )}
-                  {visualSelection.length === 1 && (
-                    <fieldset className="inspector-fields" disabled={Boolean(layer.locked)}>
-                      <MaskControls key={layer.id} layer={layer} patch={patchOne} />
-                    </fieldset>
-                  )}
                   {colorEditor}
                   {!isAudio && (
                     <section className="property-section">
@@ -610,11 +609,35 @@ export default function Inspector({
                       </label>
                     </section>
                   )}
+                  {!isAudio && (
+                    <details className="inspector-section-disclosure">
+                      <summary>3D & depth</summary>
+                      <Element3DControls
+                        key={`3d-${singleVisual?.id ?? 'selection'}`}
+                        layer={singleVisual}
+                        onChange={change}
+                        checkpoint={checkpoint}
+                        emptyMessage={
+                          isAudio
+                            ? 'Select a visual element to give it depth.'
+                            : 'Select one element to edit its 3D pose.'
+                        }
+                      />
+                    </details>
+                  )}
+                  {visualSelection.length === 1 && (
+                    <details className="inspector-section-disclosure">
+                      <summary>Masks</summary>
+                      <fieldset className="inspector-fields" disabled={Boolean(layer.locked)}>
+                        <MaskControls key={layer.id} layer={layer} patch={patchOne} />
+                      </fieldset>
+                    </details>
+                  )}
                   {(layer.kind === 'audio' || layer.kind === 'video') && (
                     <SoundControls layer={layer} patch={patch} />
                   )}
-                  <section className="property-section">
-                    <h4>Timing</h4>
+                  <details className="inspector-section-disclosure">
+                    <summary>Timing</summary>
                     <div className="field-grid">
                       <NumberField
                         label="Start (s)"
@@ -636,7 +659,7 @@ export default function Inspector({
                         onChange={(duration) => patch({ duration })}
                       />
                     </div>
-                  </section>
+                  </details>
                 </>
               )}
               {activeTab === 'motion' &&
@@ -644,15 +667,65 @@ export default function Inspector({
                   <SoundControls layer={layer} patch={patch} />
                 ) : (
                   <>
-                    <MotionRecipes
-                      project={project}
-                      selected={selected}
-                      time={time}
-                      apply={(layers) => updateProject({ layers })}
-                      editKeys={editKeys}
-                    />
-                    <details className="inspector-basic-motion">
-                      <summary>Simple preset controls</summary>
+                    <section className="inspector-motion-start" aria-label="Animation tools">
+                      {singleVisual ? (
+                        <>
+                          <div className="inspector-keyframe-summary">
+                            <svg viewBox="0 0 68 24" aria-hidden="true">
+                              <path d="M10 12H58" />
+                              <path d="M10 7L15 12L10 17L5 12Z M58 7L63 12L58 17L53 12Z" />
+                            </svg>
+                            <span>
+                              {pointCount
+                                ? `${pointCount} ${pointCount === 1 ? 'point' : 'points'}`
+                                : 'Make your own move'}
+                            </span>
+                          </div>
+                          <button
+                            className="inspector-keyframes-action"
+                            type="button"
+                            onClick={() => editKeys(singleVisual.id)}
+                            disabled={Boolean(singleVisual.locked)}
+                          >
+                            Edit keyframes <ArrowUpRight size={14} />
+                          </button>
+                          <p className="helper-copy">
+                            Set a start and end pose. Drag the points to change the timing.
+                          </p>
+                          <button
+                            className="secondary wide"
+                            type="button"
+                            onClick={() => editPresets(singleVisual.id)}
+                            disabled={Boolean(singleVisual.locked)}
+                          >
+                            <Sparkles size={13} /> Choose animation preset
+                          </button>
+                        </>
+                      ) : (
+                        <p className="helper-copy">
+                          Select one element to edit keyframes. Open Motion library to animate this
+                          selection together.
+                        </p>
+                      )}
+                    </section>
+                    <details
+                      className="inspector-section-disclosure inspector-motion-library"
+                      open={motionLibraryOpen}
+                      onToggle={(event) => setMotionLibraryOpen(event.currentTarget.open)}
+                    >
+                      <summary>Motion library</summary>
+                      {motionLibraryOpen && (
+                        <MotionRecipes
+                          project={project}
+                          selected={selected}
+                          time={time}
+                          apply={(layers) => updateProject({ layers })}
+                          editKeys={editKeys}
+                        />
+                      )}
+                    </details>
+                    <details className="inspector-section-disclosure inspector-basic-motion">
+                      <summary>Advanced timing</summary>
                       <Element3DMotionControls layer={singleVisual} onChange={change} />
                       <section className="property-section">
                         <h4>

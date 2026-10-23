@@ -1,127 +1,131 @@
+.canvas-workspace {
+  container-type: inline-size;
+}
 .creation-toolbar {
   position: absolute;
-  left: 14px;
-  top: 50%;
+  left: 50%;
+  bottom: 14px;
   z-index: 6;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  max-height: calc(100% - 108px);
-  padding: 5px;
-  overflow-y: auto;
+  gap: 3px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 6px;
+  overflow-x: auto;
   overscroll-behavior: contain;
-  border: 1px solid color-mix(in srgb, var(--muted) 21%, transparent);
-  border-radius: 11px;
-  background: var(--panel-raised);
-  box-shadow: 0 4px 16px #0003;
-  transform: translateY(-50%);
+  border: 1px solid #ffffff1c;
+  border-radius: 14px;
+  background: #252525f5;
+  box-shadow:
+    0 6px 20px #0004,
+    inset 0 1px #ffffff05;
+  transform: translateX(-50%);
   scrollbar-width: none;
 }
 .creation-toolbar::-webkit-scrollbar {
-  width: 0;
+  height: 0;
 }
 .creation-tool-label {
   display: none;
 }
-.creation-toolbar.is-expanded {
-  width: 138px;
-  align-items: stretch;
-}
-.creation-toolbar.is-expanded > button {
-  display: flex;
-  justify-content: flex-start;
-  gap: 10px;
-  width: 100%;
-  height: 33px;
-  min-height: 33px;
-  padding: 0 8px;
-}
-.creation-toolbar.is-expanded > button > svg,
-.creation-toolbar.is-expanded > button > .tool-glyph {
-  flex-shrink: 0;
-  width: 19px;
-  height: 19px;
-}
 .creation-toolbar.is-expanded .creation-tool-label {
   display: inline;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
 }
-.creation-toolbar.is-expanded .creation-menu-caret {
-  width: 8px;
-  height: 8px;
-  right: 4px;
-  bottom: 5px;
+.creation-toolbar.is-expanded {
+  bottom: 60px;
 }
-.creation-toolbar.is-expanded .creation-divider {
-  width: calc(100% - 16px);
-  margin: 4px 8px;
-}
-.creation-toolbar > .creation-rail-toggle {
-  height: 25px;
-  min-height: 25px;
-  color: var(--muted);
-}
-.creation-rail-chevron {
-  transform: rotate(-90deg);
-}
-.creation-toolbar.is-expanded .creation-rail-toggle {
-  justify-content: space-between;
-}
-.creation-toolbar.is-expanded .creation-rail-chevron {
-  transform: rotate(90deg);
-}
-.creation-toolbar > button {
+.creation-toolbar > button,
+.creation-tool-split > button {
   position: relative;
-  display: grid;
-  place-items: center;
-  width: 36px;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 36px;
   height: 36px;
-  min-height: 36px;
-  padding: 0;
+  padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
-  color: #bababa;
+  color: #cecece;
   transition:
-    background 120ms,
-    color 120ms,
-    border-color 120ms;
+    background 180ms,
+    color 180ms;
 }
 .creation-toolbar > button:hover:not(:disabled),
-.creation-toolbar > button.is-open {
-  background: color-mix(in srgb, var(--text) 5%, transparent);
-  color: var(--text);
-  border-color: color-mix(in srgb, var(--muted) 15%, transparent);
+.creation-toolbar > button.is-open,
+.creation-tool-split > button:hover {
+  background: #ffffff0c;
+  color: #f5f5f5;
 }
 .creation-toolbar > button.active,
-.creation-toolbar > button.active:hover {
-  background: var(--text);
-  color: var(--panel-raised);
-  border-color: var(--text);
+.creation-toolbar > button.active:hover,
+.creation-tool-split.active {
+  background: #ededed;
+  color: #252525;
+}
+.creation-tool-split {
+  display: flex;
+  flex: none;
+  align-items: center;
+  border-radius: 8px;
+  transition:
+    background 180ms,
+    color 180ms;
+}
+.creation-tool-split.active > button {
+  color: inherit;
+}
+.creation-tool-split.active > button:hover {
+  background: #0000000c;
+}
+.creation-tool-split > .creation-split-caret {
+  min-width: 20px;
+  width: 20px;
+  padding: 0 3px;
+  margin-left: -4px;
 }
 .creation-toolbar > button:disabled {
   opacity: 0.35;
   cursor: default;
 }
-.creation-toolbar .creation-menu-caret {
-  position: absolute;
-  right: 2px;
-  bottom: 3px;
-  opacity: 0.8;
+.creation-menu-caret {
+  flex: none;
+  opacity: 0.7;
 }
 .creation-divider {
-  width: 22px;
-  min-height: 1px;
-  background: color-mix(in srgb, var(--muted) 14%, transparent);
-  margin: 3px 0;
+  width: 1px;
+  height: 22px;
+  flex: none;
+  background: #ffffff13;
+  margin: 0 3px;
 }
-.creation-toolbar > button:focus-visible,
+.creation-toolbar button:focus-visible,
 .canvas-tool-popover button:focus-visible,
+.canvas-tool-popover summary:focus-visible,
 .canvas-tool-popover input:focus-visible {
-  outline: 2px solid var(--focus);
+  outline: 2px solid #96c7f3;
   outline-offset: 2px;
+}
+.creation-toolbar + .board-surface .vector-tool-hint,
+.canvas-workspace:has(.creation-toolbar) .board-surface .vector-tool-hint {
+  bottom: 70px;
+}
+@container (max-width: 680px) {
+  .creation-toolbar {
+    bottom: 60px;
+  }
+  .board-surface .vector-tool-hint {
+    bottom: 114px !important;
+  }
+}
+.canvas-workspace:has(.creation-toolbar.is-expanded) .board-surface .vector-tool-hint {
+  bottom: 114px;
 }
 .canvas-tool-popover {
   position: fixed;
@@ -134,12 +138,26 @@
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--muted) 24%, transparent);
   border-radius: 12px;
-  background: var(--panel-raised);
+  background: #252525;
   color: var(--text);
   box-shadow:
     0 12px 40px #0005,
     0 2px 8px #0003;
   font-size: 11px;
+  animation: canvas-tool-appear 180ms ease-out;
+}
+@keyframes canvas-tool-appear {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.canvas-tool-selection {
+  width: 220px;
 }
 .canvas-tool-heading {
   display: flex;
@@ -204,61 +222,148 @@
   font-size: 10px;
   line-height: 1.6;
 }
-.canvas-drawing-options {
+.canvas-menu-choices {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
-.canvas-drawing-options > button {
+.canvas-menu-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  border-radius: 7px;
+  background: #ffffff0b;
+  pointer-events: none;
+  transition:
+    transform 180ms ease,
+    height 180ms ease,
+    opacity 180ms ease;
+}
+.canvas-menu-choices > button {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
   width: 100%;
+  min-height: 38px;
   padding: 9px 8px;
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: #c0c0c0;
+  color: #cecece;
   text-align: left;
 }
-.canvas-drawing-options > button:hover {
-  background: color-mix(in srgb, var(--text) 3%, transparent);
-  color: var(--text);
+.canvas-menu-choices > button:hover:not(:disabled) {
+  color: #f5f5f5;
 }
-.canvas-drawing-options > button[aria-pressed='true'] {
-  border-color: color-mix(in srgb, var(--muted) 27%, transparent);
-  background: color-mix(in srgb, var(--muted) 9%, transparent);
-  color: var(--text);
+.canvas-menu-choices > button[aria-pressed='true'] {
+  color: #f5f5f5;
 }
-.canvas-drawing-options > button > svg {
+.canvas-menu-choices > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.canvas-menu-choices > button > svg {
   flex-shrink: 0;
 }
-.canvas-drawing-options > button > span {
+.canvas-menu-choices > button > span {
   flex: 1;
+  font-size: 11px;
 }
-.canvas-drawing-options strong {
+.canvas-menu-choices strong {
   display: block;
   font-size: 11px;
   font-weight: 500;
 }
-.canvas-drawing-options small {
+.canvas-menu-choices small {
   display: block;
-  margin-top: 4px;
-  font-size: 9px;
-  color: #aaaaaa;
+  margin-top: 3px;
+  font-size: 10px;
+  color: #9e9e9e;
 }
-.canvas-drawing-options kbd {
-  padding: 2px 4px;
-  border: 1px solid color-mix(in srgb, var(--muted) 16%, transparent);
-  border-radius: 4px;
-  color: var(--muted);
+.canvas-menu-choices kbd {
+  color: #999;
   font-family: inherit;
-  font-size: 9px;
+  font-size: 10px;
+}
+.canvas-menu-divider {
+  height: 1px;
+  margin: 6px 2px;
+  background: #ffffff12;
+}
+.canvas-menu-footer {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid #ffffff12;
+}
+.canvas-menu-footer > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  color: #aaa;
+  background: transparent;
+  font-size: 10px;
+}
+.canvas-menu-footer > button:hover {
+  color: #f5f5f5;
+  background: #ffffff08;
+}
+.canvas-menu-switch {
+  width: 24px;
+  height: 14px;
+  padding: 2px;
+  border-radius: 8px;
+  background: #4a4a4a;
+}
+.canvas-menu-switch::after {
+  content: '';
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #bbb;
+  transition: transform 180ms;
+}
+.canvas-menu-switch.is-on {
+  background: #f0f0f0;
+}
+.canvas-menu-switch.is-on::after {
+  transform: translateX(10px);
+  background: #303030;
 }
 .canvas-drawing-style {
   margin-top: 11px;
-  padding-top: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--muted) 15%, transparent);
+  border-top: 1px solid #ffffff12;
+}
+.canvas-drawing-style > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 34px;
+  color: #c4c4c4;
+  font-size: 11px;
+  cursor: pointer;
+  list-style: none;
+}
+.canvas-drawing-style > summary::-webkit-details-marker {
+  display: none;
+}
+.canvas-drawing-style > summary > svg {
+  transition: transform 180ms;
+}
+.canvas-drawing-style[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.canvas-drawing-style-fields {
+  padding-top: 6px;
 }
 .canvas-stroke-preview {
   display: block;
@@ -367,7 +472,7 @@
 .canvas-stroke-width input::-webkit-inner-spin-button {
   -webkit-appearance: none;
 }
-.canvas-drawing-style > input[type='range'] {
+.canvas-drawing-style-fields > input[type='range'] {
   display: block;
   width: 100%;
   height: 4px;
@@ -541,27 +646,42 @@
   opacity: 0.45;
   cursor: default;
 }
-@media (max-height: 800px) {
+@media (max-height: 700px) {
   .creation-toolbar {
-    gap: 1px;
-    padding: 4px;
-    border-radius: 10px;
+    padding: 5px;
+    border-radius: 12px;
   }
-  .creation-toolbar > button {
-    width: 32px;
+  .creation-toolbar > button,
+  .creation-tool-split > button {
     height: 32px;
-    min-height: 32px;
   }
-  .creation-toolbar .tool-glyph {
-    width: 19px;
-    height: 19px;
+  .canvas-tool-popover {
+    padding: 10px;
   }
-  .creation-divider {
-    margin: 2px 0;
+  .canvas-shape-grid > button {
+    min-height: 60px;
+    gap: 3px;
+    padding: 5px 2px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .creation-toolbar > button {
+  .creation-toolbar > button,
+  .creation-tool-split,
+  .creation-tool-split > button,
+  .canvas-menu-highlight,
+  .canvas-menu-switch::after,
+  .canvas-drawing-style > summary > svg {
     transition: none;
+  }
+  .canvas-tool-popover {
+    animation: none;
+  }
+}
+
+/* Keep the dock in the available board area while properties are open. */
+@container (max-width: 900px) {
+  .editor-layout:has(.inspector) .creation-toolbar {
+    left: calc((100% - 292px) / 2);
+    max-width: calc(100% - 316px);
   }
 }

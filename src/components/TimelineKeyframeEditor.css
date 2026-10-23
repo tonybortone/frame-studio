@@ -3,7 +3,6 @@
   background: #171717;
 }
 .keyframe-property-bar,
-.keyframe-more-tools,
 .keyframe-value-drawer,
 .keyframe-message,
 .keyframe-selection-panel {
@@ -21,16 +20,6 @@
   height: 36px;
   padding: 3px 12px;
 }
-.keyframe-property-chips {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.keyframe-property-chips button,
-.keyframe-more-toggle,
 .keyframe-adjust-toggle {
   height: 28px;
   padding: 0 9px;
@@ -42,38 +31,14 @@
   font-size: 11px;
   white-space: nowrap;
 }
-.keyframe-property-chips button[aria-pressed='true'] {
-  border-color: #575757;
-  background: #333;
-  color: #f4f4f4;
-}
-.keyframe-property-chips small {
-  color: #c9c9c9;
-  font-size: 9px;
-  min-width: 15px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: #ffffff0b;
-}
 .keyframe-adjust-toggle {
   margin-left: auto;
   border-color: #ffffff22;
 }
-.keyframe-adjust-toggle[aria-expanded='true'],
-.keyframe-more-toggle[aria-expanded='true'] {
+.keyframe-adjust-toggle[aria-expanded='true'] {
   color: #f4f4f4;
   background: #333;
 }
-.keyframe-canvas-hint {
-  margin-left: auto;
-  white-space: nowrap;
-  color: #999;
-  font-size: 10px;
-}
-.keyframe-canvas-hint + .keyframe-adjust-toggle {
-  margin-left: 0;
-}
-.keyframe-more-tools,
 .keyframe-value-drawer {
   display: flex;
   align-items: center;
@@ -83,14 +48,12 @@
   color: #ababab;
   font-size: 10px;
 }
-.keyframe-more-tools label,
 .keyframe-effect-detail,
 .keyframe-time-detail {
   display: flex;
   align-items: center;
   gap: 7px;
 }
-.keyframe-more-tools select,
 .keyframe-effect-detail select {
   height: 27px;
   padding: 3px 8px;
@@ -100,9 +63,7 @@
   color: #e6e6e6;
   font-size: 11px;
 }
-.keyframe-more-tools small {
-  color: #929292;
-}
+
 .keyframe-message {
   padding: 6px 12px;
   color: #c5c5c5;
@@ -375,26 +336,16 @@
 .keyframe-delete:disabled {
   opacity: 0.35;
 }
-@media (max-width: 1200px) {
-  .keyframe-canvas-hint {
-    display: none;
-  }
-  .keyframe-canvas-hint + .keyframe-adjust-toggle {
-    margin-left: auto;
-  }
-}
 @media (max-height: 800px) {
   .keyframe-property-bar {
     height: 32px;
     padding-block: 2px;
   }
-  .keyframe-property-chips button,
-  .keyframe-more-toggle,
   .keyframe-adjust-toggle {
     height: 26px;
   }
   .keyframe-selection-panel {
-    min-height: 104px;
+    min-height: 92px;
   }
 }
 @media (max-width: 800px) {
@@ -436,11 +387,37 @@
   background: #343434;
   color: #fff;
 }
-@media (max-width: 1400px) {
-  .keyframe-canvas-hint {
+
+.keyframe-target-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #c5c5c5;
+  font-size: 11px;
+  padding-right: 10px;
+  border-right: 1px solid #ffffff16;
+}
+.keyframe-count {
+  color: #969696;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.keyframe-lane {
+  cursor: crosshair;
+}
+.keyframe-segment {
+  pointer-events: none;
+}
+@media (max-width: 800px) {
+  .keyframe-target-name {
+    max-width: 90px;
+  }
+  .keyframe-count {
     display: none;
   }
-  .keyframe-canvas-hint + .keyframe-adjust-toggle {
-    margin-left: auto;
-  }
+}
+
+.keyframe-row.is-crowded .keyframe-diamond {
+  height: 28px;
 }

@@ -97,7 +97,11 @@ export default function Timeline({
   }, []);
   const activeGesture = useRef<(() => void) | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [keyframesMode, setKeyframesMode] = useState(false);
   const previousMotionRequest = useRef(motionRequest.id);
+  const previousKeys = useRef<{ layerId: string; ids: Set<string> } | null>(null);
+  const playheadTime = useRef(time);
+  playheadTime.current = time;
   const [viewportWidth, setViewportWidth] = useState(1000);
   useEffect(() => {
     const node = scroller.current;
@@ -130,36 +134,89 @@ export default function Timeline({
     if (expandedId && !project.layers.some((layer) => layer.id === expandedId)) setExpandedId(null);
   }, [expandedId, project.layers]);
   useEffect(() => {
-    if (motionRequest.id === previousMotionRequest.current) return;
-    previousMotionRequest.current = motionRequest.id;
-    if (selected.length !== 1) return;
+    if (motionRequest.id !== previousMotionRequest.current) {
+      previousMotionRequest.current = motionRequest.id;
+      if (selected.length !== 1) return;
+      const layer = project.layers.find((item) => item.id === selected[0]);
+      if (!layer || layer.kind === 'audio') return;
+      setKeyframesMode(motionRequest.keyframes);
+      setExpandedId(layer.id);
+      onExpand?.(motionRequest.keyframes);
+      return;
+    }
+    if (!expandedId || selected.length !== 1 || selected[0] === expandedId) return;
     const layer = project.layers.find((item) => item.id === selected[0]);
-    if (!layer || layer.kind === 'audio') return;
+    if (!layer) return;
     setExpandedId(layer.id);
-    onExpand?.(
-      motionRequest.keyframes ||
-        Object.values(layer.keyframes ?? {}).some((track) => track?.length),
-    );
-  }, [motionRequest, selected, project.layers, onExpand]);
+    onExpand?.(layer.kind !== 'audio' && keyframesMode);
+  }, [motionRequest, expandedId, selected, project.layers, keyframesMode, onExpand]);
   useLayoutEffect(() => {
     if (!expandedId) return;
     const row = expandedTrack.current;
     const layer = project.layers.find((item) => item.id === expandedId);
     const viewport = layer?.kind === 'audio' ? audioScroll.current : visualScroll.current;
     if (!row || !viewport) return;
-    const rowBounds = row.getBoundingClientRect();
-    const viewportBounds = viewport.getBoundingClientRect();
-    const headingHeight =
-      viewport.querySelector('.timeline-section-heading')?.getBoundingClientRect().height ?? 0;
-    const top = viewportBounds.top + headingHeight;
-    const bottom = viewportBounds.bottom;
-    // Scroll only this pane vertically, leaving its synchronized horizontal position intact.
-    if (rowBounds.top < top || rowBounds.height > bottom - top)
-      viewport.scrollTop += rowBounds.top - top;
-    else if (rowBounds.bottom > bottom) viewport.scrollTop += rowBounds.bottom - bottom;
+    const revealExpandedRow = () => {
+      const rowBounds = row.getBoundingClientRect();
+      const viewportBounds = viewport.getBoundingClientRect();
+      const headingHeight =
+        viewport.querySelector('.timeline-section-heading')?.getBoundingClientRect().height ?? 0;
+      const top = viewportBounds.top + headingHeight;
+      const bottom = viewportBounds.bottom;
+      // Scroll only this pane vertically, leaving its synchronized horizontal position intact.
+      if (rowBounds.top < top || rowBounds.height > bottom - top)
+        viewport.scrollTop += rowBounds.top - top;
+      else if (rowBounds.bottom > bottom) viewport.scrollTop += rowBounds.bottom - bottom;
+    };
+    revealExpandedRow();
+    const observer = new ResizeObserver(revealExpandedRow);
+    observer.observe(row);
+    observer.observe(viewport);
+    return () => observer.disconnect();
   }, [expandedId]);
   const pixels = Math.max(0.001, Math.min(140, Number.isFinite(zoom) ? zoom : 66));
   const width = Math.max(640, viewportWidth - LABEL_WIDTH, project.duration * pixels + 24);
+  const revealTime = useCallback(
+    (at: number) => {
+      const visibleWidth = Math.max(1, viewportWidth - LABEL_WIDTH);
+      const margin = Math.min(24, visibleWidth / 4);
+      const position = Math.max(0, Math.min(project.duration, at)) * pixels;
+      const left = horizontalPosition.current;
+      if (position < left + margin) syncHorizontal(position - margin);
+      else if (position > left + visibleWidth - margin)
+        syncHorizontal(position - visibleWidth + margin);
+    },
+    [viewportWidth, project.duration, pixels, syncHorizontal],
+  );
+  const seekEditor = (at: number, reveal = true) => {
+    seek(at);
+    if (reveal) revealTime(at);
+  };
+  const expandedLayer = project.layers.find((layer) => layer.id === expandedId);
+  useEffect(() => {
+    if (!expandedLayer) {
+      previousKeys.current = null;
+      return;
+    }
+    const frames = Object.values(expandedLayer.keyframes ?? {}).flatMap((track) => track ?? []);
+    const previous = previousKeys.current;
+    previousKeys.current = {
+      layerId: expandedLayer.id,
+      ids: new Set(frames.map((frame) => frame.id)),
+    };
+    if (!previous || previous.layerId !== expandedLayer.id) return;
+    const at = playheadTime.current;
+    const authoredTime = at - expandedLayer.start + (expandedLayer.keyframeOffset ?? 0);
+    // Canvas edits can author keys without seeking. Reveal only a newly added
+    // point at the playhead; ordinary playback never moves the user's viewport.
+    if (
+      frames.some(
+        (frame) =>
+          !previous.ids.has(frame.id) && Math.abs(frame.time - authoredTime) <= 1 / project.fps,
+      )
+    )
+      revealTime(at);
+  }, [expandedLayer, project.fps, revealTime]);
   const minimumTickInterval = Math.max(1, 56 / pixels);
   const tickMagnitude = 10 ** Math.floor(Math.log10(minimumTickInterval));
   const tickInterval =
@@ -318,8 +375,11 @@ export default function Timeline({
               onClick={(event) => {
                 event.stopPropagation();
                 select([layer.id]);
-                if (!expanded)
-                  onExpand?.(Object.values(layer.keyframes ?? {}).some((track) => track?.length));
+                if (!expanded) {
+                  const keyed = Object.values(layer.keyframes ?? {}).some((track) => track?.length);
+                  setKeyframesMode(keyed);
+                  onExpand?.(keyed);
+                }
                 if (expanded) onCollapse?.();
                 setExpandedId(expanded ? null : layer.id);
               }}
@@ -428,12 +488,17 @@ export default function Timeline({
             laneWidth={width}
             time={time}
             compositionDuration={project.duration}
-            seek={seek}
-            keyframesRequest={
-              motionRequest.keyframes && selected.includes(layer.id) ? motionRequest.id : 0
-            }
-            onKeyframesOpen={() => onExpand?.(true)}
-            onPresetsOpen={() => onExpand?.(false)}
+            seek={seekEditor}
+            initialKeyframes={keyframesMode}
+            modeRequest={motionRequest}
+            onKeyframesOpen={() => {
+              setKeyframesMode(true);
+              onExpand?.(true);
+            }}
+            onPresetsOpen={() => {
+              setKeyframesMode(false);
+              onExpand?.(false);
+            }}
             change={change}
             checkpoint={checkpoint}
             onClose={() => {

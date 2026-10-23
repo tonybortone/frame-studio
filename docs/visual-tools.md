@@ -6,11 +6,9 @@ These tools edit the selected layer and participate in Undo/Redo. They run local
 
 ## Shapes and drawing
 
-The left **Tools** rail starts with visible names. Use **Collapse tools** for an icon-only rail, or **Show tool labels** to expand it again. **Templates** opens the template library; **Components** opens reusable designs.
+The compact **Canvas tools** toolbar sits below the board. Its **Insert** menu opens Templates and Components, saves reusable selections, and offers grouping. **Insert → Show tool labels** adds names beside the icons; turn it off to keep the toolbar compact. Selection tools switches between Select and Hand.
 
 **Shapes** opens nine choices: rectangle, rounded rectangle, ellipse, triangle, star, diamond, hexagon, line, and arrow. Each inserts an editable layer at the current playhead. Resize and recolor it on the board or in Properties. Arrow keys move between choices; Enter inserts the focused shape.
-
-![Compact shape menu on the canvas](images/toolbar.png)
 
 **Drawing tools** contains Pencil, Brush, and Pen, with stroke color and width settings and a live stroke preview. Pencil and Brush create freehand vector strokes; Brush starts with a wider stroke. **Pen (B)** builds a path point by point: click for a corner, drag for a smooth Bézier handle. **Enter / Finish** completes an open path. Click the first point or use **Close path** to make a filled closed shape. **Backspace** removes the last draft point; **Escape / Cancel** discards the draft. Completing the path is one undo step.
 
@@ -20,7 +18,7 @@ Tool menus close with their X, Escape, or a click or keyboard focus elsewhere. T
 
 ## Mask and flip
 
-Select one unlocked visual element, then open **Masks** in the canvas toolbar, or **Design** in Properties. Choose None, Rectangle, Rounded, Ellipse, or Diamond. Without an eligible selection, the menu still shows the four mask shapes and explains how to select an element. **Color & background** opens the selected element’s Color menu; from the 3D workspace it returns to the 2D canvas. Inset brings the mask inward equally from each edge; Roundness adjusts the Rounded mask. These are local bounds, so the mask follows the element when it moves, rotates, or animates. Horizontal and vertical flips use its center and leave its placement and clip timing unchanged.
+Select one unlocked visual element, then open **Masks and effects** in the canvas toolbar, or expand **Design → Masks** in Properties. Choose None, Rectangle, Rounded, Ellipse, or Diamond. Without an eligible selection, the menu still shows the four mask shapes and explains how to select an element. **Color & background** opens the selected element’s Color menu; from the 3D workspace it returns to the 2D canvas. Inset brings the mask inward equally from each edge; Roundness adjusts the Rounded mask. These are local bounds, so the mask follows the element when it moves, rotates, or animates. Horizontal and vertical flips use its center and leave its placement and clip timing unchanged.
 
 An ellipse fills the element's bounds; use equal width and height for a circle. An explicit mask replaces the legacy rounded corners of an image or video. None removes clipping. The original geometry stays editable, and changing the mask does not crop pixels out of the source file.
 
@@ -44,13 +42,13 @@ Background removal and image color replacement currently support still images. V
 
 ## Motion in the timeline
 
-Select a layer and click **Motion** in the timeline toolbar. The **Presets** tab has separate Entrance, Loop, and Exit controls, including direction, travel, period, and easing. **Preview clip** plays that interval; **Reset presets** removes those presets in one undoable change, preserving authored keyframes. See the [timeline and motion guide](timeline-motion.md) for timing and limits.
+Select a layer and click **Motion** in the timeline toolbar. The **Presets** tab shows one of Enter, Loop, or Exit at a time. Choose a visual preset, set its duration or period, and open Adjust for direction, travel, easing, and other details. **Preview clip** plays that interval; **Reset presets** removes those presets in one undoable change, preserving authored keyframes. See the [timeline and motion guide](timeline-motion.md) for timing and limits.
 
 ## Give one element a 3D pose or animation
 
-Select exactly one visual layer and open **Design → 3D element**. Enable the switch, pick a tilt pose or adjust **Tilt X**, **Tilt Y**, and **Depth**. Positive depth brings that element closer; negative moves it farther. Existing Rotation controls its in-plane rotation. **Reset 3D** removes the pose and 3D motion; switching off keeps settings for reuse. Locked layers cannot be changed.
+Select exactly one visual layer and open **Design → 3D & depth**. Enable the switch, pick a tilt pose or adjust **Tilt X**, **Tilt Y**, and **Depth**. Positive depth brings that element closer; negative moves it farther. Existing Rotation controls its in-plane rotation. **Reset 3D** removes the pose and 3D motion; switching off keeps settings for reuse. Locked layers cannot be changed.
 
-Choose **Motion → 3D motion** for **Tilt in**, **Flip in**, or looping **Float**. Fine-tune duration (Float period), delay, and entrance easing, or expand the layer's timeline motion row. The same pose and compact motion controls are available beside the layer stack in **3D layers**. Select an individual piece via the Layers panel when editing a grouped mockup.
+Choose **Motion → Advanced timing → 3D motion** for **Tilt in**, **Flip in**, or looping **Float**. Fine-tune duration (Float period), delay, and entrance easing, or expand the layer's timeline motion row. The same pose and compact motion controls are available beside the layer stack in **3D layers**. Select an individual piece via the Layers panel when editing a grouped mockup.
 
 You can drag a tilted element by its projected outline. Use Design W/H for resizing perspective artwork; corner handles are hidden for a selection containing 3D. Only that element gains perspective; other elements, canvas dimensions, and the inspection camera stay as authored. Its transform saves with the project and components, and renders in PNG/video. These are flat visual planes, not imported 3D models or lighting effects. Very large perspective artwork uses bounded rasterization and may soften.
 
