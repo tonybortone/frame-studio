@@ -32,6 +32,7 @@ interface Props {
   compositionDuration: number;
   seek: (time: number) => void;
   onKeyframesOpen: () => void;
+  keyframesRequest?: number;
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   checkpoint: () => void;
   onClose: () => void;
@@ -133,6 +134,7 @@ export default function TimelineMotionEditor({
   compositionDuration,
   seek,
   onKeyframesOpen,
+  keyframesRequest = 0,
   change,
   checkpoint,
   onClose,
@@ -142,8 +144,13 @@ export default function TimelineMotionEditor({
   useEffect(() => () => gesture.current?.(), []);
   const audio = layer.kind === 'audio';
   const [mode, setMode] = useState<'presets' | 'keyframes'>(() =>
-    Object.values(layer.keyframes ?? {}).some((track) => track?.length) ? 'keyframes' : 'presets',
+    keyframesRequest > 0 || Object.values(layer.keyframes ?? {}).some((track) => track?.length)
+      ? 'keyframes'
+      : 'presets',
   );
+  useEffect(() => {
+    if (keyframesRequest > 0) setMode('keyframes');
+  }, [keyframesRequest]);
   const timing = getMotionTiming(layer);
   const motion3d = layer.transform3d?.enabled ? layer.transform3d.motion : 'none';
   const hasEntrance = layer.animation !== 'none' || motion3d !== 'none';

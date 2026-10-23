@@ -7,7 +7,22 @@ import type {
   PropertyKeyframe,
 } from './types';
 
-export const KEYFRAME_PROPERTIES = ['x', 'y', 'width', 'height', 'rotation', 'opacity'] as const;
+export const GEOMETRY_KEYFRAME_PROPERTIES = [
+  'x',
+  'y',
+  'width',
+  'height',
+  'rotation',
+  'opacity',
+] as const;
+export const SPATIAL_KEYFRAME_PROPERTIES = ['rotateX', 'rotateY', 'depth'] as const;
+export const KEYFRAME_PROPERTIES = [
+  ...GEOMETRY_KEYFRAME_PROPERTIES,
+  ...SPATIAL_KEYFRAME_PROPERTIES,
+  'blur',
+  'reveal',
+  'textReveal',
+] as const;
 export const KEYFRAME_EASINGS = [
   'linear',
   'hold',
@@ -26,12 +41,36 @@ export const KEYFRAME_LIMITS: Record<KeyframeProperty, readonly [number, number]
   height: [0.01, 32768],
   rotation: [-360000, 360000],
   opacity: [0, 1],
+  rotateX: [-180, 180],
+  rotateY: [-180, 180],
+  depth: [-100, 100],
+  blur: [0, 80],
+  reveal: [0, 1],
+  textReveal: [0, 1],
 };
 const bound = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const boundedValue = (property: KeyframeProperty, value: number) =>
   bound(value, ...KEYFRAME_LIMITS[property]);
 const cubic = (t: number, first: number, second: number) =>
   3 * (1 - t) ** 2 * t * first + 3 * (1 - t) * t ** 2 * second + t ** 3;
+
+export function getKeyframeBaseValue(layer: Layer, property: KeyframeProperty): number {
+  if (property === 'rotateX' || property === 'rotateY') return layer.transform3d?.[property] ?? 0;
+  if (property === 'depth') return layer.transform3d?.z ?? 0;
+  if (property === 'blur') return layer.blur ?? 0;
+  if (property === 'reveal' || property === 'textReveal') return layer[property] ?? 1;
+  return layer[property];
+}
+
+function isSpatial(
+  property: KeyframeProperty,
+): property is (typeof SPATIAL_KEYFRAME_PROPERTIES)[number] {
+  return property === 'rotateX' || property === 'rotateY' || property === 'depth';
+}
+
+function spatialTransform(layer: Layer): NonNullable<Layer['transform3d']> {
+  return { enabled: true, rotateX: 0, rotateY: 0, z: 0, motion: 'none', ...layer.transform3d };
+}
 
 /** Solve the curve's x coordinate before sampling y; overshoot is intentional. */
 export function cubicBezierProgress(progress: number, curve: KeyframeCurve): number {
@@ -74,7 +113,7 @@ export function evaluateKeyframeProperty(
   localTime: number,
 ): number {
   const frames = layer.keyframes?.[property];
-  if (!frames?.length) return layer[property];
+  if (!frames?.length) return getKeyframeBaseValue(layer, property);
   const time = localTime + (layer.keyframeOffset ?? 0);
   if (time <= frames[0].time) return frames[0].value;
   const last = frames[frames.length - 1];
@@ -97,8 +136,14 @@ export function evaluateKeyframedLayer(layer: Layer, projectTime: number): Layer
   if (!KEYFRAME_PROPERTIES.some((property) => layer.keyframes?.[property]?.length)) return layer;
   const evaluated = { ...layer };
   for (const property of KEYFRAME_PROPERTIES) {
-    if (layer.keyframes?.[property]?.length)
-      evaluated[property] = evaluateKeyframeProperty(layer, property, projectTime - layer.start);
+    if (!layer.keyframes?.[property]?.length) continue;
+    const value = evaluateKeyframeProperty(layer, property, projectTime - layer.start);
+    if (isSpatial(property)) {
+      evaluated.transform3d = {
+        ...spatialTransform(evaluated),
+        [property === 'depth' ? 'z' : property]: value,
+      };
+    } else evaluated[property] = value;
   }
   return evaluated;
 }
@@ -118,6 +163,9 @@ export function upsertKeyframe(
   value = evaluateKeyframeProperty(layer, property, localTime),
   options: KeyframeOptions = {},
 ): Partial<Layer> {
+  if (layer.kind === 'audio') throw new Error('Property keyframes require a visual layer.');
+  if (property === 'textReveal' && layer.kind !== 'text')
+    throw new Error('Text reveal requires a text layer.');
   if (!Number.isFinite(value)) throw new Error('Keyframe value must be a finite number.');
   if (options.id !== undefined && (!options.id.trim() || options.id.length > 128))
     throw new Error('Choose a valid keyframe ID.');
@@ -180,6 +228,7 @@ export function upsertKeyframe(
     throw new Error('Keyframe time is outside the supported range.');
   return {
     keyframes: { ...keyframes, [property]: next },
+    ...(isSpatial(property) ? { transform3d: { ...spatialTransform(layer), enabled: true } } : {}),
     ...(offset !== (layer.keyframeOffset ?? 0) ? { keyframeOffset: offset } : {}),
   };
 }
@@ -221,11 +270,32 @@ export function keyframeGeometryPatch(
   let authored = layer;
   const localTime = Math.round((projectTime - layer.start) * fps) / fps;
   for (const property of KEYFRAME_PROPERTIES) {
-    if (typeof patch[property] !== 'number' || !layer.keyframes?.[property]?.length) continue;
-    const next = upsertKeyframe(authored, property, localTime, patch[property]);
+    const value = isSpatial(property)
+      ? patch.transform3d?.[property === 'depth' ? 'z' : property]
+      : patch[property];
+    if (typeof value !== 'number' || !layer.keyframes?.[property]?.length) continue;
+    // The 3D controls forward a complete evaluated transform. Only the edited
+    // axis should acquire a key; inserting untouched axes would reshape their
+    // existing Bézier segments. Compare at the actual display time before snap.
+    if (
+      isSpatial(property) &&
+      Math.abs(value - evaluateKeyframeProperty(layer, property, projectTime - layer.start)) < 1e-8
+    )
+      continue;
+    const next = upsertKeyframe(authored, property, localTime, value);
     authored = { ...authored, ...next };
     Object.assign(result, next);
-    delete result[property];
+    if (!isSpatial(property)) delete result[property];
+  }
+  // Preserve untracked 3D fields and shared-plane metadata while retaining the
+  // authored base value of tracked fields. Turning 3D off remains reversible.
+  if (patch.transform3d) {
+    const transform = { ...patch.transform3d };
+    for (const property of SPATIAL_KEYFRAME_PROPERTIES) {
+      if (layer.keyframes?.[property]?.length)
+        transform[property === 'depth' ? 'z' : property] = getKeyframeBaseValue(layer, property);
+    }
+    result.transform3d = transform;
   }
   return result;
 }
@@ -239,7 +309,6 @@ export function transformKeyframeGeometry(
     translateY = 0,
   }: { scale?: number; translateX?: number; translateY?: number },
 ): Partial<Layer> {
-  if (!layer.keyframes) return {};
   if (![scale, translateX, translateY].every(Number.isFinite) || scale <= 0)
     throw new Error('Choose a positive scale and finite translation.');
   const keyframes = { ...layer.keyframes };
@@ -253,5 +322,29 @@ export function transformKeyframeGeometry(
       return { ...frame, value };
     });
   }
-  return { keyframes };
+  const transform = layer.transform3d;
+  const shared =
+    transform?.originX !== undefined &&
+    transform.originY !== undefined &&
+    transform.perspectiveDistance !== undefined;
+  const transformed = shared
+    ? {
+        ...transform,
+        originX: transform.originX! * scale + translateX,
+        originY: transform.originY! * scale + translateY,
+        perspectiveDistance: transform.perspectiveDistance! * scale,
+      }
+    : undefined;
+  if (
+    transformed &&
+    (Math.abs(transformed.originX) > 100000 ||
+      Math.abs(transformed.originY) > 100000 ||
+      transformed.perspectiveDistance < 0.01 ||
+      transformed.perspectiveDistance > 1000000)
+  )
+    throw new Error('That transform would move the shared 3D plane outside the supported range.');
+  return {
+    ...(layer.keyframes ? { keyframes } : {}),
+    ...(transformed ? { transform3d: transformed } : {}),
+  };
 }

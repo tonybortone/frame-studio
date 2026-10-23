@@ -116,7 +116,7 @@ export default function ComponentLibrary({
                 title={preset.description}
                 onClick={() => insert(preset)}
               >
-                <TemplatePreview project={preview} />
+                <TemplatePreview project={preview} interactive={false} />
                 <span className="fs-component-preset-caption">
                   <span>
                     <strong>{preset.name}</strong>

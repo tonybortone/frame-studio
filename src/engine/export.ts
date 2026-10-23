@@ -1,6 +1,7 @@
 import type { Project } from '../core/types';
 import { hasElement3D } from '../core/element3d';
 import { evaluateKeyframedLayer } from '../core/keyframes';
+import { getLayerFont, getRevealGeometry, getTextRevealLines } from '../core/motionEffects';
 import { getMaskGeometry } from '../core/visualEffects';
 import { hasImageEffects } from './imageEffects';
 import {
@@ -225,7 +226,7 @@ export function exportSvg(project: Project, time: number, media?: MediaCache): B
   const active = project.layers.filter(
     (layer) => isLayerActive(layer, time) && layer.kind !== 'audio',
   );
-  if (active.some(hasElement3D))
+  if (active.some((layer) => hasElement3D(evaluateKeyframedLayer(layer, time))))
     throw new Error(
       'This frame contains 3D elements. Export PNG or video to preserve perspective, or turn off 3D on those elements before exporting SVG.',
     );
@@ -243,19 +244,57 @@ export function exportSvg(project: Project, time: number, media?: MediaCache): B
           : `${animation.scale}`;
       const transform = `translate(${layer.x + layer.width / 2 + animation.x} ${layer.y + layer.height / 2 + animation.y}) rotate(${layer.rotation}) scale(${scale}) translate(${-layer.width / 2} ${-layer.height / 2})`;
       const filter = `brightness(${layer.brightness}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
+      const blur = layer.blur ?? 0;
+      // Canvas filters are isotropic after the artwork transform. Compensate
+      // SVG's local filter axes when width and height animate independently.
+      const blurAxisRatio = Math.sqrt(
+        layer.height / authored.height / (layer.width / authored.width),
+      );
+      const blurX = blur * blurAxisRatio;
+      const blurY = blur / blurAxisRatio;
+      const deviation = Math.abs(blurX - blurY) < 1e-9 ? `${blur}` : `${blurX} ${blurY}`;
+      const blurId = `blur-${index}`;
+      const blurDefinition =
+        blur > 0
+          ? `<defs><filter id="${blurId}" filterUnits="userSpaceOnUse" x="${-blurX * 3}" y="${-blurY * 3}" width="${authored.width + blurX * 6}" height="${authored.height + blurY * 6}" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="${deviation}"/></filter></defs>`
+          : '';
+      const blurAttribute = blur > 0 ? ` filter="url(#${blurId})"` : '';
+      let textClipsBlur = false;
       let content = '';
       if (authored.kind === 'shape')
         content = `<rect width="${authored.width}" height="${authored.height}" rx="${Math.max(0, authored.radius)}" fill="${escapeXml(authored.fill)}"/>`;
       else if (authored.kind === 'text') {
         const size = authored.fontSize ?? 48;
-        content = `<text fill="${escapeXml(authored.fill)}" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="${size}" font-weight="${authored.fontWeight ?? 600}" dominant-baseline="text-before-edge">${(
-          authored.text ?? ''
-        )
+        const attributes = `fill="${escapeXml(authored.fill)}" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="${size}" font-weight="${authored.fontWeight ?? 600}" dominant-baseline="text-before-edge"`;
+        content = `<text ${attributes}>${(authored.text ?? '')
           .split('\n')
           .map(
             (line, index) => `<tspan x="0" y="${index * size * 1.12}">${escapeXml(line)}</tspan>`,
           )
           .join('')}</text>`;
+        if ((layer.textReveal ?? 1) < 1) {
+          textClipsBlur = true;
+          let measurement: CanvasRenderingContext2D | null | undefined;
+          content = getTextRevealLines(authored.text ?? '', layer.textReveal, layer.textRevealMode)
+            .map((line, lineIndex) => {
+              if (!line.visibleText) return '';
+              const text = `<text ${attributes} x="0" y="${lineIndex * size * 1.12}"${blurAttribute}>${escapeXml(line.text)}</text>`;
+              if (line.complete) return text;
+              measurement ??=
+                typeof document === 'undefined'
+                  ? null
+                  : document.createElement('canvas').getContext('2d');
+              if (!measurement)
+                throw new Error(
+                  'Text reveal SVG export requires canvas text measurement. Export from the app.',
+                );
+              measurement.font = getLayerFont(authored);
+              const width = measurement.measureText(line.visibleText).width;
+              const id = `text-reveal-${index}-${lineIndex}`;
+              return `<defs><clipPath id="${id}" clipPathUnits="userSpaceOnUse"><rect x="${-size}" y="${lineIndex * size * 1.12 - size * 0.3}" width="${size + width}" height="${size * 1.6}"/></clipPath></defs><g clip-path="url(#${id})">${text}</g>`;
+            })
+            .join('');
+        }
       } else if (authored.kind === 'image') {
         if (!authored.src?.startsWith('data:image/'))
           throw new Error('SVG export requires embedded image files.');
@@ -272,6 +311,8 @@ export function exportSvg(project: Project, time: number, media?: MediaCache): B
         );
         content = `<g transform="scale(${authored.width / width} ${authored.height / height}) translate(${-x} ${-y})"><path d="${escapeXml(authored.path)}" fill="${authored.kind === 'drawing' ? 'none' : escapeXml(authored.fill)}" stroke="${escapeXml(authored.stroke ?? 'none')}" stroke-width="${authored.strokeWidth ?? 3}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
       }
+      if (blur > 0)
+        content = `${blurDefinition}${textClipsBlur ? content : `<g${blurAttribute}>${content}</g>`}`;
       const mask = getMaskGeometry(authored);
       if (mask) {
         const geometry =
@@ -281,6 +322,10 @@ export function exportSvg(project: Project, time: number, media?: MediaCache): B
               ? `<polygon points="${mask.x + mask.width / 2},${mask.y} ${mask.x + mask.width},${mask.y + mask.height / 2} ${mask.x + mask.width / 2},${mask.y + mask.height} ${mask.x},${mask.y + mask.height / 2}"/>`
               : `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}"/>`;
         content = `<defs><clipPath id="mask-${index}" clipPathUnits="userSpaceOnUse">${geometry}</clipPath></defs><g clip-path="url(#mask-${index})">${content}</g>`;
+      }
+      const reveal = getRevealGeometry(authored, layer);
+      if (reveal) {
+        content = `<defs><clipPath id="reveal-${index}" clipPathUnits="userSpaceOnUse"><rect x="${reveal.x}" y="${reveal.y}" width="${reveal.width}" height="${reveal.height}"/></clipPath></defs><g clip-path="url(#reveal-${index})">${content}</g>`;
       }
       if (layer.width !== authored.width || layer.height !== authored.height)
         content = `<g transform="scale(${layer.width / authored.width} ${layer.height / authored.height})">${content}</g>`;

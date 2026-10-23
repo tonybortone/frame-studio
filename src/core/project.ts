@@ -203,6 +203,7 @@ export function duplicateLayers(layers: Layer[]): Layer[] {
     return {
       ...layer,
       id: uid(),
+      ...(layer.transform3d ? { transform3d: { ...layer.transform3d } } : {}),
       ...(layer.keyframes
         ? {
             keyframes: Object.fromEntries(
@@ -371,6 +372,11 @@ const LAYER_KEYS = [
   'keyframes',
   'keyframeOffset',
   'transform3d',
+  'blur',
+  'reveal',
+  'revealDirection',
+  'textReveal',
+  'textRevealMode',
   ...TIMING_KEYS,
   'brightness',
   'contrast',
@@ -457,6 +463,8 @@ function parseLayer(value: unknown): Layer {
     knownKeys(tracks, [...KEYFRAME_PROPERTIES], 'Property keyframes');
     layer.keyframes = {};
     for (const property of Object.keys(tracks) as KeyframeProperty[]) {
+      if (property === 'textReveal' && layer.kind !== 'text')
+        throw new Error('Text reveal keyframes require a text layer.');
       const values = tracks[property];
       if (!Array.isArray(values) || values.length > MAX_PROPERTY_KEYFRAMES)
         throw new Error(`A property must contain at most ${MAX_PROPERTY_KEYFRAMES} keyframes.`);
@@ -495,7 +503,11 @@ function parseLayer(value: unknown): Layer {
   if (item.transform3d !== undefined) {
     if (layer.kind === 'audio') throw new Error('3D transforms require a visual layer.');
     const transform = object(item.transform3d, '3D transform');
-    knownKeys(transform, ['enabled', 'rotateX', 'rotateY', 'z', 'motion'], '3D transform');
+    knownKeys(
+      transform,
+      ['enabled', 'rotateX', 'rotateY', 'z', 'motion', 'originX', 'originY', 'perspectiveDistance'],
+      '3D transform',
+    );
     if (typeof transform.enabled !== 'boolean')
       throw new Error('3D enabled must be true or false.');
     if (!['none', 'tilt-in', 'flip-in', 'float'].includes(transform.motion as string))
@@ -507,6 +519,45 @@ function parseLayer(value: unknown): Layer {
       z: number(transform.z, '3D depth', -100, 100),
       motion: transform.motion as NonNullable<Layer['transform3d']>['motion'],
     };
+    const planeFields = ['originX', 'originY', 'perspectiveDistance'] as const;
+    if (planeFields.some((field) => transform[field] !== undefined)) {
+      if (!planeFields.every((field) => transform[field] !== undefined))
+        throw new Error(
+          'A shared 3D plane requires both origin coordinates and a perspective distance.',
+        );
+      layer.transform3d.originX = number(transform.originX, '3D origin X', -100000, 100000);
+      layer.transform3d.originY = number(transform.originY, '3D origin Y', -100000, 100000);
+      layer.transform3d.perspectiveDistance = number(
+        transform.perspectiveDistance,
+        '3D perspective distance',
+        0.01,
+        1000000,
+      );
+    }
+  }
+  if (
+    layer.kind === 'audio' &&
+    ['blur', 'reveal', 'revealDirection', 'textReveal', 'textRevealMode'].some(
+      (field) => item[field] !== undefined,
+    )
+  )
+    throw new Error('Blur and reveal effects require a visual layer.');
+  if (item.blur !== undefined) layer.blur = number(item.blur, 'Blur', 0, 80);
+  if (item.reveal !== undefined) layer.reveal = number(item.reveal, 'Reveal', 0, 1);
+  if (item.revealDirection !== undefined) {
+    if (!['left', 'right', 'up', 'down', 'center'].includes(item.revealDirection as string))
+      throw new Error('Unsupported reveal direction.');
+    layer.revealDirection = item.revealDirection as Layer['revealDirection'];
+  }
+  if (item.textReveal !== undefined || item.textRevealMode !== undefined) {
+    if (layer.kind !== 'text') throw new Error('Text reveal requires a text layer.');
+    if (item.textReveal !== undefined)
+      layer.textReveal = number(item.textReveal, 'Text reveal', 0, 1);
+    if (item.textRevealMode !== undefined) {
+      if (!['characters', 'words'].includes(item.textRevealMode as string))
+        throw new Error('Unsupported text reveal mode.');
+      layer.textRevealMode = item.textRevealMode as Layer['textRevealMode'];
+    }
   }
   if (item.mask !== undefined) {
     if (!['none', 'rectangle', 'rounded', 'ellipse', 'diamond'].includes(item.mask as string))

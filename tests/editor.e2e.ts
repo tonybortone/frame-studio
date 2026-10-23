@@ -3,11 +3,20 @@ import { expect, test, type Download, type Page } from '@playwright/test';
 import { createLayer, createProject, parseProject } from '../src/core/project';
 import type { Layer, LayerKind, Project } from '../src/core/types';
 import { projectElementPoint } from '../src/core/element3d';
+import { evaluateKeyframedLayer } from '../src/core/keyframes';
 
 function editingMenu(page: Page, name: 'Design' | 'Motion' | 'Color' | 'Sound') {
   return page
     .getByRole('navigation', { name: 'Editing menus', exact: true })
     .getByRole('button', { name, exact: true });
+}
+
+async function revealSimpleMotionPresets(page: Page) {
+  const details = page
+    .getByRole('complementary', { name: 'Properties', exact: true })
+    .locator('details.inspector-basic-motion');
+  if (!(await details.evaluate((node) => node.hasAttribute('open'))))
+    await details.locator('summary').first().click();
 }
 
 async function downloadBytes(download: Download): Promise<Buffer> {
@@ -700,7 +709,7 @@ test('previews editable templates, applies a chapter layout, and restores the or
   const original = await saveProject(page);
   await page.getByRole('tab', { name: 'Templates', exact: true }).click();
   const library = page.getByRole('complementary', { name: 'Library' });
-  await expect(library.getByRole('button', { name: /^Use template:/ })).toHaveCount(7);
+  await expect(library.getByRole('button', { name: /^Use template:/ })).toHaveCount(10);
   const preview = library.getByRole('img', { name: 'Preview of Tutorial chapter', exact: true });
   await expect(preview).toBeAttached();
   const colors = await preview.evaluate((element) => {
@@ -1416,6 +1425,7 @@ test('applies a group-safe motion recipe in one undo step without changing compo
   const parts = before.layers.slice(6);
   const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
   await editingMenu(page, 'Motion').click();
+  await revealSimpleMotionPresets(page);
   await expect(properties.getByRole('button', { name: 'Pop', exact: true })).toBeDisabled();
   await properties.getByRole('button', { name: 'Rise', exact: true }).click();
   const after = await saveProject(page);
@@ -2082,6 +2092,7 @@ test('right-side editing menus open dedicated categories and retain selection an
   await motion.click();
   await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
   await expect(motion).toHaveAttribute('aria-pressed', 'true');
+  await revealSimpleMotionPresets(page);
   await expect(properties.getByRole('button', { name: 'Rise', exact: true })).toBeVisible();
   await motion.focus();
   await page.keyboard.press('Escape');
@@ -2100,6 +2111,7 @@ test('right-side editing menus open dedicated categories and retain selection an
   await expect(
     properties.getByRole('heading', { name: 'Motion', exact: true, level: 2 }),
   ).toBeVisible();
+  await revealSimpleMotionPresets(page);
   await properties.getByRole('button', { name: 'Rise', exact: true }).focus();
   await page.keyboard.press('Escape');
   await expect(properties).toHaveCount(0);
@@ -2592,6 +2604,7 @@ test('element 3D controls guard locked layers, audio, and multiple selection', a
   await expect(inspector.getByRole('slider', { name: '3D Tilt Y', exact: true })).toBeDisabled();
   await toggle.dispatchEvent('click');
   await editingMenu(page, 'Motion').click();
+  await revealSimpleMotionPresets(page);
   await expect(inspector.getByRole('button', { name: '3D Tilt in', exact: true })).toBeDisabled();
   await inspector.getByRole('button', { name: '3D Tilt in', exact: true }).dispatchEvent('click');
   await editingMenu(page, 'Design').click();
@@ -2668,10 +2681,12 @@ test('element 3D motion follows seeking and PNG output while SVG refuses active 
   await page.getByRole('button', { name: 'Timeline clip Perspective card', exact: true }).click();
   await editingMenu(page, 'Motion').click();
   const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  await revealSimpleMotionPresets(page);
   await inspector.getByRole('button', { name: '3D Tilt in', exact: true }).click();
   await editingMenu(page, 'Design').click();
   await inspector.getByRole('button', { name: 'Flat', exact: true }).click();
   await editingMenu(page, 'Motion').click();
+  await revealSimpleMotionPresets(page);
   await inspector.locator('summary').filter({ hasText: 'Fine-tune' }).click();
   await inspector.getByRole('spinbutton', { name: 'Delay (s)', exact: true }).fill('1');
   await inspector.getByRole('spinbutton', { name: 'Duration (s)', exact: true }).fill('1');
@@ -3864,4 +3879,703 @@ test('endpoint keyframe typing edits the selected final key and undoes the whole
   expect(await saveProject(page, fixture.name)).toEqual(before);
   await page.getByRole('button', { name: 'Redo', exact: true }).click();
   expect(await saveProject(page, fixture.name)).toEqual(authored);
+});
+
+async function selectLibraryLayers(page: Page, names: string[]) {
+  await page.getByRole('tab', { name: 'Layers', exact: true }).click();
+  const library = page.getByRole('complementary', { name: 'Library', exact: true });
+  for (const [index, name] of names.entries())
+    await library
+      .getByRole('button', { name, exact: true })
+      .click(index ? { modifiers: ['Shift'] } : {});
+}
+
+async function motionRecipes(page: Page) {
+  const motion = editingMenu(page, 'Motion');
+  if ((await motion.getAttribute('aria-pressed')) !== 'true') await motion.click();
+  const panel = page.getByRole('region', { name: 'Motion recipes', exact: true });
+  const picker = panel.locator('details.motion-recipe-picker');
+  if ((await picker.count()) && !(await picker.evaluate((node) => node.hasAttribute('open'))))
+    await picker.locator('summary').click();
+  return panel;
+}
+
+async function recipeTiming(page: Page, start: number) {
+  const panel = page.getByRole('region', { name: 'Motion recipes', exact: true });
+  const options = panel.locator('details.motion-recipe-options');
+  if (!(await options.evaluate((node) => node.hasAttribute('open'))))
+    await options.locator('summary').click();
+  await panel
+    .getByRole('combobox', { name: 'Recipe start mode', exact: true })
+    .selectOption('custom');
+  await panel
+    .getByRole('spinbutton', { name: 'Recipe start time (s)', exact: true })
+    .fill(String(start));
+}
+
+function recipeFixture(): Project {
+  return {
+    ...createProject(),
+    name: 'Recipe study',
+    width: 640,
+    height: 400,
+    duration: 8,
+    background: '#ffffff',
+    components: [],
+    layers: [
+      createLayer('shape', {
+        name: 'Red part',
+        x: 80,
+        y: 100,
+        width: 120,
+        height: 100,
+        fill: '#ff0000',
+        radius: 0,
+        duration: 8,
+        groupId: 'card',
+      }),
+      createLayer('shape', {
+        name: 'Blue part',
+        x: 200,
+        y: 100,
+        width: 120,
+        height: 100,
+        fill: '#0000ff',
+        radius: 0,
+        duration: 8,
+        groupId: 'card',
+      }),
+      createLayer('text', {
+        name: 'Words',
+        text: 'ONE TWO THREE',
+        x: 50,
+        y: 250,
+        width: 500,
+        height: 70,
+        fontSize: 48,
+        fill: '#000000',
+        duration: 8,
+      }),
+      createLayer('shape', {
+        name: 'Locked card',
+        x: 480,
+        y: 50,
+        width: 80,
+        height: 80,
+        fill: '#00ff00',
+        duration: 8,
+        locked: true,
+      }),
+      createLayer('audio', { name: 'Recipe sound', duration: 8 }),
+    ],
+  };
+}
+
+test('motion recipes create editable group keys on one shared plane with atomic undo redo and reopening', async ({
+  page,
+}) => {
+  const fixture = recipeFixture();
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  // Selecting one part must carry its group through the Together recipe.
+  await selectLibraryLayers(page, ['Red part']);
+  const panel = await motionRecipes(page);
+  await expect(panel.getByRole('button', { name: /^Choose motion:/ })).toHaveCount(10);
+  await panel.getByRole('button', { name: 'Choose motion: Tilt reveal', exact: true }).click();
+  await panel.getByRole('spinbutton', { name: 'Recipe duration (s)', exact: true }).fill('2');
+  await recipeTiming(page, 1);
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+  await panel.getByRole('button', { name: 'Apply tilt reveal', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('2 elements animated');
+  const authored = await saveProject(page, fixture.name);
+  for (const [index, layer] of authored.layers.slice(0, 2).entries()) {
+    for (const property of ['x', 'y', 'width', 'height', 'groupId'] as const)
+      expect(layer[property]).toBe(before.layers[index][property]);
+    expect(layer.transform3d?.enabled).toBe(true);
+    expect(layer.keyframes?.rotateX?.length).toBeGreaterThanOrEqual(2);
+    expect(layer.keyframes?.rotateY?.length).toBeGreaterThanOrEqual(2);
+    expect(layer.keyframes?.opacity?.[0]).toMatchObject({ time: 0, value: 0 });
+  }
+  const plane = authored.layers[0].transform3d!;
+  expect([plane.originX, plane.originY, plane.perspectiveDistance].every(Number.isFinite)).toBe(
+    true,
+  );
+  expect(authored.layers[1].transform3d).toMatchObject({
+    originX: plane.originX,
+    originY: plane.originY,
+    perspectiveDistance: plane.perspectiveDistance,
+  });
+  expect(authored.layers.slice(2)).toEqual(before.layers.slice(2));
+  const left = evaluateKeyframedLayer(authored.layers[0], 2);
+  const right = evaluateKeyframedLayer(authored.layers[1], 2);
+  const edgeA = projectElementPoint(left, 2, { x: left.width, y: left.height / 2 });
+  const edgeB = projectElementPoint(right, 2, { x: 0, y: right.height / 2 });
+  expect(edgeA.x).toBeCloseTo(edgeB.x, 5);
+  expect(edgeA.y).toBeCloseTo(edgeB.y, 5);
+  await jumpToTime(page, '2');
+  const edge = [[Math.round(edgeA.x), Math.round(edgeA.y)]];
+  const color = (await exportedPngPixels(page, edge))[0];
+  expect(color.slice(0, 3).some((value) => value < 200)).toBe(true);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+  await panel.getByRole('button', { name: 'Edit keyframes in timeline', exact: true }).click();
+  await expect(
+    page.getByRole('group', { name: 'Keyframes for Red part', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeEnabled();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+});
+
+test('motion recipes stagger reversed entries hide earlier frames and preserve locked and audio layers', async ({
+  page,
+}) => {
+  const fixture = recipeFixture();
+  fixture.layers[0].groupId = undefined;
+  fixture.layers[1].groupId = undefined;
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  await selectLibraryLayers(page, ['Red part', 'Blue part', 'Locked card', 'Recipe sound']);
+  const panel = await motionRecipes(page);
+  await panel.getByRole('button', { name: 'Choose motion: Soft rise', exact: true }).click();
+  await panel.getByRole('spinbutton', { name: 'Recipe duration (s)', exact: true }).fill('0.5');
+  await panel.getByRole('button', { name: 'One after another', exact: true }).click();
+  await recipeTiming(page, 1);
+  await panel.getByRole('spinbutton', { name: 'Recipe stagger (s)', exact: true }).fill('0.6');
+  await panel.getByRole('checkbox', { name: 'Reverse order', exact: true }).check();
+  await expect(
+    panel.getByRole('checkbox', { name: 'Hide until entry', exact: true }),
+  ).toBeChecked();
+  await panel.getByRole('button', { name: 'Apply soft rise', exact: true }).click();
+  const authored = await saveProject(page, fixture.name);
+  expect(authored.layers.slice(2)).toEqual(before.layers.slice(2));
+  const points = [
+    [140, 150],
+    [260, 150],
+  ];
+  await jumpToTime(page, '0.5');
+  await expect
+    .poll(() => previewPixels(page, points))
+    .toEqual([
+      [255, 255, 255, 255],
+      [255, 255, 255, 255],
+    ]);
+  await jumpToTime(page, '1.5');
+  await expect
+    .poll(() => previewPixels(page, points))
+    .toEqual([
+      [255, 255, 255, 255],
+      [0, 0, 255, 255],
+    ]);
+  await jumpToTime(page, '2.2');
+  await expect
+    .poll(() => previewPixels(page, points))
+    .toEqual([
+      [255, 0, 0, 255],
+      [0, 0, 255, 255],
+    ]);
+  await selectLibraryLayers(page, ['Words']);
+  const words = await motionRecipes(page);
+  await words.getByRole('button', { name: 'Choose motion: Type on', exact: true }).click();
+  await words
+    .getByRole('combobox', { name: 'Recipe text mode', exact: true })
+    .selectOption('words');
+  await words.getByRole('spinbutton', { name: 'Recipe duration (s)', exact: true }).fill('1');
+  await recipeTiming(page, 0.5);
+  await words.getByRole('button', { name: 'Apply type on', exact: true }).click();
+  const typed = await saveProject(page, fixture.name);
+  expect(typed.layers[2].textRevealMode).toBe('words');
+  expect(typed.layers[2].keyframes?.textReveal?.[0]).toMatchObject({ time: 0, value: 0 });
+  expect(typed.layers.slice(3)).toEqual(before.layers.slice(3));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+});
+
+test('extra animated properties expose editable effect keys and filtering does not alter the project', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture(false);
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  const keys = await openKeyframes(page);
+  const property = keys.getByRole('combobox', {
+    name: 'Add animated property for Keyframe card',
+    exact: true,
+  });
+  for (const id of ['tilt', 'depth', 'blur', 'reveal']) await property.selectOption(id);
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+  await jumpToTime(page, '1');
+  for (const name of ['3D tilt', 'Depth', 'Soft blur', 'Mask reveal'])
+    await keys
+      .getByRole('button', { name: `Add ${name} keyframe for Keyframe card`, exact: true })
+      .click();
+  await jumpToTime(page, '3');
+  for (const name of ['3D tilt', 'Depth', 'Soft blur', 'Mask reveal'])
+    await keys
+      .getByRole('button', { name: `Add ${name} keyframe for Keyframe card`, exact: true })
+      .click();
+  for (const [label, value] of [
+    ['3D tilt X', '20'],
+    ['3D tilt Y', '-25'],
+    ['Depth value', '30'],
+    ['Soft blur value', '8'],
+    ['Mask reveal value', '50'],
+  ])
+    await keys
+      .getByRole('spinbutton', { name: `${label} for Keyframe card`, exact: true })
+      .fill(value);
+  await keys
+    .getByRole('combobox', { name: 'Mask reveal direction for Keyframe card', exact: true })
+    .selectOption('right');
+  const authored = await saveProject(page, fixture.name);
+  expect(authored.layers[0].transform3d?.enabled).toBe(true);
+  for (const [name, value] of Object.entries({
+    rotateX: 20,
+    rotateY: -25,
+    depth: 30,
+    blur: 8,
+    reveal: 0.5,
+  }))
+    expect(
+      authored.layers[0].keyframes?.[name as keyof NonNullable<Layer['keyframes']>]?.at(-1),
+    ).toMatchObject({ time: 2, value });
+  expect(authored.layers[0].revealDirection).toBe('right');
+  await keys.getByRole('checkbox', { name: 'Animated only', exact: true }).check();
+  await expect(
+    keys.getByRole('group', { name: 'Position keyframes for Keyframe card', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    keys.getByRole('group', { name: 'Soft blur keyframes for Keyframe card', exact: true }),
+  ).toBeVisible();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+  const diamond = keys.getByRole('button', {
+    name: 'Soft blur keyframe at 2.00 seconds for Keyframe card',
+    exact: true,
+  });
+  await diamond.scrollIntoViewIfNeeded();
+  const bounds = (await diamond.boundingBox())!;
+  const pixels = Number(
+    await page.getByRole('slider', { name: 'Timeline zoom', exact: true }).inputValue(),
+  );
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width / 2 + pixels * 0.5, bounds.y + bounds.height / 2, {
+    steps: 6,
+  });
+  await page.mouse.up();
+  expect((await saveProject(page, fixture.name)).layers[0].keyframes!.blur!.at(-1)!.time).toBe(2.5);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+  await keys
+    .getByRole('button', {
+      name: 'Soft blur keyframe at 0.00 seconds for Keyframe card',
+      exact: true,
+    })
+    .click();
+  await keys
+    .getByRole('combobox', { name: 'Keyframe curve for Keyframe card', exact: true })
+    .selectOption('ease-in-out');
+  expect((await saveProject(page, fixture.name)).layers[0].keyframes!.blur![0].easing).toBe(
+    'ease-in-out',
+  );
+});
+
+test('3D inspector auto keys only the axis changed at the evaluated playhead and preserves redo on no-op', async ({
+  page,
+}) => {
+  const fixture = keyframeFixture(false);
+  fixture.layers[0].start = 0;
+  fixture.layers[0].transform3d = { enabled: true, rotateX: 5, rotateY: -5, z: 4, motion: 'none' };
+  fixture.layers[0].keyframes = {
+    rotateX: [
+      { id: 'rx0', time: 0, value: 0, easing: 'linear' },
+      { id: 'rx2', time: 2, value: 20, easing: 'linear' },
+    ],
+    rotateY: [
+      { id: 'ry0', time: 0, value: 0, easing: 'linear' },
+      { id: 'ry2', time: 2, value: 40, easing: 'linear' },
+    ],
+    depth: [
+      { id: 'z0', time: 0, value: 0, easing: 'linear' },
+      { id: 'z2', time: 2, value: 40, easing: 'linear' },
+    ],
+  };
+  await openProjectFixture(page, fixture);
+  await page.getByRole('button', { name: 'Timeline clip Keyframe card', exact: true }).click();
+  await jumpToTime(page, '1');
+  const before = await saveProject(page, fixture.name);
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  const x = inspector.getByRole('spinbutton', { name: '3D Tilt X value', exact: true });
+  await expect(x).toHaveValue('10');
+  await x.fill('15');
+  await x.press('Enter');
+  const authored = await saveProject(page, fixture.name);
+  expect(authored.layers[0].keyframes!.rotateX!.map(({ time }) => time)).toEqual([0, 1, 2]);
+  expect(authored.layers[0].keyframes!.rotateX![1].value).toBe(15);
+  expect(authored.layers[0].keyframes!.rotateY).toEqual(before.layers[0].keyframes!.rotateY);
+  expect(authored.layers[0].keyframes!.depth).toEqual(before.layers[0].keyframes!.depth);
+  expect(authored.layers[0].transform3d).toEqual(before.layers[0].transform3d);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+  await x.fill('10');
+  await x.press('Enter');
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+  const keys = await openKeyframes(page);
+  await jumpToTime(page, '1');
+  const timelineX = keys.getByRole('spinbutton', {
+    name: '3D tilt X for Keyframe card',
+    exact: true,
+  });
+  await timelineX.fill('18');
+  await timelineX.press('Enter');
+  const timelineEdit = await saveProject(page, fixture.name);
+  expect(timelineEdit.layers[0].keyframes!.rotateX![1].value).toBe(18);
+  expect(timelineEdit.layers[0].keyframes!.rotateY).toEqual(authored.layers[0].keyframes!.rotateY);
+  expect(timelineEdit.layers[0].keyframes!.depth).toEqual(authored.layers[0].keyframes!.depth);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+});
+
+test('animated soft blur and directional mask reveal render actual pixels consistently in PNG', async ({
+  page,
+}) => {
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Effect pixels',
+    width: 400,
+    height: 220,
+    duration: 4,
+    background: '#ffffff',
+    components: [],
+    layers: [
+      createLayer('shape', {
+        name: 'Soft red card',
+        x: 40,
+        y: 40,
+        width: 80,
+        height: 80,
+        radius: 0,
+        fill: '#ff0000',
+        duration: 4,
+        keyframes: {
+          blur: [
+            { id: 'b0', time: 0, value: 0, easing: 'linear' },
+            { id: 'b2', time: 2, value: 12, easing: 'linear' },
+          ],
+        },
+      }),
+      createLayer('shape', {
+        name: 'Blue wipe',
+        x: 200,
+        y: 40,
+        width: 160,
+        height: 100,
+        radius: 0,
+        fill: '#0000ff',
+        mask: 'ellipse',
+        duration: 4,
+        revealDirection: 'left',
+        keyframes: {
+          reveal: [
+            { id: 'w0', time: 0, value: 0, easing: 'linear' },
+            { id: 'w2', time: 2, value: 1, easing: 'linear' },
+          ],
+        },
+      }),
+    ],
+  };
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  const points = [
+    [35, 80],
+    [80, 80],
+    [240, 90],
+    [320, 90],
+  ];
+  await jumpToTime(page, '0');
+  expect(await previewPixels(page, points)).toEqual([
+    [255, 255, 255, 255],
+    [255, 0, 0, 255],
+    [255, 255, 255, 255],
+    [255, 255, 255, 255],
+  ]);
+  await jumpToTime(page, '1');
+  await expect.poll(async () => (await previewPixels(page, points))[0][1]).toBeLessThan(250);
+  const middle = await previewPixels(page, points);
+  expect(middle[0][1]).toBeGreaterThan(0);
+  expectUniformPixels([middle[1]], [255, 0, 0, 255], 'Blurred center', 2);
+  expect(middle[2]).toEqual([0, 0, 255, 255]);
+  expect(middle[3]).toEqual([255, 255, 255, 255]);
+  const png = await exportedPngPixels(page, points);
+  // Chromium's GPU and software Gaussian filters can differ slightly at a soft edge.
+  for (const [index, pixel] of png.entries())
+    expectUniformPixels([pixel], middle[index], `Effect PNG ${index}`, index === 0 ? 6 : 2);
+  await jumpToTime(page, '2');
+  await expect.poll(async () => (await previewPixels(page, points))[3]).toEqual([0, 0, 255, 255]);
+  expect(await saveProject(page, fixture.name)).toEqual(before);
+});
+
+test('text reveal by word and character changes visible letters while PNG preserves the same layout', async ({
+  page,
+}) => {
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Text reveal pixels',
+    width: 640,
+    height: 180,
+    duration: 4,
+    background: '#ffffff',
+    components: [],
+    layers: [
+      createLayer('text', {
+        name: 'Revealing words',
+        text: 'ONE TWO THREE',
+        x: 30,
+        y: 30,
+        width: 580,
+        height: 110,
+        fontSize: 56,
+        fontWeight: 500,
+        fill: '#000000',
+        duration: 4,
+        textRevealMode: 'words',
+        keyframes: {
+          textReveal: [
+            { id: 't0', time: 0, value: 0, easing: 'linear' },
+            { id: 't2', time: 2, value: 1, easing: 'linear' },
+          ],
+        },
+      }),
+    ],
+  };
+  await openProjectFixture(page, fixture);
+  const keys = await openKeyframes(page, 'Revealing words');
+  const points = Array.from({ length: 55 }, (_, y) =>
+    Array.from({ length: 290 }, (_, x) => [30 + x * 2, 25 + y * 2]),
+  ).flat();
+  const count = (pixels: number[][]) =>
+    pixels.filter((pixel) => pixel[0] < 100 && pixel[1] < 100 && pixel[2] < 100).length;
+  const width = (pixels: number[][]) =>
+    Math.max(...pixels.flatMap((pixel, index) => (pixel[0] < 100 ? [points[index][0]] : [])));
+  const expectTextPng = async (preview: number[][]) => {
+    const png = await exportedPngPixels(page, points);
+    // Exclude the antialiased glyph edge; preview readback and PNG can use different
+    // Chromium raster backends. Solid glyph interiors and visible text extents agree.
+    const stable = preview.flatMap((pixel, index) => {
+      const x = index % 290,
+        y = Math.floor(index / 290);
+      if (x < 1 || x >= 289 || y < 1 || y >= 54 || pixel[0] > 5) return [];
+      const interior = [-1, 0, 1].every((dy) =>
+        [-1, 0, 1].every((dx) => preview[index + dy * 290 + dx][0] < 10),
+      );
+      return interior ? [index] : [];
+    });
+    expect(stable.length).toBeGreaterThan(15);
+    expectUniformPixels(
+      stable.map((index) => png[index]),
+      [0, 0, 0, 255],
+      'Text PNG interiors',
+      10,
+    );
+    expect(Math.abs(width(png) - width(preview))).toBeLessThanOrEqual(2);
+  };
+  await jumpToTime(page, '0');
+  expect(count(await previewPixels(page, points))).toBe(0);
+  await jumpToTime(page, '1');
+  const words = await previewPixels(page, points);
+  expect(count(words)).toBeGreaterThan(200);
+  await expectTextPng(words);
+  await jumpToTime(page, '1');
+  await keys
+    .getByRole('combobox', { name: 'Text reveal mode for Revealing words', exact: true })
+    .selectOption('characters');
+  const characters = await previewPixels(page, points);
+  expect(count(characters)).toBeGreaterThan(count(words) * 1.2);
+  expect(width(characters)).toBeGreaterThan(width(words) + 30);
+  await expectTextPng(characters);
+  const saved = await saveProject(page, fixture.name);
+  expect(saved.layers[0].text).toBe(fixture.layers[0].text);
+  expect(saved.layers[0].width).toBe(fixture.layers[0].width);
+  expect(saved.layers[0].textRevealMode).toBe('characters');
+});
+
+test('motion templates instantiate editable projects and preview with bounded rendering while respecting reduced motion', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const before = await saveProject(page);
+  await page.evaluate(() => {
+    const target = window as unknown as { __templatePaints: Record<string, number[]> };
+    target.__templatePaints = {};
+    const states = new WeakMap<
+      CanvasRenderingContext2D,
+      { depth: number; start: number; name: string }
+    >();
+    const save = CanvasRenderingContext2D.prototype.save;
+    const restore = CanvasRenderingContext2D.prototype.restore;
+    CanvasRenderingContext2D.prototype.save = function () {
+      const name = this.canvas.getAttribute('aria-label') ?? '';
+      if (name.startsWith('Preview of ')) {
+        const state = states.get(this) ?? { depth: 0, start: 0, name };
+        if (state.depth === 0) state.start = performance.now();
+        state.depth++;
+        states.set(this, state);
+      }
+      return save.call(this);
+    };
+    CanvasRenderingContext2D.prototype.restore = function () {
+      const result = restore.call(this),
+        state = states.get(this);
+      if (state && --state.depth === 0)
+        (target.__templatePaints[state.name] ??= []).push(performance.now() - state.start);
+      return result;
+    };
+  });
+  await page.getByRole('tab', { name: 'Templates', exact: true }).click();
+  const library = page.getByRole('complementary', { name: 'Library', exact: true });
+  const results: { name: string; median: number; p95: number; frames: number }[] = [];
+  for (const name of ['Product fly-through', 'Card choreography', 'Words in motion']) {
+    const preview = library
+      .getByRole('img', { name: `Preview of ${name}`, exact: true })
+      .locator('..');
+    await preview.scrollIntoViewIfNeeded();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await preview.hover();
+    await preview.focus();
+    await expect(preview).toHaveAttribute('aria-pressed', 'false');
+    const still = await preview
+      .locator('canvas')
+      .evaluate((canvas) => (canvas as HTMLCanvasElement).toDataURL());
+    await page.waitForTimeout(140);
+    expect(
+      await preview
+        .locator('canvas')
+        .evaluate((canvas) => (canvas as HTMLCanvasElement).toDataURL()),
+    ).toBe(still);
+    await page.getByRole('button', { name: 'Export', exact: true }).focus();
+    await page.mouse.move(750, 60);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await preview.hover();
+    await expect(preview).toHaveAttribute('aria-pressed', 'true');
+    await expect
+      .poll(() =>
+        preview.locator('canvas').evaluate((canvas) => (canvas as HTMLCanvasElement).toDataURL()),
+      )
+      .not.toBe(still);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (name) =>
+            (window as unknown as { __templatePaints: Record<string, number[]> }).__templatePaints[
+              `Preview of ${name}`
+            ]?.length ?? 0,
+          name,
+        ),
+      )
+      .toBeGreaterThanOrEqual(32);
+    const samples = await page.evaluate(
+      (name) =>
+        (window as unknown as { __templatePaints: Record<string, number[]> }).__templatePaints[
+          `Preview of ${name}`
+        ]
+          .slice(2)
+          .sort((a, b) => a - b),
+      name,
+    );
+    const median = samples[Math.floor(samples.length / 2)],
+      p95 = samples[Math.floor((samples.length - 1) * 0.95)];
+    expect(p95, `${name} 95th-percentile preview paint`).toBeLessThan(150);
+    results.push({ name, median, p95, frames: samples.length });
+    await page.mouse.move(750, 60);
+    await library.getByRole('button', { name: `Use template: ${name}`, exact: true }).click();
+    const project = await saveProject(page, name);
+    expect([project.width, project.height]).toEqual([1920, 1080]);
+    expect(project.layers.length).toBeGreaterThan(3);
+    expect(project.layers.every((layer) => ['shape', 'text', 'svg'].includes(layer.kind))).toBe(
+      true,
+    );
+    expect(project.layers.some((layer) => Object.keys(layer.keyframes ?? {}).length > 0)).toBe(
+      true,
+    );
+    expect(project.layers.every((layer) => !layer.src)).toBe(true);
+    if (name === 'Product fly-through') {
+      const spatial = project.layers.filter((layer) => layer.transform3d?.enabled);
+      expect(spatial.length).toBeGreaterThan(20);
+      expect(
+        new Set(
+          spatial.map(
+            (layer) =>
+              `${layer.transform3d!.originX}:${layer.transform3d!.originY}:${layer.transform3d!.perspectiveDistance}`,
+          ),
+        ).size,
+      ).toBe(1);
+    }
+    await jumpToTime(page, '2');
+    const pixels = await page.getByLabel('Composition canvas').evaluate((canvas) => {
+      const context = (canvas as HTMLCanvasElement).getContext('2d')!;
+      const { width, height } = canvas as HTMLCanvasElement;
+      const pixels = context.getImageData(0, 0, width, height).data;
+      const colors = [];
+      for (let y = 0; y < height; y += 10)
+        for (let x = 0; x < width; x += 10) {
+          const index = (y * width + x) * 4;
+          colors.push(Array.from(pixels.slice(index, index + 4)).join(','));
+        }
+      return colors;
+    });
+    expect(new Set(pixels).size).toBeGreaterThan(1);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    expect(await saveProject(page)).toEqual(before);
+    await page.getByRole('tab', { name: 'Templates', exact: true }).click();
+  }
+  await test.info().attach('template-preview-render-times.json', {
+    body: JSON.stringify(results, null, 2),
+    contentType: 'application/json',
+  });
+  console.log('Template preview render timing:', JSON.stringify(results));
+});
+
+test('motion recipe options and extra keyframe lanes remain reachable at narrow editor sizes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1000, height: 700 });
+  const fixture = recipeFixture();
+  await openProjectFixture(page, fixture);
+  const before = await saveProject(page, fixture.name);
+  await selectLibraryLayers(page, ['Words']);
+  const panel = await motionRecipes(page);
+  await panel.getByRole('button', { name: 'Choose motion: Type on', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Apply type on', exact: true })).toBeInViewport();
+  await panel.getByRole('button', { name: 'One after another', exact: true }).click();
+  await recipeTiming(page, 1);
+  const inspector = page.getByRole('complementary', { name: 'Properties', exact: true });
+  for (const control of await panel.locator('input,select,button').all()) {
+    if (!(await control.isVisible())) continue;
+    await control.scrollIntoViewIfNeeded();
+    await expect(control).toBeInViewport();
+    const box = (await control.boundingBox())!,
+      bounds = (await inspector.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+  }
+  await panel.getByRole('button', { name: 'Edit keyframes in timeline', exact: true }).click();
+  const keys = page.getByRole('group', { name: 'Keyframes for Words', exact: true });
+  const add = keys.getByRole('combobox', { name: 'Add animated property for Words', exact: true });
+  for (const id of ['tilt', 'depth', 'blur', 'reveal', 'text']) await add.selectOption(id);
+  for (const name of ['3D tilt', 'Depth', 'Soft blur', 'Mask reveal', 'Text reveal']) {
+    const row = keys.getByRole('group', { name: `${name} keyframes for Words`, exact: true });
+    await row.getByRole('spinbutton').first().scrollIntoViewIfNeeded();
+    for (const input of await row.getByRole('spinbutton').all()) {
+      await expect(input).toBeInViewport();
+      const box = (await input.boundingBox())!;
+      expect(box.width).toBeGreaterThan(40);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(1000);
+    }
+  }
+  expect(await saveProject(page, fixture.name)).toEqual(before);
 });

@@ -9,6 +9,7 @@ import {
 import { getMaskGeometry } from '../core/visualEffects';
 import { getElement3DState } from '../core/element3d';
 import { evaluateKeyframedLayer } from '../core/keyframes';
+import { getLayerFont, getRevealGeometry, getTextRevealLines } from '../core/motionEffects';
 import { drawProjectedLayer } from './projectedLayer';
 import { ProcessedImageCache } from './imageEffects';
 
@@ -277,7 +278,19 @@ export function animationState(
 }
 
 /** Draw local content once; 2D, perspective preview, PNG, and video share it. */
-function drawLayerContents(ctx: CanvasRenderingContext2D, layer: Layer, media: MediaCache): void {
+function drawLayerContents(
+  ctx: CanvasRenderingContext2D,
+  layer: Layer,
+  media: MediaCache,
+  effects: Layer,
+): void {
+  const reveal = getRevealGeometry(layer, effects);
+  if (reveal) {
+    if (!reveal.width || !reveal.height) return;
+    ctx.beginPath();
+    ctx.rect(reveal.x, reveal.y, reveal.width, reveal.height);
+    ctx.clip();
+  }
   const mask = getMaskGeometry(layer);
   if (mask) {
     ctx.beginPath();
@@ -300,7 +313,12 @@ function drawLayerContents(ctx: CanvasRenderingContext2D, layer: Layer, media: M
     } else ctx.roundRect(mask.x, mask.y, mask.width, mask.height, mask.radius);
     ctx.clip();
   }
-  ctx.filter = `brightness(${layer.brightness}) contrast(${layer.contrast}) saturate(${layer.saturation})`;
+  // Canvas filter lengths are device pixels. Account for preview/texture scale
+  // so a soft blur has the same authored radius in previews and full exports.
+  const matrix = ctx.getTransform?.();
+  const pixelScale = matrix ? Math.sqrt(Math.abs(matrix.a * matrix.d - matrix.b * matrix.c)) : 1;
+  const blur = (effects.blur ?? 0) * pixelScale;
+  ctx.filter = `brightness(${layer.brightness}) contrast(${layer.contrast}) saturate(${layer.saturation})${blur > 0 ? ` blur(${blur}px)` : ''}`;
   ctx.fillStyle = layer.fill;
   if (layer.kind === 'shape') {
     ctx.beginPath();
@@ -308,11 +326,29 @@ function drawLayerContents(ctx: CanvasRenderingContext2D, layer: Layer, media: M
     ctx.fill();
   } else if (layer.kind === 'text') {
     const size = layer.fontSize ?? 48;
-    ctx.font = `${layer.fontWeight ?? 600} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.font = getLayerFont(layer);
     ctx.textBaseline = 'top';
-    (layer.text ?? '')
-      .split('\n')
-      .forEach((line, index) => ctx.fillText(line, 0, index * size * 1.12));
+    getTextRevealLines(layer.text ?? '', effects.textReveal ?? 1, effects.textRevealMode).forEach(
+      (line, index) => {
+        if (!line.visibleText) return;
+        if (line.complete) ctx.fillText(line.text, 0, index * size * 1.12);
+        else {
+          // Paint the complete line under a measured clip. Kerning, ligatures,
+          // line breaks, and the positions of unrevealed words stay unchanged.
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(
+            -size,
+            index * size * 1.12 - size * 0.3,
+            size + ctx.measureText(line.visibleText).width,
+            size * 1.6,
+          );
+          ctx.clip();
+          ctx.fillText(line.text, 0, index * size * 1.12);
+          ctx.restore();
+        }
+      },
+    );
   } else if (layer.kind === 'svg' || layer.kind === 'drawing') {
     if (layer.path) {
       const [x, y, width, height] = parseViewBox(layer.viewBox, layer.width, layer.height);
@@ -384,12 +420,12 @@ export function renderFrame(
     // The same painter is used for flat output and perspective textures.
     const paint = (context: CanvasRenderingContext2D) => {
       if (layer.width === authored.width && layer.height === authored.height) {
-        drawLayerContents(context, authored, media);
+        drawLayerContents(context, authored, media, layer);
         return;
       }
       context.save();
       context.scale(layer.width / authored.width, layer.height / authored.height);
-      drawLayerContents(context, authored, media);
+      drawLayerContents(context, authored, media, layer);
       context.restore();
     };
     if (spatial.rotateX !== 0 || spatial.rotateY !== 0 || spatial.z !== 0) {
@@ -405,6 +441,10 @@ export function renderFrame(
             ctx.canvas.width / project.width,
             ctx.canvas.height / project.height,
           ),
+          padding:
+            (layer.blur ?? 0) *
+            Math.max(layer.width / authored.width, layer.height / authored.height) *
+            3,
         },
         paint,
       );

@@ -10,12 +10,12 @@ Initial scope: a React/TypeScript editor with an Electron shell; semantic layer 
 
 **Exit criteria:** a short composition can be created, edited, saved, reopened, previewed, and exported; automated model checks and the renderer build pass; known import/export limits are documented; a local Mac package can be exercised.
 
-**Current constraints:** embedded media and a 50 MB import limit, a flat layer model, a limited SVG subset, preset-based motion with editable timing and easing, and real-time capture. This phase does not establish professional editor parity or a signed public download.
+**Current constraints:** embedded media and a 50 MB import limit, a flat layer model, a limited SVG subset, scalar keyframes and baked motion recipes rather than a hierarchical animation system, and real-time capture. This phase does not establish professional editor parity or a signed public download.
 
 ## 1 — Reliable everyday editing
 
 - Improve selection, snapping, alignment, keyboard commands, and discoverability.
-- Unify current-time transforms for rendering, hit-testing, selection outlines and handles.
+- Continue checking current-time transforms across rendering, hit-testing, selection outlines and handles, including perspective and animated effects.
 - Repair the SVG export/import contract so supported exported artwork can be imported again without losing editable structure.
 - Extend the existing numeric clip controls with real audio waveforms and more precise timeline navigation.
 - Strengthen undo/redo coverage, validation, error recovery, and project compatibility.
@@ -39,8 +39,10 @@ Initial scope: a React/TypeScript editor with an Electron shell; semantic layer 
 ## 3 — Motion authoring
 
 - Shipped in alpha17: editable Position, Size, Rotation and Opacity keyframes, draggable timing diamonds, and temporal Bézier handles. See the [keyframe guide](keyframes.md).
-- Extend property animation to selected effects, spring-like presets, and spatial motion paths.
-- Extend the existing static shape masks with animated masks, track mattes, transitions, camera-style framing, and motion paths.
+- Alpha18 adds 3D tilt/depth, soft blur, directional/center mask reveal and character/word text reveal tracks: 12 scalar channels in total.
+- Alpha18 adds ten recipes that bake editable keys, including grouped spring overshoot, staged entrances and camera-style website tours. Shared perspective origins keep grouped pieces on one plane. Three editable motion templates demonstrate the workflow. See [motion recipes](motion-recipes.md).
+- Extend these tools with spatial motion paths, per-character transform animators, editable mask vertices/feathering, track mattes and clip transitions.
+- Define hierarchical transforms and scene-camera behavior beyond the current baked pan/zoom/tilt recipes. Temporal motion blur remains separate from Gaussian soft focus.
 - Let users save and reuse motion treatments independently of content.
 - Explore simple frame-by-frame/pencil animation with onion-skin previews.
 

@@ -57,7 +57,7 @@ interface Props {
   checkpoint: () => void;
   onExpand?: (keyframes?: boolean) => void;
   resetScrollKey?: number;
-  motionRequest?: number;
+  motionRequest?: { id: number; keyframes: boolean };
   onPreviewLayer: (layer: Layer) => void;
 }
 export default function Timeline({
@@ -71,7 +71,7 @@ export default function Timeline({
   checkpoint,
   onExpand,
   resetScrollKey = 0,
-  motionRequest = 0,
+  motionRequest = { id: 0, keyframes: false },
   onPreviewLayer,
 }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
@@ -95,7 +95,7 @@ export default function Timeline({
   }, []);
   const activeGesture = useRef<(() => void) | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const previousMotionRequest = useRef(motionRequest);
+  const previousMotionRequest = useRef(motionRequest.id);
   const [viewportWidth, setViewportWidth] = useState(1000);
   useEffect(() => {
     const node = scroller.current;
@@ -128,13 +128,16 @@ export default function Timeline({
     if (expandedId && !project.layers.some((layer) => layer.id === expandedId)) setExpandedId(null);
   }, [expandedId, project.layers]);
   useEffect(() => {
-    if (motionRequest === previousMotionRequest.current) return;
-    previousMotionRequest.current = motionRequest;
+    if (motionRequest.id === previousMotionRequest.current) return;
+    previousMotionRequest.current = motionRequest.id;
     if (selected.length !== 1) return;
     const layer = project.layers.find((item) => item.id === selected[0]);
     if (!layer || layer.kind === 'audio') return;
     setExpandedId(layer.id);
-    onExpand?.(Object.values(layer.keyframes ?? {}).some((track) => track?.length));
+    onExpand?.(
+      motionRequest.keyframes ||
+        Object.values(layer.keyframes ?? {}).some((track) => track?.length),
+    );
   }, [motionRequest, selected, project.layers, onExpand]);
   useLayoutEffect(() => {
     if (!expandedId) return;
@@ -422,6 +425,9 @@ export default function Timeline({
             time={time}
             compositionDuration={project.duration}
             seek={seek}
+            keyframesRequest={
+              motionRequest.keyframes && selected.includes(layer.id) ? motionRequest.id : 0
+            }
             onKeyframesOpen={() => onExpand?.(true)}
             change={change}
             checkpoint={checkpoint}

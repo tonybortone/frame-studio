@@ -9,7 +9,8 @@ import type { Layer } from '../core/types';
 
 const MAX_EDGE = 2048;
 const MAX_PIXELS = 4_000_000;
-const SUBDIVISIONS = 12;
+const MAX_SUBDIVISIONS = 12;
+const MESH_ERROR_PIXELS = 0.6;
 
 interface Buffers {
   texture: HTMLCanvasElement;
@@ -33,6 +34,74 @@ function fitScale(width: number, height: number, requested: number): number {
 }
 
 type Triangle = [ElementPoint, ElementPoint, ElementPoint];
+
+type LocalBounds = { x: number; y: number; width: number; height: number };
+
+/** Estimate actual affine-triangle error, including the diagonal's cross-axis error. */
+function projectionError(
+  project: (point: ElementPoint) => ElementPoint,
+  bounds: LocalBounds,
+  columns: number,
+  rows: number,
+): number {
+  let worst = 0;
+  const at = (u: number, v: number) =>
+    project({ x: bounds.x + u * bounds.width, y: bounds.y + v * bounds.height });
+  const error = (u: number, v: number, points: ElementPoint[]) => {
+    const actual = at(u, v);
+    const x = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+    const y = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+    worst = Math.max(worst, Math.hypot(actual.x - x, actual.y - y));
+  };
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const u = column / columns,
+        v = row / rows,
+        du = 1 / columns,
+        dv = 1 / rows;
+      const tl = at(u, v),
+        tr = at(u + du, v),
+        bl = at(u, v + dv),
+        br = at(u + du, v + dv);
+      error(u + du / 2, v, [tl, tr]);
+      error(u + du / 2, v + dv, [bl, br]);
+      error(u, v + dv / 2, [tl, bl]);
+      error(u + du, v + dv / 2, [tr, br]);
+      error(u + du / 2, v + dv / 2, [tl, br]);
+      error(u + (du * 2) / 3, v + dv / 3, [tl, tr, br]);
+      error(u + du / 3, v + (dv * 2) / 3, [tl, br, bl]);
+    }
+  }
+  return worst;
+}
+
+/** Small near-affine labels use one cell; large tilted plates gain detail only where needed. */
+export function chooseProjectionMesh(
+  project: (point: ElementPoint) => ElementPoint,
+  bounds: LocalBounds,
+  pixelScale: number,
+): { columns: number; rows: number } {
+  const tolerance = MESH_ERROR_PIXELS / Math.max(0.001, pixelScale);
+  let columns = 1,
+    rows = 1;
+  let error = projectionError(project, bounds, columns, rows);
+  while (error > tolerance && (columns < MAX_SUBDIVISIONS || rows < MAX_SUBDIVISIONS)) {
+    const nextColumns = Math.min(MAX_SUBDIVISIONS, columns * 2);
+    const nextRows = Math.min(MAX_SUBDIVISIONS, rows * 2);
+    const horizontal =
+      columns < MAX_SUBDIVISIONS ? projectionError(project, bounds, nextColumns, rows) : Infinity;
+    const vertical =
+      rows < MAX_SUBDIVISIONS ? projectionError(project, bounds, columns, nextRows) : Infinity;
+    if (horizontal < vertical || (horizontal === vertical && bounds.width >= bounds.height)) {
+      columns = nextColumns;
+      error = horizontal;
+    } else {
+      rows = nextRows;
+      error = vertical;
+    }
+  }
+  return { columns, rows };
+}
 
 /** Map one texture triangle to a projected triangle with a local affine transform. */
 function drawTriangle(
@@ -82,10 +151,21 @@ export function drawProjectedLayer(
   layer: Layer,
   time: number,
   animation: Element2DMotion & { opacity: number },
-  viewport: { width: number; height: number; pixelScale: number },
+  viewport: { width: number; height: number; pixelScale: number; padding?: number },
   paint: (context: CanvasRenderingContext2D) => void,
 ): void {
-  const bounds = getQuadBounds(getElement3DQuad(layer, time, animation));
+  const padding = Math.max(0, viewport.padding ?? 0);
+  const project = createElementProjector(layer, time, animation);
+  const bounds = getQuadBounds(
+    padding
+      ? [
+          project({ x: -padding, y: -padding }),
+          project({ x: layer.width + padding, y: -padding }),
+          project({ x: layer.width + padding, y: layer.height + padding }),
+          project({ x: -padding, y: layer.height + padding }),
+        ]
+      : getElement3DQuad(layer, time, animation),
+  );
   const left = Math.max(0, Math.floor(bounds.x) - 1);
   const top = Math.max(0, Math.floor(bounds.y) - 1);
   const right = Math.min(viewport.width, Math.ceil(bounds.x + bounds.width) + 1);
@@ -117,9 +197,11 @@ export function drawProjectedLayer(
   // Match thumbnail resolution while retaining detail when perspective brings the
   // element closer. The same calculation preserves full-resolution export quality.
   const magnification = Math.max(1, bounds.width / layer.width, bounds.height / layer.height);
-  const textureScale = fitScale(layer.width, layer.height, viewport.pixelScale * magnification);
-  const textureWidth = Math.max(1, Math.floor(layer.width * textureScale));
-  const textureHeight = Math.max(1, Math.floor(layer.height * textureScale));
+  const localWidth = layer.width + padding * 2;
+  const localHeight = layer.height + padding * 2;
+  const textureScale = fitScale(localWidth, localHeight, viewport.pixelScale * magnification);
+  const textureWidth = Math.max(1, Math.floor(localWidth * textureScale));
+  const textureHeight = Math.max(1, Math.floor(localHeight * textureScale));
   resize(pair.texture, textureWidth, textureHeight);
   const texture = pair.texture.getContext('2d');
   const composite = pair.composite.getContext('2d');
@@ -128,25 +210,30 @@ export function drawProjectedLayer(
   texture.setTransform(1, 0, 0, 1, 0, 0);
   texture.clearRect(0, 0, textureWidth, textureHeight);
   texture.save();
-  texture.scale(textureWidth / layer.width, textureHeight / layer.height);
+  texture.scale(textureWidth / localWidth, textureHeight / localHeight);
+  if (padding) texture.translate(padding, padding);
   texture.translate(layer.flipX ? layer.width : 0, layer.flipY ? layer.height : 0);
   texture.scale(layer.flipX ? -1 : 1, layer.flipY ? -1 : 1);
   paint(texture);
   texture.restore();
 
   const outputScale = fitScale(width, height, viewport.pixelScale);
+  const { columns, rows } = chooseProjectionMesh(
+    project,
+    { x: -padding, y: -padding, width: localWidth, height: localHeight },
+    outputScale,
+  );
   const compositeWidth = Math.max(1, Math.floor(width * outputScale));
   const compositeHeight = Math.max(1, Math.floor(height * outputScale));
   resize(pair.composite, compositeWidth, compositeHeight);
   composite.setTransform(1, 0, 0, 1, 0, 0);
   composite.clearRect(0, 0, compositeWidth, compositeHeight);
-  const project = createElementProjector(layer, time, animation);
   const nodes: Array<{ source: ElementPoint; target: ElementPoint }> = [];
-  for (let row = 0; row <= SUBDIVISIONS; row++) {
-    for (let column = 0; column <= SUBDIVISIONS; column++) {
-      const u = column / SUBDIVISIONS;
-      const v = row / SUBDIVISIONS;
-      const point = project({ x: u * layer.width, y: v * layer.height });
+  for (let row = 0; row <= rows; row++) {
+    for (let column = 0; column <= columns; column++) {
+      const u = column / columns;
+      const v = row / rows;
+      const point = project({ x: u * localWidth - padding, y: v * localHeight - padding });
       nodes.push({
         source: { x: u * textureWidth, y: v * textureHeight },
         target: {
@@ -156,11 +243,11 @@ export function drawProjectedLayer(
       });
     }
   }
-  for (let row = 0; row < SUBDIVISIONS; row++) {
-    for (let column = 0; column < SUBDIVISIONS; column++) {
-      const tl = row * (SUBDIVISIONS + 1) + column;
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const tl = row * (columns + 1) + column;
       const tr = tl + 1;
-      const bl = tl + SUBDIVISIONS + 1;
+      const bl = tl + columns + 1;
       const br = bl + 1;
       for (const indices of [
         [tl, tr, br],

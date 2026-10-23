@@ -6,6 +6,7 @@ import {
   upsertKeyframe,
   removeKeyframe,
   moveKeyframe,
+  KEYFRAME_LIMITS,
 } from '../core/keyframes';
 import KeyframeCurveEditor from './KeyframeCurveEditor';
 import './TimelineKeyframeEditor.css';
@@ -15,8 +16,22 @@ const GROUPS = [
   { id: 'size', name: 'Size', properties: ['width', 'height'], labels: ['W', 'H'], unit: 'px' },
   { id: 'rotation', name: 'Rotation', properties: ['rotation'], labels: ['value'], unit: '°' },
   { id: 'opacity', name: 'Opacity', properties: ['opacity'], labels: ['value'], unit: '%' },
+  {
+    id: 'tilt',
+    name: '3D tilt',
+    properties: ['rotateX', 'rotateY'],
+    labels: ['X', 'Y'],
+    unit: '°',
+  },
+  { id: 'depth', name: 'Depth', properties: ['depth'], labels: ['value'], unit: '%' },
+  { id: 'blur', name: 'Soft blur', properties: ['blur'], labels: ['value'], unit: 'px' },
+  { id: 'reveal', name: 'Mask reveal', properties: ['reveal'], labels: ['value'], unit: '%' },
+  { id: 'text', name: 'Text reveal', properties: ['textReveal'], labels: ['value'], unit: '%' },
 ] as const;
 type Group = (typeof GROUPS)[number];
+const BASIC_GROUPS = new Set(['position', 'size', 'rotation', 'opacity']);
+const displayScale = (property: KeyframeProperty) =>
+  ['opacity', 'reveal', 'textReveal'].includes(property) ? 100 : 1;
 interface GroupKey {
   id: string;
   time: number;
@@ -53,7 +68,7 @@ function groupKeys(layer: Layer, group: Group): GroupKey[] {
 }
 const firstFrame = (key: GroupKey) => Object.values(key.frames)[0]!;
 
-/** Four approachable lanes backed by six independent, persisted property tracks. */
+/** Basic lanes stay visible; extra effects appear only when requested or animated. */
 export default function TimelineKeyframeEditor({
   layer,
   fps,
@@ -67,6 +82,8 @@ export default function TimelineKeyframeEditor({
 }: Props) {
   const [selected, setSelected] = useState<{ group: Group['id']; id: string } | null>(null);
   const [error, setError] = useState('');
+  const [extraGroups, setExtraGroups] = useState<string[]>([]);
+  const [animatedOnly, setAnimatedOnly] = useState(false);
   const gesture = useRef<(() => void) | null>(null);
   const selectionPanel = useRef<HTMLDivElement>(null);
   const expectedSeek = useRef<number | null>(null);
@@ -84,6 +101,8 @@ export default function TimelineKeyframeEditor({
   useEffect(() => {
     setSelected(null);
     setError('');
+    setExtraGroups([]);
+    setAnimatedOnly(false);
     gesture.current?.();
   }, [layer.id]);
   useEffect(() => {
@@ -111,6 +130,8 @@ export default function TimelineKeyframeEditor({
     let draft = layer;
     try {
       for (const property of target.properties) {
+        // Numeric edits touch only the field being edited; diamond insertion remains paired.
+        if (values && values[property] === undefined) continue;
         draft = {
           ...draft,
           ...upsertKeyframe(
@@ -127,7 +148,14 @@ export default function TimelineKeyframeEditor({
     }
     setError('');
     if (!record) beginNumberEdit();
-    edit({ keyframes: draft.keyframes, keyframeOffset: draft.keyframeOffset }, record);
+    edit(
+      {
+        keyframes: draft.keyframes,
+        keyframeOffset: draft.keyframeOffset,
+        transform3d: draft.transform3d,
+      },
+      record,
+    );
     const added = groupKeys(draft, target).find((entry) => near(entry.time, at));
     if (added) setSelected({ group: target.id, id: added.id });
     seekKeyTime(at);
@@ -147,7 +175,11 @@ export default function TimelineKeyframeEditor({
       const frame = entry.frames[property];
       if (frame) draft = { ...draft, ...moveKeyframe(draft, property, frame.id, at) };
     }
-    return { keyframes: draft.keyframes, keyframeOffset: draft.keyframeOffset };
+    return {
+      keyframes: draft.keyframes,
+      keyframeOffset: draft.keyframeOffset,
+      transform3d: draft.transform3d,
+    };
   };
   const moveTo = (target: Group, entry: GroupKey, at: number, record = true) => {
     const next = snap(at, fps, layer.duration);
@@ -243,7 +275,87 @@ export default function TimelineKeyframeEditor({
               : 'Move the playhead inside this clip to add a keyframe.')}
         </small>
       </div>
-      {GROUPS.map((target) => {
+      <div className="keyframe-extra-tools">
+        <label>
+          <span>Add an animated property</span>
+          <select
+            aria-label={`Add animated property for ${layer.name}`}
+            value=""
+            disabled={locked}
+            onChange={(event) => {
+              const id = event.currentTarget.value;
+              if (id) {
+                setExtraGroups((groups) => [...groups, id]);
+                setAnimatedOnly(false);
+              }
+            }}
+          >
+            <option value="">+ Add property</option>
+            {GROUPS.filter(
+              (item) =>
+                !BASIC_GROUPS.has(item.id) &&
+                !extraGroups.includes(item.id) &&
+                !item.properties.some((property) => layer.keyframes?.[property]?.length) &&
+                (item.id !== 'text' || layer.kind === 'text'),
+            ).map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {(extraGroups.includes('reveal') || layer.keyframes?.reveal?.length) && (
+          <label>
+            <span>Mask direction</span>
+            <select
+              aria-label={`Mask reveal direction for ${layer.name}`}
+              value={layer.revealDirection ?? 'left'}
+              disabled={locked}
+              onChange={(event) =>
+                edit({ revealDirection: event.currentTarget.value as Layer['revealDirection'] })
+              }
+            >
+              <option value="left">From left</option>
+              <option value="right">From right</option>
+              <option value="up">From top</option>
+              <option value="down">From bottom</option>
+              <option value="center">From center</option>
+            </select>
+          </label>
+        )}
+        {layer.kind === 'text' &&
+          (extraGroups.includes('text') || layer.keyframes?.textReveal?.length) && (
+            <label>
+              <span>Reveal text by</span>
+              <select
+                aria-label={`Text reveal mode for ${layer.name}`}
+                value={layer.textRevealMode ?? 'characters'}
+                disabled={locked}
+                onChange={(event) =>
+                  edit({ textRevealMode: event.currentTarget.value as Layer['textRevealMode'] })
+                }
+              >
+                <option value="characters">Character</option>
+                <option value="words">Word</option>
+              </select>
+            </label>
+          )}
+        <label className="keyframe-animated-only">
+          <input
+            type="checkbox"
+            checked={animatedOnly}
+            onChange={(event) => setAnimatedOnly(event.currentTarget.checked)}
+          />
+          Animated only
+        </label>
+      </div>
+      {GROUPS.filter((item) =>
+        animatedOnly
+          ? item.properties.some((property) => layer.keyframes?.[property]?.length)
+          : BASIC_GROUPS.has(item.id) ||
+            extraGroups.includes(item.id) ||
+            item.properties.some((property) => layer.keyframes?.[property]?.length),
+      ).map((target) => {
         const entries = groupKeys(layer, target);
         // A selected endpoint may be beyond the last displayable composition frame.
         const editingTime = key && selected?.group === target.id ? key.time : localTime;
@@ -297,8 +409,7 @@ export default function TimelineKeyframeEditor({
               <div className="keyframe-values">
                 {target.properties.map((property, index) => {
                   const value =
-                    evaluateKeyframeProperty(layer, property, editingTime) *
-                    (property === 'opacity' ? 100 : 1);
+                    evaluateKeyframeProperty(layer, property, editingTime) * displayScale(property);
                   return (
                     <label key={property}>
                       <span>
@@ -308,16 +419,10 @@ export default function TimelineKeyframeEditor({
                         type="number"
                         aria-label={`${target.name} ${target.labels[index]} for ${layer.name}`}
                         value={Number(value.toFixed(2))}
-                        step={property === 'opacity' ? 1 : 0.1}
+                        step={displayScale(property) === 100 ? 1 : 0.1}
                         disabled={locked || !inside}
-                        min={
-                          property === 'opacity'
-                            ? 0
-                            : property === 'width' || property === 'height'
-                              ? 0.01
-                              : undefined
-                        }
-                        max={property === 'opacity' ? 100 : undefined}
+                        min={KEYFRAME_LIMITS[property][0] * displayScale(property)}
+                        max={KEYFRAME_LIMITS[property][1] * displayScale(property)}
                         onFocus={() => {
                           numberGesture.current = false;
                         }}
@@ -331,7 +436,7 @@ export default function TimelineKeyframeEditor({
                               target,
                               editingTime,
                               {
-                                [property]: value / (property === 'opacity' ? 100 : 1),
+                                [property]: value / displayScale(property),
                               },
                               false,
                             );
@@ -458,7 +563,14 @@ export default function TimelineKeyframeEditor({
                       }),
                     };
                 }
-                edit({ keyframes: draft.keyframes, keyframeOffset: draft.keyframeOffset }, record);
+                edit(
+                  {
+                    keyframes: draft.keyframes,
+                    keyframeOffset: draft.keyframeOffset,
+                    transform3d: draft.transform3d,
+                  },
+                  record,
+                );
               }}
             />
           </>

@@ -79,7 +79,15 @@ export function createElementProjector(
   animation: Element2DMotion = STILL,
 ): (point: ElementPoint) => ElementPoint {
   const state = getElement3DState(layer, time);
-  const distance = 2.5 * Math.max(1, layer.width, layer.height);
+  const transform = layer.transform3d;
+  const sharedPlane =
+    hasElement3D(layer) &&
+    transform?.originX !== undefined &&
+    transform.originY !== undefined &&
+    transform.perspectiveDistance !== undefined;
+  const distance = sharedPlane
+    ? Math.max(0.01, transform.perspectiveDistance!)
+    : 2.5 * Math.max(1, layer.width, layer.height);
   const depth = (clampDepth(state.z) / 100) * distance * 0.5;
   const cx = Math.cos(radians(state.rotateX));
   const sx = Math.sin(radians(state.rotateX));
@@ -90,8 +98,16 @@ export function createElementProjector(
   const centerX = layer.x + layer.width / 2 + animation.x;
   const centerY = layer.y + layer.height / 2 + animation.y;
   return (point) => {
-    const x = point.x - layer.width / 2;
-    const y = point.y - layer.height / 2;
+    const localX = point.x - layer.width / 2;
+    const localY = point.y - layer.height / 2;
+    // A shared plane transforms canvas positions around one common origin.
+    // Individual in-plane rotations remain part of each member's artwork pose.
+    const x = sharedPlane
+      ? centerX + (localX * cz - localY * sz) * animation.scale - transform.originX!
+      : localX;
+    const y = sharedPlane
+      ? centerY + (localX * sz + localY * cz) * animation.scale - transform.originY!
+      : localY;
     // X tilt, Y turn, then the existing in-plane Z rotation.
     const turnedX = x * cy + y * sx * sy;
     const tiltedY = y * cx;
@@ -99,6 +115,11 @@ export function createElementProjector(
     // Valid authored bounds stay comfortably behind this near plane. The clamp
     // also keeps external callers and numerical edge cases finite.
     const perspective = distance / Math.max(distance * 0.1, distance - depth - turnedZ);
+    if (sharedPlane)
+      return {
+        x: transform.originX! + turnedX * perspective,
+        y: transform.originY! + tiltedY * perspective,
+      };
     return {
       x: centerX + (turnedX * cz - tiltedY * sz) * perspective * animation.scale,
       y: centerY + (turnedX * sz + tiltedY * cz) * perspective * animation.scale,

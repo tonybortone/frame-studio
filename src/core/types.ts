@@ -5,7 +5,19 @@ export type AnimationEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
 export type ExitAnimation =
   'none' | 'fade' | 'reverse' | 'rise' | 'fall' | 'slide-left' | 'slide-right' | 'shrink';
 export type LoopAnimation = 'none' | 'float' | 'pulse';
-export type KeyframeProperty = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'opacity';
+export type KeyframeProperty =
+  | 'x'
+  | 'y'
+  | 'width'
+  | 'height'
+  | 'rotation'
+  | 'opacity'
+  | 'rotateX'
+  | 'rotateY'
+  | 'depth'
+  | 'blur'
+  | 'reveal'
+  | 'textReveal';
 export type KeyframeEasing = AnimationEasing | 'hold' | 'custom';
 export type KeyframeCurve = [number, number, number, number];
 export interface PropertyKeyframe {
@@ -20,6 +32,8 @@ export interface PropertyKeyframe {
 export type LayerKeyframes = Partial<Record<KeyframeProperty, PropertyKeyframe[]>>;
 export type LayerMask = 'none' | 'rectangle' | 'rounded' | 'ellipse' | 'diamond';
 export type Element3DMotion = 'none' | 'tilt-in' | 'flip-in' | 'float';
+export type RevealDirection = 'left' | 'right' | 'up' | 'down' | 'center';
+export type TextRevealMode = 'characters' | 'words';
 /** Perspective of one visual plane, independent of the inspection camera. */
 export interface Element3DTransform {
   enabled: boolean;
@@ -28,6 +42,10 @@ export interface Element3DTransform {
   /** Normalized depth, -100 (farther) to 100 (closer). */
   z: number;
   motion: Element3DMotion;
+  /** Supply these three values together to tilt several editable layers as one plane. */
+  originX?: number;
+  originY?: number;
+  perspectiveDistance?: number;
 }
 export interface BackgroundRemoval {
   color: string;
@@ -86,6 +104,14 @@ export interface Layer {
   /** Sampling origin retained by split/trim so Bézier segments remain exact. */
   keyframeOffset?: number;
   transform3d?: Element3DTransform;
+  /** Soft Gaussian blur in authored artwork pixels, not temporal motion blur. */
+  blur?: number;
+  /** Local wipe progress: 0 is hidden, 1 is fully visible. */
+  reveal?: number;
+  revealDirection?: RevealDirection;
+  /** Text reveal preserves the full text's original positions and line breaks. */
+  textReveal?: number;
+  textRevealMode?: TextRevealMode;
   /** Linear gain ramps applied to audio and video sound in preview and export. */
   audioFadeIn?: number;
   audioFadeOut?: number;

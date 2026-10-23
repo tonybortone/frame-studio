@@ -113,7 +113,8 @@ export default function LayerDepthStage({
     ? evaluateKeyframedLayer(movableLayers[0], time)
     : undefined;
   const depthLayer = selectedLayers.length === 1 ? selectedLayers[0] : null;
-  const elementLayer = selected.length === 1 ? (depthLayer ?? undefined) : undefined;
+  const elementLayer =
+    selected.length === 1 && depthLayer ? evaluateKeyframedLayer(depthLayer, time) : undefined;
   const depthIndex = depthLayer ? visuals.findIndex((layer) => layer.id === depthLayer.id) : 0;
   const projection: DepthProjection = {
     viewportWidth: size.width,

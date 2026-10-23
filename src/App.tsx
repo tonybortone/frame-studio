@@ -58,7 +58,7 @@ import { sampleBackgroundColor } from './engine/imageEffects';
 import {
   evaluateKeyframedLayer,
   transformKeyframeGeometry,
-  KEYFRAME_PROPERTIES,
+  GEOMETRY_KEYFRAME_PROPERTIES,
 } from './core/keyframes';
 import { geometryEditPatch } from './core/geometryEditing';
 
@@ -108,7 +108,7 @@ export default function App() {
   } | null>(null);
   const [timelineZoom, setTimelineZoom] = useState(66);
   const [timelineResetKey, setTimelineResetKey] = useState(0);
-  const [timelineMotionRequest, setTimelineMotionRequest] = useState(0);
+  const [timelineMotionRequest, setTimelineMotionRequest] = useState({ id: 0, keyframes: false });
   const [playbackSession, setPlaybackSession] = useState(0);
   const previewEnd = useRef<number | null>(null);
   const [timelineHeight, setTimelineHeight] = useState(() =>
@@ -201,7 +201,8 @@ export default function App() {
   const change = useCallback(
     (id: string, patch: Partial<Layer>, record = true) => {
       if (
-        KEYFRAME_PROPERTIES.some((property) => patch[property] !== undefined) ||
+        GEOMETRY_KEYFRAME_PROPERTIES.some((property) => patch[property] !== undefined) ||
+        ['transform3d', 'blur', 'reveal', 'textReveal'].some((property) => property in patch) ||
         'keyframes' in patch
       )
         setPlaying(false);
@@ -272,7 +273,7 @@ export default function App() {
         if (transformed[index] === evaluated[index]) return layer;
         const next = transformed[index];
         const patch: Partial<Layer> = {};
-        for (const property of KEYFRAME_PROPERTIES) {
+        for (const property of GEOMETRY_KEYFRAME_PROPERTIES) {
           if (next[property] !== evaluated[index][property]) patch[property] = next[property];
         }
         // Keyed Size scales local content at render time. Static objects retain their style scaling.
@@ -944,7 +945,15 @@ export default function App() {
             time={time}
             selected={selected}
             change={change}
-            updateProject={(patch) => update((p) => ({ ...p, ...patch }))}
+            updateProject={(patch) => {
+              if (patch.layers) setPlaying(false);
+              update((p) => ({ ...p, ...patch }));
+            }}
+            editKeys={(id) => {
+              setPlaying(false);
+              setSelected([id]);
+              setTimelineMotionRequest((request) => ({ id: request.id + 1, keyframes: true }));
+            }}
             duplicate={duplicate}
             remove={remove}
             group={group}
@@ -990,7 +999,9 @@ export default function App() {
               aria-label="Edit selected motion"
               className="timeline-labeled-action timeline-motion-action"
               disabled={selectedLayers.length !== 1 || selectedLayers[0]?.kind === 'audio'}
-              onClick={() => setTimelineMotionRequest((value) => value + 1)}
+              onClick={() =>
+                setTimelineMotionRequest((value) => ({ id: value.id + 1, keyframes: false }))
+              }
             >
               <Layers3 size={16} />
               <span>Motion</span>

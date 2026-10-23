@@ -1,5 +1,6 @@
 import { createLayer, createProject } from './project';
 import type { Animation, Layer, Project } from './types';
+import { MOTION_TEMPLATES } from './motionTemplates';
 
 export interface ProjectTemplate {
   id: string;
@@ -89,6 +90,7 @@ function scene(
 
 /** Original, media-free layouts. Preview thumbnails render these exact project objects. */
 export const TEMPLATES: ProjectTemplate[] = [
+  ...MOTION_TEMPLATES,
   {
     id: 'blank',
     name: 'Blank canvas',
