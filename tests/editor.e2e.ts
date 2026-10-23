@@ -1946,3 +1946,72 @@ test('brush strokes use the chosen width and color and save as vector data', asy
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   expect(await saveProject(page)).toEqual(original);
 });
+
+test('canvas size menu preserves redo for the current size and applies valid custom dimensions with Enter', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  const trigger = page.getByRole('button', { name: 'Canvas size', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Canvas size settings', exact: true });
+  await trigger.click();
+  await expect(dialog.getByRole('button', { name: 'Landscape 16:9', exact: true })).toBeFocused();
+  await dialog.getByRole('button', { name: 'Portrait 9:16', exact: true }).click();
+  await trigger.click();
+  await expect(dialog.getByRole('button', { name: 'Portrait 9:16', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  const redo = page.getByRole('button', { name: 'Redo', exact: true });
+  await expect(redo).toBeEnabled();
+  await trigger.click();
+  await dialog.getByRole('button', { name: 'Landscape 16:9', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(redo).toBeEnabled();
+  expect(await saveProject(page)).toEqual(original);
+  await trigger.click();
+  const width = dialog.getByRole('spinbutton', { name: 'Canvas width', exact: true });
+  const height = dialog.getByRole('spinbutton', { name: 'Canvas height', exact: true });
+  await width.fill('15');
+  await expect(width).toHaveAttribute('aria-invalid', 'true');
+  await expect(dialog.getByRole('button', { name: /^Apply size/ })).toBeDisabled();
+  await expect(dialog.getByRole('alert')).toContainText('between 16 and 16,384');
+  await width.fill('1280');
+  await height.fill('720');
+  await dialog.getByRole('checkbox', { name: 'Fit contents to frame', exact: true }).uncheck();
+  await height.press('Enter');
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toContainText('1280 × 720');
+  const resized = await saveProject(page);
+  expect([resized.width, resized.height]).toEqual([1280, 720]);
+  expect(resized.layers).toEqual(original.layers);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page)).toEqual(original);
+});
+
+test('canvas size menu fits a short window and discards swapped dimensions when closed', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1000, height: 520 });
+  const original = await saveProject(page);
+  const trigger = page.getByRole('button', { name: 'Canvas size', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Canvas size settings', exact: true });
+  await trigger.click();
+  const bounds = (await dialog.boundingBox())!;
+  expect(bounds.x).toBeGreaterThanOrEqual(12);
+  expect(bounds.y).toBeGreaterThanOrEqual(12);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(988);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(508);
+  const width = dialog.getByRole('spinbutton', { name: 'Canvas width', exact: true });
+  const height = dialog.getByRole('spinbutton', { name: 'Canvas height', exact: true });
+  await dialog.getByRole('button', { name: 'Swap canvas width and height', exact: true }).click();
+  await expect(width).toHaveValue('1080');
+  await expect(height).toHaveValue('1920');
+  await expect(page.getByLabel('Composition canvas')).toHaveAttribute('width', '1920');
+  await dialog.getByRole('button', { name: 'Close canvas size', exact: true }).click();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await expect(width).toHaveValue('1920');
+  await expect(height).toHaveValue('1080');
+  await page.keyboard.press('Escape');
+  expect(await saveProject(page)).toEqual(original);
+});
