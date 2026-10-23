@@ -12,6 +12,7 @@ import {
   Spline,
   ChevronDown,
   Volume2,
+  MousePointer2,
 } from '../icons';
 import {
   useCallback,
@@ -23,10 +24,12 @@ import {
   type PointerEvent,
 } from 'react';
 import { LAYER_COLORS, type Layer, type Project } from '../core/types';
+import { timecode } from '../core/timecode';
+export { timecode } from '../core/timecode';
 import TimelineMotionEditor from './TimelineMotionEditor';
 import './Timeline.css';
 
-const LABEL_WIDTH = 184;
+const LABEL_WIDTH = 212;
 export const kindIcons = {
   video: Video,
   audio: Music2,
@@ -36,12 +39,6 @@ export const kindIcons = {
   svg: Spline,
   drawing: PenTool,
 };
-export function timecode(time: number, fps = 30) {
-  const frames = Math.max(0, Math.round(time * fps));
-  const seconds = Math.floor(frames / fps);
-  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}:${String(frames % fps).padStart(2, '0')}`;
-}
-
 function rulerTimeLabel(time: number) {
   const seconds = Math.floor(time);
   return seconds < 60
@@ -60,6 +57,8 @@ interface Props {
   checkpoint: () => void;
   onExpand?: () => void;
   resetScrollKey?: number;
+  motionRequest?: number;
+  onPreviewLayer: (layer: Layer) => void;
 }
 export default function Timeline({
   project,
@@ -72,6 +71,8 @@ export default function Timeline({
   checkpoint,
   onExpand,
   resetScrollKey = 0,
+  motionRequest = 0,
+  onPreviewLayer,
 }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const rulerScroll = useRef<HTMLDivElement>(null);
@@ -94,6 +95,7 @@ export default function Timeline({
   }, []);
   const activeGesture = useRef<(() => void) | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const previousMotionRequest = useRef(motionRequest);
   const [viewportWidth, setViewportWidth] = useState(1000);
   useEffect(() => {
     const node = scroller.current;
@@ -125,6 +127,15 @@ export default function Timeline({
   useEffect(() => {
     if (expandedId && !project.layers.some((layer) => layer.id === expandedId)) setExpandedId(null);
   }, [expandedId, project.layers]);
+  useEffect(() => {
+    if (motionRequest === previousMotionRequest.current) return;
+    previousMotionRequest.current = motionRequest;
+    if (selected.length !== 1) return;
+    const layer = project.layers.find((item) => item.id === selected[0]);
+    if (!layer || layer.kind === 'audio') return;
+    setExpandedId(layer.id);
+    onExpand?.();
+  }, [motionRequest, selected, project.layers, onExpand]);
   useLayoutEffect(() => {
     if (!expandedId) return;
     const row = expandedTrack.current;
@@ -276,6 +287,12 @@ export default function Timeline({
     const active = selected.includes(layer.id);
     const expanded = expandedId === layer.id;
     const audio = layer.kind === 'audio';
+    const animated =
+      !audio &&
+      (layer.animation !== 'none' ||
+        ((layer.exitDuration ?? 0) > 0 && layer.exitAnimation !== 'none') ||
+        (layer.loopAnimation && layer.loopAnimation !== 'none') ||
+        (layer.transform3d?.enabled && layer.transform3d.motion !== 'none'));
     return (
       <div
         className={`timeline-track-group ${expanded ? 'is-expanded' : ''}`}
@@ -345,7 +362,7 @@ export default function Timeline({
               tabIndex={0}
               aria-label={`Timeline clip ${layer.name}`}
               aria-pressed={active}
-              title={`${layer.name}${layer.locked ? ' · Locked' : ''}${audio && layer.muted ? ' · Muted' : ''}${layer.groupId ? ' · Grouped' : ''}${!audio && (layer.animation !== 'none' || (layer.exitDuration ?? 0) > 0 || (layer.transform3d?.enabled && layer.transform3d.motion !== 'none')) ? ' · Motion applied' : ''}`}
+              title={`${layer.name}${layer.locked ? ' · Locked' : ''}${audio && layer.muted ? ' · Muted' : ''}${layer.groupId ? ' · Grouped' : ''}${animated ? ' · Motion applied' : ''}`}
               className={`timeline-clip ${active ? 'selected' : ''} ${layer.hidden ? 'is-hidden' : ''} ${layer.locked ? 'is-locked' : ''} ${audio && layer.muted ? 'is-muted' : ''}`}
               style={
                 {
@@ -380,6 +397,9 @@ export default function Timeline({
                 <Icon size={12} aria-hidden="true" />
               )}
               <span className="clip-name">{layer.name}</span>
+              {animated && layer.duration * pixels > 180 && (
+                <span className="clip-status clip-motion-status">Motion</span>
+              )}
               {audio && layer.muted && <span className="clip-status">Muted</span>}
               <div
                 className="trim-handle right"
@@ -397,6 +417,8 @@ export default function Timeline({
             laneWidth={width}
             change={change}
             checkpoint={checkpoint}
+            onClose={() => setExpandedId(null)}
+            onPreview={onPreviewLayer}
           />
         )}
       </div>
@@ -418,7 +440,7 @@ export default function Timeline({
           '--timeline-viewport-width': `${viewportWidth}px`,
           '--grid-step': `${tickInterval * pixels}px`,
           '--grid-width': `${project.duration * pixels}px`,
-          '--audio-band-height': `${Math.min(2, audioLayers.length) * 26 + 26}px`,
+          '--audio-band-height': `${Math.min(2, audioLayers.length) * 32 + 28}px`,
         } as CSSProperties
       }
     >
@@ -431,6 +453,17 @@ export default function Timeline({
           <div className="track-heading">
             <span>Layers</span>
             <small>{project.layers.length}</small>
+            <button
+              type="button"
+              aria-label="Reveal playhead"
+              title="Bring the current time into view"
+              onClick={() =>
+                syncHorizontal(time * pixels - Math.max(0, viewportWidth - LABEL_WIDTH) / 2)
+              }
+            >
+              <MousePointer2 size={13} />
+              <span>Locate</span>
+            </button>
           </div>
           <div
             className="ruler-scale"

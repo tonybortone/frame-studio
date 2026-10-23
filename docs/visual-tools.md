@@ -42,6 +42,10 @@ This works best for logos, product cutouts, screenshots, and graphics against a 
 
 Background removal and image color replacement currently support still images. Video can use masks, flips, and the existing color adjustments, but does not use these pixel-cleanup effects.
 
+## Motion in the timeline
+
+Select a layer and click **Motion** in the timeline toolbar. Entrance, Loop, and Exit have separate controls, including direction, travel, period, and easing. **Preview clip** plays that interval; **Reset** removes motion in one undoable change. See the [timeline and motion guide](timeline-motion.md) for timing and limits.
+
 ## Give one element a 3D pose or animation
 
 Select exactly one visual layer and open **Design → 3D element**. Enable the switch, pick a tilt pose or adjust **Tilt X**, **Tilt Y**, and **Depth**. Positive depth brings that element closer; negative moves it farther. Existing Rotation controls its in-plane rotation. **Reset 3D** removes the pose and 3D motion; switching off keeps settings for reuse. Locked layers cannot be changed.

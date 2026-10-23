@@ -1,5 +1,11 @@
 import type { Layer, Project } from '../core/types';
-import { audioEnvelope, easeProgress, getMotionTiming } from '../core/motion';
+import {
+  audioEnvelope,
+  easeProgress,
+  getAnimationDistance,
+  getLoopTiming,
+  getMotionTiming,
+} from '../core/motion';
 import { getMaskGeometry } from '../core/visualEffects';
 import { getElement3DState } from '../core/element3d';
 import { drawProjectedLayer } from './projectedLayer';
@@ -210,19 +216,62 @@ export function animationState(
   const { delay, duration, exitDuration } = getMotionTiming(layer);
   const progress = duration > 0 ? (elapsed - delay) / duration : elapsed >= delay ? 1 : 0;
   const eased = easeProgress(progress, layer.animationEasing);
-  const exit =
+  const leaving =
     exitDuration > 0
-      ? 1 -
-        easeProgress(
+      ? easeProgress(
           (elapsed - layer.duration + exitDuration) / exitDuration,
-          layer.animationEasing,
+          layer.exitEasing ?? layer.animationEasing,
         )
-      : 1;
+      : 0;
+  const entrance = 1 - eased;
+  const travel = getAnimationDistance(layer);
+  let x =
+    layer.animation === 'slide'
+      ? -travel * entrance
+      : layer.animation === 'slide-right'
+        ? travel * entrance
+        : 0;
+  let y =
+    layer.animation === 'rise'
+      ? travel * entrance
+      : layer.animation === 'fall'
+        ? -travel * entrance
+        : 0;
+  let scale =
+    layer.animation === 'pop'
+      ? 0.72 + 0.28 * eased
+      : layer.animation === 'zoom-out'
+        ? 1 + 0.28 * entrance
+        : 1;
+  const exit = layer.exitAnimation ?? 'fade';
+  const exitTravel = getAnimationDistance(layer, exit === 'reverse' ? layer.animation : exit);
+  if (exit === 'reverse') {
+    // Return towards the entrance's initial pose, including its original scale.
+    if (layer.animation === 'slide') x -= exitTravel * leaving;
+    if (layer.animation === 'slide-right') x += exitTravel * leaving;
+    if (layer.animation === 'rise') y += exitTravel * leaving;
+    if (layer.animation === 'fall') y -= exitTravel * leaving;
+    if (layer.animation === 'pop') scale *= 1 - 0.28 * leaving;
+    if (layer.animation === 'zoom-out') scale *= 1 + 0.28 * leaving;
+  } else {
+    if (exit === 'slide-left') x -= exitTravel * leaving;
+    if (exit === 'slide-right') x += exitTravel * leaving;
+    if (exit === 'rise') y -= exitTravel * leaving;
+    if (exit === 'fall') y += exitTravel * leaving;
+    if (exit === 'shrink') scale *= 1 - 0.28 * leaving;
+  }
+  if (layer.loopAnimation && layer.loopAnimation !== 'none') {
+    const loop = getLoopTiming(layer);
+    const phase = (Math.max(0, elapsed - loop.delay) / loop.period) * Math.PI * 2;
+    if (layer.loopAnimation === 'float') y += Math.sin(phase) * loop.amount;
+    if (layer.loopAnimation === 'pulse')
+      scale *= 1 + (((1 - Math.cos(phase)) / 2) * loop.amount) / 100;
+  }
   return {
-    opacity: layer.opacity * (layer.animation === 'none' ? 1 : eased) * exit,
-    x: layer.animation === 'slide' ? -80 * (1 - eased) : 0,
-    y: layer.animation === 'rise' ? 48 * (1 - eased) : 0,
-    scale: layer.animation === 'pop' ? 0.72 + 0.28 * eased : 1,
+    opacity: layer.opacity * (layer.animation === 'none' ? 1 : eased) * (1 - leaving),
+    x,
+    y,
+    scale,
   };
 }
 

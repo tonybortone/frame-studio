@@ -67,7 +67,7 @@ The frame-size picker shows landscape, portrait, square, and social formats as f
 
 ![Visual format cards and custom canvas dimensions](images/canvas-size.png)
 
-One timeline toolbar groups playback and exact time, editing and selection locking, then zoom and Fit. The ruler underneath is dedicated to seconds and seeking. Second labels sit above the tick marks, with a small playhead handle below them to avoid covering the time labels. Arrow keys step one frame; Shift + arrow steps one second. The canvas remains available for the composition and its editing tools.
+One timeline toolbar groups playback and exact time, editing and selection locking, then zoom and Fit. The current-time display accepts precise time entry, with previous/next-frame controls beside playback. Locate reveals the playhead; zoom buttons and Fit remain separate from editing. The ruler underneath is dedicated to seconds and seeking. Second labels sit above the tick marks, with a small playhead handle below them to avoid covering the time labels. Arrow keys step one frame; Shift + arrow steps one second. The canvas remains available for the composition and its editing tools.
 
 The 3D layers view separates the current frame's visible visual layers into CSS 3D planes. Orbit or pan the view, change layer spacing and zoom, or use front, back, top, and perspective presets to inspect overlap. Audio has no visual plane. Hidden layers and clips outside the current time are omitted. These camera controls affect inspection only. Per-element perspective is an independent saved content edit that renders in the composition and exports.
 
@@ -79,13 +79,13 @@ The selected layer's Layer order slider and forward/back buttons change its save
 
 ## Timeline, motion, and sound
 
-Visual and audio tracks have separate labeled sections. Visual tracks show the frontmost layer at the top, explained once in the section header. Each layer keeps its own editable clip in a compact 26-pixel row. Solid category colors, concise names, and a clear selection outline keep the clips readable. The ruler displays seconds and adjusts label spacing as the timeline zoom changes; seeking remains frame-snapped. Fit timeline makes the full sequence reachable in the available width. Trim edges are visible on interaction, and image clips use their real imported thumbnails. The timeline height can be changed by dragging its separator or using its arrow-key controls.
+Visual and audio tracks have separate labeled sections. Visual tracks show the frontmost layer at the top, explained once in the section header. Each layer keeps its own editable clip in a readable 32-pixel row with a 24-pixel clip. Solid category colors, concise names, and a clear selection outline keep the clips readable. The ruler displays seconds and adjusts label spacing as the timeline zoom changes; seeking remains frame-snapped. Fit timeline makes the full sequence reachable in the available width. Trim edges are visible on interaction, and image clips use their real imported thumbnails. The timeline height can be changed by dragging its separator or using its arrow-key controls.
 
 Each row has a lock control, and the toolbar can lock or unlock the selection in one undoable action. A mixed selection locks all selected layers; an entirely locked selection unlocks them. Locked clips can be selected but cannot be moved, trimmed, split, or deleted. A subtle hatch and lock icon reinforce the state without relying on color alone.
 
 ![Playback controls and the timeline ruler](images/timeline.png)
 
-Expanding a visual track exposes entrance and exit timing. Entrance presets are None, Fade, Rise, Pop, and Slide. Duration, delay, easing, and exit fade are editable through the inline controls and properties. The entrance and exit strips represent those actual timing settings and can be adjusted directly. This is preset-based motion editing, not an arbitrary keyframe graph editor.
+Expanding a visual track or clicking Motion opens three sections: Entrance, Loop, and Exit. Each has named choices and timing controls, with easing curves beside the Feel choices. The header offers Preview clip, Reset, and Close. Travel distance, directional entrances and exits, and Float/Pulse loops use the shared renderer. The entrance and exit strips represent those actual timing settings and can be adjusted directly. This is preset-based motion editing, not an arbitrary keyframe graph editor.
 
 Expanding an audio track exposes volume, mute, and fade-in/fade-out duration. Audio-only properties omit visual transforms and opacity. Sound fades affect gain independently of visual opacity. Shared timing calculations keep preview and export consistent; shortening a clip clamps its effective timing without discarding authored values.
 

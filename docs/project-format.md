@@ -37,7 +37,7 @@ Color looks use only `brightness`, `contrast`, and `saturation`. At strength `s`
 
 The selected preset name and strength are inferred from the stored values. Matching values restore the look after reopening; manually altered values show Custom, and differing values across selected editable visual layers show Mixed. At 0% every look is mathematically Original. The inspector keeps only a temporary hint for the current selection to let that same strength control move back above zero. Reopening a neutral project reports Original; this changes no rendered appearance. There is no `lookId`, `lookStrength`, LUT, or filter-stack field in version 1.
 
-Motion recipe names likewise do not add fields. None, Gentle fade, Float, Slide, and Pop set `animation`, `animationDuration`, `animationDelay`, `animationEasing`, and `exitDuration`. Float is the UI recipe for the existing `rise` animation. A recipe replaces these motion settings without changing layer start, duration, media offset, source, geometry, color, or audio. Pop is restricted to a single selected visual element in the inspector; the flat model has no shared group-scale pivot.
+Motion recipe names likewise do not add fields. None, Gentle fade, Rise, Slide, and Pop set `animation`, `animationDuration`, `animationDelay`, `animationEasing`, and `exitDuration`. Rise uses the `rise` entrance; Float is now a separate repeating loop. A recipe replaces these motion settings without changing layer start, duration, media offset, source, geometry, color, or audio. Pop is restricted to a single selected visual element in the inspector; the flat model has no shared group-scale pivot.
 
 ## Optional visual-tool fields (alpha 7)
 
@@ -83,8 +83,22 @@ Optional version-one fields are backward-compatible; absent values retain the or
 | `animationDuration`           | Entrance length in seconds, default `0.6`                   |
 | `animationDelay`              | Entrance delay after the layer starts, default `0`          |
 | `animationEasing`             | `linear`, `ease-in`, `ease-out` (default), or `ease-in-out` |
-| `exitDuration`                | End fade length in seconds, default `0` (off)               |
+| `exitDuration`                | Exit length in seconds, default `0` (off)                   |
 | `audioFadeIn`, `audioFadeOut` | Linear sound gain ramps in seconds, default `0` (off)       |
+
+Alpha 16 adds optional fields:
+
+| Field               | Values and defaults                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `animation`         | Existing values plus `fall`, `slide-right`, `zoom-out`                                                  |
+| `animationDistance` | Shared entrance/exit travel, `0–2000` pixels; absent defaults to 48 vertical or 80 horizontal           |
+| `exitAnimation`     | `none`, `fade`, `reverse`, `rise`, `fall`, `slide-left`, `slide-right`, `shrink`; absent preserves fade |
+| `exitEasing`        | Same easing values; absent uses `animationEasing`                                                       |
+| `loopAnimation`     | `none`, `float`, `pulse`; absent disables looping                                                       |
+| `loopDuration`      | `0.4–3600` seconds, default 2                                                                           |
+| `loopAmount`        | `0–100`; Float uses pixels (default 12), Pulse percent growth (default 8)                               |
+
+Loops begin after the effective 2D or 3D entrance, or at the delay when there is no entrance. These values are clip-relative, so splitting restarts them. Reset removes motion while preserving the element's authored 3D pose. Older projects leave new fields absent.
 
 Timing values must be finite, nonnegative, and at most 3,600 seconds. Authored settings are retained when trimming; effective timings fit inside the current clip. Entrance delay and duration fit together, while overlapping entrance/end fades multiply. Sound fades multiply the layer volume independently of its visual opacity.
 

@@ -70,6 +70,13 @@ async function exportedPixel(page: Page, x: number, y: number) {
   return pixel;
 }
 
+async function jumpToTime(page: Page, value: string) {
+  await page.getByRole('button', { name: 'Current timeline time', exact: true }).click();
+  const input = page.getByRole('textbox', { name: 'Jump to time', exact: true });
+  await input.fill(value);
+  await input.press('Enter');
+}
+
 function depthFixture(): Project {
   return {
     ...createProject(),
@@ -1322,9 +1329,9 @@ test('fits a long timeline into view and seeks its final clip without editing co
   expect(Number(await ruler.getAttribute('aria-valuenow'))).toBeLessThan(180);
   const transport = page.getByRole('group', { name: 'Timeline playback', exact: true });
   await expect(transport).toBeVisible();
-  await expect(transport.getByRole('timer')).toHaveText(
-    (await ruler.getAttribute('aria-valuetext'))!,
-  );
+  await expect(
+    transport.getByRole('button', { name: 'Current timeline time', exact: true }),
+  ).toHaveText((await ruler.getAttribute('aria-valuetext'))!);
   expect(await saveProject(page, fixture.name)).toEqual(original);
 });
 
@@ -1410,7 +1417,7 @@ test('applies a group-safe motion recipe in one undo step without changing compo
   const properties = page.getByRole('complementary', { name: 'Properties', exact: true });
   await editingMenu(page, 'Motion').click();
   await expect(properties.getByRole('button', { name: 'Pop', exact: true })).toBeDisabled();
-  await properties.getByRole('button', { name: 'Float', exact: true }).click();
+  await properties.getByRole('button', { name: 'Rise', exact: true }).click();
   const after = await saveProject(page);
   after.layers.slice(6).forEach((layer, index) => {
     expect(layer.animation).toBe('rise');
@@ -2075,7 +2082,7 @@ test('right-side editing menus open dedicated categories and retain selection an
   await motion.click();
   await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
   await expect(motion).toHaveAttribute('aria-pressed', 'true');
-  await expect(properties.getByRole('button', { name: 'Float', exact: true })).toBeVisible();
+  await expect(properties.getByRole('button', { name: 'Rise', exact: true })).toBeVisible();
   await motion.focus();
   await page.keyboard.press('Escape');
   await expect(properties).toHaveCount(0);
@@ -2093,7 +2100,7 @@ test('right-side editing menus open dedicated categories and retain selection an
   await expect(
     properties.getByRole('heading', { name: 'Motion', exact: true, level: 2 }),
   ).toBeVisible();
-  await properties.getByRole('button', { name: 'Float', exact: true }).focus();
+  await properties.getByRole('button', { name: 'Rise', exact: true }).focus();
   await page.keyboard.press('Escape');
   await expect(properties).toHaveCount(0);
   await expect(motion).toBeFocused();
@@ -2315,7 +2322,7 @@ test('timeline controls stay in one toolbar above readable seconds in a small wi
   const toolbarBounds = (await controls.boundingBox())!;
   const rulerBounds = (await ruler.boundingBox())!;
   expect(toolbarBounds.y + toolbarBounds.height).toBeLessThanOrEqual(rulerBounds.y);
-  const boxes = await controls.locator('button, input, [role="timer"]').evaluateAll((nodes) =>
+  const boxes = await controls.locator('button, input').evaluateAll((nodes) =>
     nodes
       .map((node) => {
         const bounds = node.getBoundingClientRect();
@@ -2957,4 +2964,312 @@ test('color and background action from the 3D view opens the selected image colo
     page.getByRole('button', { name: 'Timeline clip Two colors', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
   expect(await saveProject(page, fixture.name)).toEqual(before);
+});
+
+test('timeline time entry validates frames, locates the playhead and leaves project content unchanged', async ({
+  page,
+}) => {
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Timecode navigation',
+    duration: 120,
+    fps: 30,
+    layers: [createLayer('shape', { name: 'Long card', duration: 120 })],
+  };
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  const clock = page.getByRole('button', { name: 'Current timeline time', exact: true });
+  const ruler = page.getByRole('slider', { name: 'Timeline position', exact: true });
+  const currentTime = async () => Number(await ruler.getAttribute('aria-valuenow'));
+  await jumpToTime(page, '01:02:15');
+  await expect.poll(currentTime).toBe(62.5);
+  await expect(clock).toHaveText('01:02:15');
+  await expect(clock).toBeFocused();
+  await page.getByRole('button', { name: 'Reveal playhead', exact: true }).click();
+  await expect(page.locator('.ruler-playhead')).toBeInViewport();
+  await page.getByRole('button', { name: 'Next frame', exact: true }).click();
+  await expect.poll(currentTime).toBeCloseTo(62.5 + 1 / 30, 3);
+  await page.getByRole('button', { name: 'Previous frame', exact: true }).click();
+  await expect.poll(currentTime).toBeCloseTo(62.5, 3);
+  await clock.click();
+  const input = page.getByRole('textbox', { name: 'Jump to time', exact: true });
+  await input.fill('00:00:30');
+  await input.press('Enter');
+  await expect(input).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByRole('alert')).toContainText('frames 0–29');
+  expect(await currentTime()).toBeCloseTo(62.5, 3);
+  await input.press('Escape');
+  await expect(input).toHaveCount(0);
+  await expect(clock).toBeFocused();
+  expect(await currentTime()).toBeCloseTo(62.5, 3);
+  await jumpToTime(page, '2.5');
+  await expect.poll(currentTime).toBe(2.5);
+  await jumpToTime(page, '999');
+  await expect.poll(currentTime).toBeCloseTo(120 - 1 / 30, 3);
+  await expect(page.getByRole('button', { name: 'Next frame', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Previous frame', exact: true })).toBeDisabled();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
+test('selected motion opens readable entrance loop and exit controls at both editor sizes', async ({
+  page,
+}) => {
+  const original = await saveProject(page);
+  const action = page.getByRole('button', { name: 'Edit selected motion', exact: true });
+  await expect(action).toBeDisabled();
+  await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
+  for (const viewport of [
+    { width: 1000, height: 700 },
+    { width: 1500, height: 980 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await action.click();
+    const editor = page.getByRole('group', { name: 'Motion editor for Caption', exact: true });
+    await expect(editor).toBeVisible();
+    const phases = await editor.locator('.timeline-motion-phase').evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const bounds = node.getBoundingClientRect();
+        return { x: bounds.x, right: bounds.right, width: bounds.width };
+      }),
+    );
+    expect(phases).toHaveLength(3);
+    for (const [index, phase] of phases.entries()) {
+      expect(phase.x).toBeGreaterThanOrEqual(0);
+      expect(phase.right).toBeLessThanOrEqual(viewport.width);
+      expect(phase.width).toBeGreaterThan(200);
+      if (index) expect(phase.x).toBeGreaterThanOrEqual(phases[index - 1].right);
+    }
+    const fields = editor.locator('.timeline-motion-phase input, .timeline-motion-phase select');
+    for (const field of await fields.all()) {
+      const box = (await field.boundingBox())!;
+      expect(box.width, (await field.getAttribute('aria-label')) ?? '').toBeGreaterThanOrEqual(48);
+      expect(box.height).toBeGreaterThanOrEqual(28);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    }
+    await editor
+      .getByRole('combobox', { name: 'Exit easing for Caption', exact: true })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      editor.getByRole('combobox', { name: 'Exit easing for Caption', exact: true }),
+    ).toBeInViewport();
+    await editor
+      .getByRole('button', { name: 'Close motion editor for Caption', exact: true })
+      .click();
+    await expect(editor).toHaveCount(0);
+  }
+  expect(await saveProject(page)).toEqual(original);
+});
+
+test('advanced motion persists and resets in one undo while preserving element pose and other layers', async ({
+  page,
+}) => {
+  const fixture = element3dFixture();
+  fixture.layers[0].transform3d = {
+    enabled: true,
+    rotateX: 12,
+    rotateY: -18,
+    z: 22,
+    motion: 'tilt-in',
+  };
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: 'Timeline clip Perspective card', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit selected motion', exact: true }).click();
+  const editor = page.getByRole('group', {
+    name: 'Motion editor for Perspective card',
+    exact: true,
+  });
+  await editor
+    .getByRole('combobox', { name: 'Motion preset for Perspective card', exact: true })
+    .selectOption('fall');
+  for (const [name, value] of [
+    ['Animation delay', '0.2'],
+    ['Animation duration', '0.7'],
+    ['Motion travel', '120'],
+  ])
+    await editor
+      .getByRole('spinbutton', { name: `${name} for Perspective card`, exact: true })
+      .fill(value);
+  await editor
+    .getByRole('combobox', { name: 'Animation easing for Perspective card', exact: true })
+    .selectOption('linear');
+  await editor
+    .getByRole('combobox', { name: 'Loop motion for Perspective card', exact: true })
+    .selectOption('float');
+  await editor
+    .getByRole('spinbutton', { name: 'Loop period for Perspective card', exact: true })
+    .fill('1.6');
+  await editor
+    .getByRole('spinbutton', { name: 'Loop amount for Perspective card', exact: true })
+    .fill('18');
+  await editor
+    .getByRole('combobox', { name: 'Exit motion for Perspective card', exact: true })
+    .selectOption('slide-right');
+  await editor
+    .getByRole('spinbutton', { name: 'Exit duration for Perspective card', exact: true })
+    .fill('0.6');
+  await editor
+    .getByRole('combobox', { name: 'Exit easing for Perspective card', exact: true })
+    .selectOption('ease-in');
+  const authored = await saveProject(page, fixture.name);
+  expect(authored.layers[0]).toMatchObject({
+    animation: 'fall',
+    animationDelay: 0.2,
+    animationDuration: 0.7,
+    animationDistance: 120,
+    animationEasing: 'linear',
+    loopAnimation: 'float',
+    loopDuration: 1.6,
+    loopAmount: 18,
+    exitAnimation: 'slide-right',
+    exitDuration: 0.6,
+    exitEasing: 'ease-in',
+    transform3d: original.layers[0].transform3d,
+  });
+  expect(authored.layers.slice(1)).toEqual(original.layers.slice(1));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect((await saveProject(page, fixture.name)).layers[0].exitEasing).not.toBe('ease-in');
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+  await editor
+    .getByRole('button', { name: 'Reset motion for Perspective card', exact: true })
+    .click();
+  const reset = await saveProject(page, fixture.name);
+  expect(reset.layers[0]).toMatchObject({
+    animation: 'none',
+    animationDelay: 0,
+    animationDuration: 0.6,
+    exitAnimation: 'none',
+    exitDuration: 0,
+    loopAnimation: 'none',
+    transform3d: { ...original.layers[0].transform3d, motion: 'none' },
+    x: original.layers[0].x,
+    y: original.layers[0].y,
+    width: original.layers[0].width,
+    height: original.layers[0].height,
+  });
+  expect(reset.layers.slice(1)).toEqual(original.layers.slice(1));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeEnabled();
+  expect(await saveProject(page, fixture.name)).toEqual(authored);
+});
+
+test('clip preview restarts at its own in point and stops on its final visible frame', async ({
+  page,
+}) => {
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Short motion preview',
+    duration: 4,
+    fps: 30,
+    layers: [
+      createLayer('shape', {
+        name: 'Brief card',
+        start: 1,
+        duration: 0.4,
+        animation: 'fade',
+        animationDuration: 0.2,
+      }),
+    ],
+  };
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  await page.getByRole('button', { name: 'Timeline clip Brief card', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit selected motion', exact: true }).click();
+  const ruler = page.getByRole('slider', { name: 'Timeline position', exact: true });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.getByRole('button', { name: 'Preview clip Brief card', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+    await expect
+      .poll(async () => Number(await ruler.getAttribute('aria-valuenow')))
+      .toBeCloseTo(1.4 - 1 / 30, 3);
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+    await page.waitForTimeout(120);
+    expect(Number(await ruler.getAttribute('aria-valuenow'))).toBeCloseTo(1.4 - 1 / 30, 3);
+  }
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+});
+
+test('directional exits and float pulse loops agree between preview and exported pixels', async ({
+  page,
+}) => {
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Motion pixels',
+    width: 600,
+    height: 400,
+    duration: 4,
+    background: '#ffffff',
+    layers: [
+      createLayer('shape', {
+        name: 'Floating red card',
+        x: 100,
+        y: 120,
+        width: 100,
+        height: 80,
+        radius: 0,
+        fill: '#ff0000',
+        duration: 4,
+        animation: 'none',
+        loopAnimation: 'float',
+        loopDuration: 2,
+        loopAmount: 20,
+        exitAnimation: 'slide-right',
+        exitDuration: 1,
+        exitEasing: 'linear',
+        animationDistance: 100,
+      }),
+      createLayer('shape', {
+        name: 'Pulsing blue card',
+        x: 320,
+        y: 120,
+        width: 100,
+        height: 80,
+        radius: 0,
+        fill: '#0000ff',
+        duration: 4,
+        animation: 'none',
+        loopAnimation: 'pulse',
+        loopDuration: 2,
+        loopAmount: 40,
+      }),
+    ],
+  };
+  await openProjectFixture(page, fixture);
+  const original = await saveProject(page, fixture.name);
+  const points = [
+    [110, 125],
+    [110, 145],
+    [170, 130],
+    [305, 130],
+  ];
+  const white = [255, 255, 255, 255],
+    red = [255, 0, 0, 255],
+    blue = [0, 0, 255, 255];
+  for (const [time, expected] of [
+    ['0.5', [white, red, white, white]],
+    ['1', [red, red, red, blue]],
+    ['3.5', [white, white, [255, 128, 128, 255], white]],
+  ] as [string, number[][]][]) {
+    await jumpToTime(page, time);
+    await expect
+      .poll(
+        async () => {
+          const pixels = await previewPixels(page, points);
+          return pixels.every((pixel, index) =>
+            pixel.every((value, channel) => Math.abs(value - expected[index][channel]) <= 1),
+          );
+        },
+        { message: `Preview pixels at ${time}s` },
+      )
+      .toBe(true);
+    for (const [index, pixel] of (await exportedPngPixels(page, points)).entries())
+      expectUniformPixels([pixel], expected[index], `PNG sample ${index} at ${time}s`);
+  }
+  expect(await saveProject(page, fixture.name)).toEqual(original);
 });

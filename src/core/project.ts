@@ -1,7 +1,7 @@
 import type { Layer, LayerKind, Project } from './types';
 
 const KINDS: LayerKind[] = ['video', 'audio', 'image', 'text', 'shape', 'svg', 'drawing'];
-const ANIMATIONS = ['none', 'fade', 'rise', 'pop', 'slide'];
+const ANIMATIONS = ['none', 'fade', 'rise', 'fall', 'pop', 'slide', 'slide-right', 'zoom-out'];
 const EASINGS = ['linear', 'ease-in', 'ease-out', 'ease-in-out'];
 const TIMING_KEYS = [
   'animationDuration',
@@ -331,6 +331,12 @@ const LAYER_KEYS = [
   'groupId',
   'animation',
   'animationEasing',
+  'animationDistance',
+  'exitAnimation',
+  'exitEasing',
+  'loopAnimation',
+  'loopDuration',
+  'loopAmount',
   'transform3d',
   ...TIMING_KEYS,
   'brightness',
@@ -356,6 +362,20 @@ function parseLayer(value: unknown): Layer {
     throw new Error('Unsupported layer animation.');
   if (item.animationEasing !== undefined && !EASINGS.includes(item.animationEasing as string))
     throw new Error('Unsupported animation easing.');
+  if (item.exitEasing !== undefined && !EASINGS.includes(item.exitEasing as string))
+    throw new Error('Unsupported exit easing.');
+  if (
+    item.exitAnimation !== undefined &&
+    !['none', 'fade', 'reverse', 'rise', 'fall', 'slide-left', 'slide-right', 'shrink'].includes(
+      item.exitAnimation as string,
+    )
+  )
+    throw new Error('Unsupported exit animation.');
+  if (
+    item.loopAnimation !== undefined &&
+    !['none', 'float', 'pulse'].includes(item.loopAnimation as string)
+  )
+    throw new Error('Unsupported loop animation.');
   const layer: Layer = {
     id: string(item.id, 'Layer ID', 128, 1),
     name: string(item.name, 'Layer name', 256, 1),
@@ -380,6 +400,17 @@ function parseLayer(value: unknown): Layer {
   }
   if (item.animationEasing !== undefined)
     layer.animationEasing = item.animationEasing as Layer['animationEasing'];
+  if (item.exitAnimation !== undefined)
+    layer.exitAnimation = item.exitAnimation as Layer['exitAnimation'];
+  if (item.exitEasing !== undefined) layer.exitEasing = item.exitEasing as Layer['exitEasing'];
+  if (item.loopAnimation !== undefined)
+    layer.loopAnimation = item.loopAnimation as Layer['loopAnimation'];
+  if (item.animationDistance !== undefined)
+    layer.animationDistance = number(item.animationDistance, 'Animation travel', 0, 2000);
+  if (item.loopDuration !== undefined)
+    layer.loopDuration = number(item.loopDuration, 'Loop period', 0.4, 3600);
+  if (item.loopAmount !== undefined)
+    layer.loopAmount = number(item.loopAmount, 'Loop amount', 0, 100);
   if (item.transform3d !== undefined) {
     if (layer.kind === 'audio') throw new Error('3D transforms require a visual layer.');
     const transform = object(item.transform3d, '3D transform');

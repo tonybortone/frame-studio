@@ -13,9 +13,25 @@ import {
   Copy,
   Volume2,
 } from '../icons';
-import type { Layer, Project, AnimationEasing } from '../core/types';
+import type {
+  Layer,
+  Project,
+  Animation,
+  AnimationEasing,
+  ExitAnimation,
+  LoopAnimation,
+} from '../core/types';
 import { LAYER_LABELS } from '../core/types';
-import { getAudioTiming, getMotionTiming } from '../core/motion';
+import {
+  ENTRANCE_OPTIONS,
+  EXIT_OPTIONS,
+  LOOP_OPTIONS,
+  getAnimationDistance,
+  getAudioTiming,
+  getLoopTiming,
+  getMotionTiming,
+  resetMotionPatch,
+} from '../core/motion';
 import {
   LOOK_PRESETS,
   MOTION_PRESETS,
@@ -210,6 +226,7 @@ export default function Inspector({
   const motionPreset = detectSelectionMotion(visualTargets);
   const activeTab = isAudio && tab === 'color' ? 'design' : tab;
   const motion = layer ? getMotionTiming(layer) : undefined;
+  const loop = layer ? getLoopTiming(layer) : undefined;
   const patch = (value: Partial<Layer>) => {
     const targets = project.layers.filter(
       (item) => selected.includes(item.id) && (!item.locked || value.locked !== undefined),
@@ -641,7 +658,7 @@ export default function Inspector({
                             disabled={!visualTargets.length || (recipe.id === 'pop' && isGroup)}
                             title={
                               recipe.id === 'pop' && isGroup
-                                ? 'Pop is for a single element. Choose Float or Slide to keep a component together.'
+                                ? 'Pop is for a single element. Choose Rise or Slide to keep a component together.'
                                 : undefined
                             }
                           >
@@ -654,12 +671,34 @@ export default function Inspector({
                       </div>
                       <p className="helper-copy">
                         {isGroup
-                          ? 'Float and Slide move the parts together. Pop is available for a single element.'
+                          ? 'Rise and Slide move the parts together. Pop is available for a single element.'
                           : 'Entrance, easing and exit, ready together.'}
                       </p>
                       <details className="recipe-details">
                         <summary>Fine-tune</summary>
-                        {hasMotion && (
+                        <label className="property-select">
+                          <span>Entrance</span>
+                          <select
+                            aria-label="Entrance animation"
+                            value={layer.animation}
+                            onChange={(event) =>
+                              patchVisual({ animation: event.target.value as Animation })
+                            }
+                          >
+                            {ENTRANCE_OPTIONS.map((option) => (
+                              <option
+                                key={option.id}
+                                value={option.id}
+                                disabled={
+                                  isGroup && (option.id === 'pop' || option.id === 'zoom-out')
+                                }
+                              >
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {(hasMotion || (layer.loopAnimation && layer.loopAnimation !== 'none')) && (
                           <div className="field-grid motion-timing">
                             <NumberField
                               label="Delay (s)"
@@ -669,22 +708,24 @@ export default function Inspector({
                               step={0.1}
                               onChange={(animationDelay) => patchVisual({ animationDelay })}
                             />
-                            <NumberField
-                              label={motion3d === 'float' ? 'Period (s)' : 'Duration (s)'}
-                              value={
-                                motion3d === 'float'
-                                  ? Math.max(0.4, layer.animationDuration ?? 0.6)
-                                  : motion!.duration
-                              }
-                              min={motion3d === 'float' ? 0.4 : 0}
-                              max={
-                                motion3d === 'float'
-                                  ? 3600
-                                  : Math.min(3600, layer.duration - motion!.delay)
-                              }
-                              step={0.1}
-                              onChange={(animationDuration) => patchVisual({ animationDuration })}
-                            />
+                            {hasMotion && (
+                              <NumberField
+                                label={motion3d === 'float' ? 'Period (s)' : 'Duration (s)'}
+                                value={
+                                  motion3d === 'float'
+                                    ? Math.max(0.4, layer.animationDuration ?? 0.6)
+                                    : motion!.duration
+                                }
+                                min={motion3d === 'float' ? 0.4 : 0}
+                                max={
+                                  motion3d === 'float'
+                                    ? 3600
+                                    : Math.min(3600, layer.duration - motion!.delay)
+                                }
+                                step={0.1}
+                                onChange={(animationDuration) => patchVisual({ animationDuration })}
+                              />
+                            )}
                           </div>
                         )}
                         <label className="property-select">
@@ -707,20 +748,155 @@ export default function Inspector({
                             <option value="ease-in-out">Ease in & out</option>
                           </select>
                         </label>
+                        {(['rise', 'fall', 'slide', 'slide-right'].includes(layer.animation) ||
+                          ['rise', 'fall', 'slide-left', 'slide-right'].includes(
+                            layer.exitAnimation ?? 'none',
+                          )) && (
+                          <NumberField
+                            label="Travel (px)"
+                            value={getAnimationDistance(
+                              layer,
+                              ['rise', 'fall', 'slide', 'slide-right'].includes(layer.animation)
+                                ? layer.animation
+                                : layer.exitAnimation,
+                            )}
+                            min={0}
+                            max={2000}
+                            onChange={(animationDistance) => patchVisual({ animationDistance })}
+                          />
+                        )}
+                        <label className="property-select">
+                          <span>Exit</span>
+                          <select
+                            aria-label="Exit animation"
+                            value={
+                              layer.exitAnimation ??
+                              ((layer.exitDuration ?? 0) > 0 ? 'fade' : 'none')
+                            }
+                            onChange={(event) =>
+                              patchVisual({
+                                exitAnimation: event.target.value as ExitAnimation,
+                                exitDuration:
+                                  event.target.value === 'none' ? 0 : layer.exitDuration || 0.3,
+                              })
+                            }
+                          >
+                            {EXIT_OPTIONS.map((option) => (
+                              <option
+                                key={option.id}
+                                value={option.id}
+                                disabled={
+                                  isGroup &&
+                                  (option.id === 'shrink' ||
+                                    (option.id === 'reverse' &&
+                                      ['pop', 'zoom-out'].includes(layer.animation)))
+                                }
+                              >
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <div className="motion-exit-field">
                           <NumberField
-                            label="Exit fade (s)"
+                            label={
+                              layer.exitAnimation &&
+                              layer.exitAnimation !== 'fade' &&
+                              layer.exitAnimation !== 'none'
+                                ? 'Exit duration (s)'
+                                : 'Exit fade (s)'
+                            }
                             value={motion!.exitDuration}
                             min={0}
                             max={Math.min(3600, layer.duration)}
                             step={0.1}
-                            onChange={(exitDuration) => patchVisual({ exitDuration })}
+                            onChange={(exitDuration) =>
+                              patchVisual({
+                                exitDuration,
+                                ...(exitDuration > 0 && layer.exitAnimation === 'none'
+                                  ? { exitAnimation: 'fade' }
+                                  : {}),
+                              })
+                            }
                           />
                         </div>
+                        {motion!.exitDuration > 0 && (
+                          <label className="property-select">
+                            <span>Exit easing</span>
+                            <select
+                              aria-label="Exit easing"
+                              value={layer.exitEasing ?? ''}
+                              onChange={(event) =>
+                                patchVisual({
+                                  exitEasing: (event.target.value || undefined) as
+                                    AnimationEasing | undefined,
+                                })
+                              }
+                            >
+                              <option value="">Match entrance</option>
+                              <option value="linear">Linear</option>
+                              <option value="ease-in">Ease in</option>
+                              <option value="ease-out">Ease out</option>
+                              <option value="ease-in-out">Ease in & out</option>
+                            </select>
+                          </label>
+                        )}
+                        <label className="property-select">
+                          <span>Loop</span>
+                          <select
+                            aria-label="Loop animation"
+                            value={layer.loopAnimation ?? 'none'}
+                            onChange={(event) =>
+                              patchVisual({ loopAnimation: event.target.value as LoopAnimation })
+                            }
+                          >
+                            {LOOP_OPTIONS.map((option) => (
+                              <option
+                                key={option.id}
+                                value={option.id}
+                                disabled={isGroup && option.id === 'pulse'}
+                              >
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {layer.loopAnimation && layer.loopAnimation !== 'none' && (
+                          <div className="field-grid motion-timing">
+                            <NumberField
+                              label="Loop period (s)"
+                              value={loop!.period}
+                              min={0.4}
+                              max={3600}
+                              step={0.1}
+                              onChange={(loopDuration) => patchVisual({ loopDuration })}
+                            />
+                            <NumberField
+                              label={layer.loopAnimation === 'pulse' ? 'Amount (%)' : 'Amount (px)'}
+                              value={loop!.amount}
+                              min={0}
+                              max={100}
+                              onChange={(loopAmount) => patchVisual({ loopAmount })}
+                            />
+                          </div>
+                        )}
                         <p className="helper-copy">
-                          Timing can also be edited on each timeline track. Set exit fade to 0 to
-                          turn it off.
+                          Travel applies to both entrance and exit. Loops begin after the entrance.
+                          Open Motion on a timeline track to adjust timing visually.
                         </p>
+                        <button
+                          className="subtle-button"
+                          disabled={!visualTargets.length}
+                          onClick={() => {
+                            if (!visualTargets.length) return;
+                            checkpoint();
+                            visualTargets.forEach((target) =>
+                              change(target.id, resetMotionPatch(target), false),
+                            );
+                          }}
+                        >
+                          Reset motion
+                        </button>
                       </details>
                     </section>
                     {layer.kind === 'video' && <SoundControls layer={layer} patch={patch} />}

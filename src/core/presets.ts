@@ -1,4 +1,5 @@
 import type { Animation, AnimationEasing, Layer } from './types';
+import { getAnimationDistance, getLoopTiming } from './motion';
 
 export type LookValues = Pick<Layer, 'brightness' | 'contrast' | 'saturation'>;
 export const LOOK_PRESETS = [
@@ -57,31 +58,48 @@ export function detectSelectionLook(layers: readonly Layer[]): LookMatch {
 type MotionValues = Required<
   Pick<
     Layer,
-    'animation' | 'animationDuration' | 'animationDelay' | 'animationEasing' | 'exitDuration'
+    | 'animation'
+    | 'animationDuration'
+    | 'animationDelay'
+    | 'animationEasing'
+    | 'animationDistance'
+    | 'exitDuration'
+    | 'exitAnimation'
+    | 'exitEasing'
+    | 'loopAnimation'
+    | 'loopDuration'
+    | 'loopAmount'
   >
 >;
-export const MOTION_PRESETS: readonly {
+export const MOTION_PRESETS = [
+  { id: 'none', name: 'None', duration: 0.6, easing: 'ease-out', exit: 0 },
+  { id: 'fade', name: 'Gentle fade', duration: 0.65, easing: 'ease-in-out', exit: 0.2 },
+  { id: 'rise', name: 'Rise', duration: 0.7, easing: 'ease-out', exit: 0.2 },
+  { id: 'slide', name: 'Slide', duration: 0.55, easing: 'ease-out', exit: 0.15 },
+  { id: 'pop', name: 'Pop', duration: 0.45, easing: 'ease-out', exit: 0.15 },
+] as const satisfies readonly {
   id: Animation;
   name: string;
   duration: number;
   easing: AnimationEasing;
   exit: number;
-}[] = [
-  { id: 'none', name: 'None', duration: 0.6, easing: 'ease-out', exit: 0 },
-  { id: 'fade', name: 'Gentle fade', duration: 0.65, easing: 'ease-in-out', exit: 0.2 },
-  { id: 'rise', name: 'Float', duration: 0.7, easing: 'ease-out', exit: 0.2 },
-  { id: 'slide', name: 'Slide', duration: 0.55, easing: 'ease-out', exit: 0.15 },
-  { id: 'pop', name: 'Pop', duration: 0.45, easing: 'ease-out', exit: 0.15 },
-];
+}[];
+type MotionPresetId = (typeof MOTION_PRESETS)[number]['id'];
 
-export function getMotionPresetPatch(id: Animation): MotionValues {
+export function getMotionPresetPatch(id: MotionPresetId): Partial<Layer> {
   const recipe = MOTION_PRESETS.find((preset) => preset.id === id)!;
   return {
     animation: id,
     animationDuration: recipe.duration,
     animationDelay: 0,
     animationEasing: recipe.easing,
+    animationDistance: undefined,
     exitDuration: recipe.exit,
+    exitAnimation: recipe.exit > 0 ? 'fade' : 'none',
+    exitEasing: undefined,
+    loopAnimation: 'none',
+    loopDuration: 2,
+    loopAmount: undefined,
   };
 }
 
@@ -91,7 +109,13 @@ function motionValues(layer: Layer): MotionValues {
     animationDuration: layer.animationDuration ?? 0.6,
     animationDelay: layer.animationDelay ?? 0,
     animationEasing: layer.animationEasing ?? 'ease-out',
+    animationDistance: getAnimationDistance(layer),
     exitDuration: layer.exitDuration ?? 0,
+    exitAnimation: (layer.exitDuration ?? 0) > 0 ? (layer.exitAnimation ?? 'fade') : 'none',
+    exitEasing: layer.exitEasing ?? layer.animationEasing ?? 'ease-out',
+    loopAnimation: layer.loopAnimation ?? 'none',
+    loopDuration: layer.loopDuration ?? 2,
+    loopAmount: getLoopTiming(layer).amount,
   };
 }
 
@@ -105,8 +129,15 @@ export function detectSelectionMotion(
       typeof a[key] === 'number' ? close(a[key] as number, b[key] as number) : a[key] === b[key],
     );
   if (layers.some((layer) => !same(motionValues(layer), first))) return 'mixed';
-  if (first.animation === 'none' && first.exitDuration === 0) return 'none';
+  if (
+    first.animation === 'none' &&
+    (first.exitDuration === 0 || first.exitAnimation === 'none') &&
+    first.loopAnimation === 'none'
+  )
+    return 'none';
   return (
-    MOTION_PRESETS.find((preset) => same(first, getMotionPresetPatch(preset.id)))?.id ?? 'custom'
+    MOTION_PRESETS.find((preset) =>
+      same(first, motionValues({ ...layers[0], ...getMotionPresetPatch(preset.id) })),
+    )?.id ?? 'custom'
   );
 }

@@ -1,4 +1,30 @@
-import type { AnimationEasing, Layer } from './types';
+import type { Animation, AnimationEasing, ExitAnimation, Layer, LoopAnimation } from './types';
+
+export const ENTRANCE_OPTIONS = [
+  { id: 'none', label: 'None' },
+  { id: 'fade', label: 'Fade in' },
+  { id: 'rise', label: 'Rise' },
+  { id: 'fall', label: 'Fall' },
+  { id: 'slide', label: 'From left' },
+  { id: 'slide-right', label: 'From right' },
+  { id: 'pop', label: 'Pop in' },
+  { id: 'zoom-out', label: 'Settle in' },
+] as const satisfies readonly { id: Animation; label: string }[];
+export const EXIT_OPTIONS = [
+  { id: 'none', label: 'None' },
+  { id: 'fade', label: 'Fade out' },
+  { id: 'reverse', label: 'Reverse entrance' },
+  { id: 'rise', label: 'Move up' },
+  { id: 'fall', label: 'Move down' },
+  { id: 'slide-left', label: 'Move left' },
+  { id: 'slide-right', label: 'Move right' },
+  { id: 'shrink', label: 'Shrink away' },
+] as const satisfies readonly { id: ExitAnimation; label: string }[];
+export const LOOP_OPTIONS = [
+  { id: 'none', label: 'None' },
+  { id: 'float', label: 'Float' },
+  { id: 'pulse', label: 'Pulse' },
+] as const satisfies readonly { id: LoopAnimation; label: string }[];
 
 const clamp = (value: number, maximum = 1) => Math.min(maximum, Math.max(0, value));
 
@@ -13,7 +39,46 @@ export function getMotionTiming(layer: Layer): {
   return {
     delay,
     duration: clamp(layer.animationDuration ?? 0.6, length - delay),
-    exitDuration: clamp(layer.exitDuration ?? 0, length),
+    exitDuration: layer.exitAnimation === 'none' ? 0 : clamp(layer.exitDuration ?? 0, length),
+  };
+}
+
+/** Travel defaults match legacy entrances, including when reused by a directional exit. */
+export function getAnimationDistance(
+  layer: Layer,
+  direction: Animation | ExitAnimation = layer.animation,
+): number {
+  return layer.animationDistance ?? (direction.startsWith('slide') ? 80 : 48);
+}
+
+/** Loops begin at rest after any entrance, including an element's 3D entrance. */
+export function getLoopTiming(layer: Layer): { delay: number; period: number; amount: number } {
+  const { delay, duration } = getMotionTiming(layer);
+  const has3DEntrance =
+    layer.transform3d?.enabled &&
+    (layer.transform3d.motion === 'tilt-in' || layer.transform3d.motion === 'flip-in');
+  return {
+    delay: delay + (layer.animation !== 'none' || has3DEntrance ? duration : 0),
+    period: Math.max(0.4, layer.loopDuration ?? 2),
+    amount: layer.loopAmount ?? (layer.loopAnimation === 'pulse' ? 8 : 12),
+  };
+}
+
+/** Remove motion without flattening or repositioning the selected 3D element. */
+export function resetMotionPatch(layer: Layer): Partial<Layer> {
+  return {
+    animation: 'none',
+    animationDuration: 0.6,
+    animationDelay: 0,
+    animationEasing: 'ease-out',
+    animationDistance: undefined,
+    exitAnimation: 'none',
+    exitDuration: 0,
+    exitEasing: undefined,
+    loopAnimation: 'none',
+    loopDuration: 2,
+    loopAmount: undefined,
+    ...(layer.transform3d ? { transform3d: { ...layer.transform3d, motion: 'none' } } : {}),
   };
 }
 

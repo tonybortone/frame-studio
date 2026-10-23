@@ -102,6 +102,9 @@ export default function App() {
   } | null>(null);
   const [timelineZoom, setTimelineZoom] = useState(66);
   const [timelineResetKey, setTimelineResetKey] = useState(0);
+  const [timelineMotionRequest, setTimelineMotionRequest] = useState(0);
+  const [playbackSession, setPlaybackSession] = useState(0);
+  const previewEnd = useRef<number | null>(null);
   const [timelineHeight, setTimelineHeight] = useState(() =>
     Math.min(window.innerHeight <= 800 ? 246 : 308, maxTimelineHeight()),
   );
@@ -139,11 +142,13 @@ export default function App() {
     if (!playing || exportOpen) return;
     const started = performance.now(),
       initial = time;
+    const end = Math.min(project.duration, previewEnd.current ?? project.duration);
     let frame = 0;
     const tick = () => {
       const next = initial + (performance.now() - started) / 1000;
-      if (next >= project.duration) {
-        setTime(Math.max(0, project.duration - 1 / project.fps));
+      if (next >= end) {
+        setTime(Math.max(initial, end - 1 / project.fps));
+        previewEnd.current = null;
         setPlaying(false);
         return;
       }
@@ -154,7 +159,7 @@ export default function App() {
     return () => cancelAnimationFrame(frame);
     // The playback clock deliberately captures the initial playhead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, project.duration, project.fps, exportOpen]);
+  }, [playing, project.duration, project.fps, exportOpen, playbackSession]);
   useEffect(() => {
     if (exportOpen) return;
     const sync = () => {
@@ -170,15 +175,23 @@ export default function App() {
   }, [project, time, playing, media, exportOpen, notify]);
   const seek = useCallback(
     (value: number) => {
+      previewEnd.current = null;
       setPlaying(false);
       setTime(Math.max(0, Math.min(project.duration - 1 / project.fps, value)));
     },
     [project.duration, project.fps],
   );
   const togglePlayback = useCallback(() => {
+    previewEnd.current = null;
     setTime((current) => (current >= project.duration - 1 / project.fps ? 0 : current));
     setPlaying((current) => !current);
   }, [project.duration, project.fps]);
+  const previewLayerMotion = (layer: Layer) => {
+    previewEnd.current = Math.min(project.duration, layer.start + layer.duration);
+    setTime(layer.start);
+    setPlaying(true);
+    setPlaybackSession((session) => session + 1);
+  };
   const change = useCallback(
     (id: string, patch: Partial<Layer>, record = true) =>
       update(
@@ -916,10 +929,22 @@ export default function App() {
             <button
               title="Split at playhead"
               aria-label="Split clip"
+              className="timeline-labeled-action"
               disabled={!hasEditableSelection}
               onClick={split}
             >
               <Scissors size={16} />
+              <span>Split</span>
+            </button>
+            <button
+              title="Edit animation for the selected element"
+              aria-label="Edit selected motion"
+              className="timeline-labeled-action timeline-motion-action"
+              disabled={selectedLayers.length !== 1 || selectedLayers[0]?.kind === 'audio'}
+              onClick={() => setTimelineMotionRequest((value) => value + 1)}
+            >
+              <Layers3 size={16} />
+              <span>Motion</span>
             </button>
             <button
               title="Duplicate selection"
@@ -950,7 +975,15 @@ export default function App() {
           </div>
           <div className="timeline-zoom">
             <span>Zoom</span>
-            <Minus size={12} />
+            <button
+              type="button"
+              className="timeline-zoom-step"
+              aria-label="Zoom timeline out"
+              title="Zoom out"
+              onClick={() => setTimelineZoom((value) => Math.max(0.001, value / 1.25))}
+            >
+              <Minus size={14} />
+            </button>
             <input
               aria-label="Timeline zoom"
               type="range"
@@ -960,12 +993,20 @@ export default function App() {
               value={timelineZoom}
               onChange={(e) => setTimelineZoom(Number(e.target.value))}
             />
-            <Plus size={12} />
+            <button
+              type="button"
+              className="timeline-zoom-step"
+              aria-label="Zoom timeline in"
+              title="Zoom in"
+              onClick={() => setTimelineZoom((value) => Math.min(140, value * 1.25))}
+            >
+              <Plus size={14} />
+            </button>
             <button
               aria-label="Fit timeline"
               title="Fit the whole sequence"
               onClick={() => {
-                const available = Math.max(1, (timelineSection.current?.clientWidth ?? 900) - 224);
+                const available = Math.max(1, (timelineSection.current?.clientWidth ?? 900) - 252);
                 setTimelineZoom(Math.max(0.001, Math.min(140, available / project.duration)));
                 setTimelineResetKey((value) => value + 1);
               }}
@@ -980,12 +1021,14 @@ export default function App() {
           time={time}
           zoom={timelineZoom}
           resetScrollKey={timelineResetKey}
+          motionRequest={timelineMotionRequest}
+          onPreviewLayer={previewLayerMotion}
           seek={seek}
           select={selectLayers}
           change={change}
           checkpoint={checkpoint}
           onExpand={() =>
-            setTimelineHeight((height) => Math.min(Math.max(height, 380), maxTimelineHeight()))
+            setTimelineHeight((height) => Math.min(Math.max(height, 460), maxTimelineHeight()))
           }
         />
       </section>

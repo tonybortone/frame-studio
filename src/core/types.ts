@@ -1,6 +1,10 @@
 export type LayerKind = 'video' | 'audio' | 'image' | 'text' | 'shape' | 'svg' | 'drawing';
-export type Animation = 'none' | 'fade' | 'rise' | 'pop' | 'slide';
+export type Animation =
+  'none' | 'fade' | 'rise' | 'fall' | 'pop' | 'slide' | 'slide-right' | 'zoom-out';
 export type AnimationEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+export type ExitAnimation =
+  'none' | 'fade' | 'reverse' | 'rise' | 'fall' | 'slide-left' | 'slide-right' | 'shrink';
+export type LoopAnimation = 'none' | 'float' | 'pulse';
 export type LayerMask = 'none' | 'rectangle' | 'rounded' | 'ellipse' | 'diamond';
 export type Element3DMotion = 'none' | 'tilt-in' | 'flip-in' | 'float';
 /** Perspective of one visual plane, independent of the inspection camera. */
@@ -55,7 +59,16 @@ export interface Layer {
   animationDuration?: number;
   animationDelay?: number;
   animationEasing?: AnimationEasing;
+  /** Travel in canvas pixels; absent preserves the original preset distance. */
+  animationDistance?: number;
   exitDuration?: number;
+  /** Absent retains the original fade-out behavior when exitDuration is positive. */
+  exitAnimation?: ExitAnimation;
+  exitEasing?: AnimationEasing;
+  loopAnimation?: LoopAnimation;
+  loopDuration?: number;
+  /** Pixels for Float; percentage growth for Pulse. */
+  loopAmount?: number;
   transform3d?: Element3DTransform;
   /** Linear gain ramps applied to audio and video sound in preview and export. */
   audioFadeIn?: number;
