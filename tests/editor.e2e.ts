@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { expect, test, type Download, type Page } from '@playwright/test';
+import { expect, test, type Download, type Locator, type Page } from '@playwright/test';
 import { createLayer, createProject, parseProject } from '../src/core/project';
 import type { Layer, LayerKind, Project } from '../src/core/types';
 import { projectElementPoint } from '../src/core/element3d';
@@ -17,6 +17,21 @@ async function revealSimpleMotionPresets(page: Page) {
     .locator('details.inspector-basic-motion');
   if (!(await details.evaluate((node) => node.hasAttribute('open'))))
     await details.locator('summary').first().click();
+}
+
+async function selectTimelineMotionPhase(
+  editor: Locator,
+  name: string,
+  phase: 'Enter' | 'Loop' | 'Exit',
+) {
+  await editor
+    .getByRole('button', { name: `${phase} animation settings for ${name}`, exact: true })
+    .click();
+}
+
+async function revealTimelineMotionAdjustments(editor: Locator) {
+  const adjust = editor.getByRole('button', { name: 'Adjust', exact: true });
+  if ((await adjust.getAttribute('aria-expanded')) !== 'true') await adjust.click();
 }
 
 async function downloadBytes(download: Download): Promise<Buffer> {
@@ -757,15 +772,23 @@ test('edits motion in the timeline, undoes a change, and saves the timing contro
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   expect(await saveProject(page)).toEqual(original);
   await motion
-    .getByRole('combobox', { name: 'Motion preset for Caption', exact: true })
-    .selectOption('slide');
+    .getByRole('button', { name: 'Enter animation: From left for Caption', exact: true })
+    .click();
   await motion
     .getByRole('spinbutton', { name: 'Animation delay for Caption', exact: true })
     .fill('0.4');
   await duration.fill('1.2');
+  await revealTimelineMotionAdjustments(motion);
   await motion
     .getByRole('combobox', { name: 'Animation easing for Caption', exact: true })
     .selectOption('linear');
+  await expect(
+    motion.getByRole('button', { name: 'Move entrance for Caption', exact: true }),
+  ).toBeAttached();
+  await selectTimelineMotionPhase(motion, 'Caption', 'Exit');
+  await motion
+    .getByRole('button', { name: 'Exit animation: Fade out for Caption', exact: true })
+    .click();
   await motion.getByRole('spinbutton', { name: 'Exit fade for Caption', exact: true }).fill('0.5');
   const saved = await saveProject(page);
   expect(saved.layers.find((layer) => layer.id === caption.id)).toMatchObject({
@@ -780,7 +803,7 @@ test('edits motion in the timeline, undoes a change, and saves the timing contro
   );
   await expect(
     motion.getByRole('button', { name: 'Move entrance for Caption', exact: true }),
-  ).toBeAttached();
+  ).toHaveCount(0);
   await expect(
     motion.getByRole('button', { name: 'Resize exit fade for Caption', exact: true }),
   ).toBeAttached();
@@ -3027,13 +3050,28 @@ test('timeline time entry validates frames, locates the playhead and leaves proj
   expect(await saveProject(page, fixture.name)).toEqual(original);
 });
 
-test('selected motion opens readable entrance loop and exit controls at both editor sizes', async ({
+test('visual motion picker keeps one clear phase and the selected clip visible at both editor sizes', async ({
   page,
-}) => {
+}, testInfo) => {
   const original = await saveProject(page);
+  await page.getByRole('button', { name: 'Dismiss notification', exact: true }).click();
   const action = page.getByRole('button', { name: 'Edit selected motion', exact: true });
   await expect(action).toBeDisabled();
-  await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
+  const clip = page.getByRole('button', { name: 'Timeline clip Caption', exact: true });
+  await clip.click();
+  const expectClipContext = async () => {
+    const clipBox = (await clip.boundingBox())!;
+    const viewportBox = (await page.locator('.timeline-visual-scroll').boundingBox())!;
+    const headingBox = (await page
+      .getByRole('group', { name: 'Visual tracks', exact: true })
+      .getByRole('heading')
+      .boundingBox())!;
+    expect(
+      clipBox.y,
+      'The selected clip must remain below the sticky section heading',
+    ).toBeGreaterThanOrEqual(headingBox.y + headingBox.height);
+    expect(clipBox.y + clipBox.height).toBeLessThanOrEqual(viewportBox.y + viewportBox.height);
+  };
   for (const viewport of [
     { width: 1000, height: 700 },
     { width: 1500, height: 980 },
@@ -3042,39 +3080,199 @@ test('selected motion opens readable entrance loop and exit controls at both edi
     await action.click();
     const editor = page.getByRole('group', { name: 'Motion editor for Caption', exact: true });
     await expect(editor).toBeVisible();
-    const phases = await editor.locator('.timeline-motion-phase').evaluateAll((nodes) =>
-      nodes.map((node) => {
-        const bounds = node.getBoundingClientRect();
-        return { x: bounds.x, right: bounds.right, width: bounds.width };
-      }),
-    );
-    expect(phases).toHaveLength(3);
-    for (const [index, phase] of phases.entries()) {
-      expect(phase.x).toBeGreaterThanOrEqual(0);
-      expect(phase.right).toBeLessThanOrEqual(viewport.width);
-      expect(phase.width).toBeGreaterThan(200);
-      if (index) expect(phase.x).toBeGreaterThanOrEqual(phases[index - 1].right);
-    }
-    const fields = editor.locator('.timeline-motion-phase input, .timeline-motion-phase select');
-    for (const field of await fields.all()) {
-      const box = (await field.boundingBox())!;
-      expect(box.width, (await field.getAttribute('aria-label')) ?? '').toBeGreaterThanOrEqual(48);
-      expect(box.height).toBeGreaterThanOrEqual(28);
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-    }
-    await editor
-      .getByRole('combobox', { name: 'Exit easing for Caption', exact: true })
-      .scrollIntoViewIfNeeded();
+    const picker = editor.locator('.motion-preset-picker');
+    await expect(picker).toBeVisible();
+    await expectClipContext();
     await expect(
-      editor.getByRole('combobox', { name: 'Exit easing for Caption', exact: true }),
+      page.getByRole('slider', { name: 'Timeline position', exact: true }),
     ).toBeInViewport();
+    const pickerBox = (await picker.boundingBox())!;
+    expect(
+      pickerBox.height,
+      'The basic animation picker should fit into a compact strip',
+    ).toBeLessThanOrEqual(150);
+    const tracksBox = (await page.locator('.timeline-visual-scroll').boundingBox())!;
+    expect(
+      pickerBox.y + pickerBox.height,
+      'Basic timing controls must stay above the audio section',
+    ).toBeLessThanOrEqual(tracksBox.y + tracksBox.height);
+    for (const element of [
+      editor.getByRole('spinbutton', { name: 'Animation duration for Caption', exact: true }),
+      editor.getByRole('button', { name: 'Adjust', exact: true }),
+      editor.locator('.timeline-effect-row').first(),
+    ]) {
+      const bounds = (await element.boundingBox())!;
+      expect(bounds.y).toBeGreaterThanOrEqual(tracksBox.y);
+      expect(
+        bounds.y + bounds.height,
+        'Timing and its editable strip must fit without vertical scrolling',
+      ).toBeLessThanOrEqual(tracksBox.y + tracksBox.height);
+    }
+    expect(pickerBox.x).toBeGreaterThanOrEqual(0);
+    expect(pickerBox.x + pickerBox.width).toBeLessThanOrEqual(viewport.width);
+    await expect(editor.locator('.motion-picker-advanced')).toHaveCount(0);
+    await expect(editor.getByRole('button', { name: 'Adjust', exact: true })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    for (const [phase, count] of [
+      ['Enter', 8],
+      ['Loop', 3],
+      ['Exit', 8],
+    ] as const) {
+      await selectTimelineMotionPhase(editor, 'Caption', phase);
+      await expect(
+        editor.getByRole('button', {
+          name: `${phase} animation settings for Caption`,
+          exact: true,
+        }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      await expect(editor.locator('.motion-picker-options')).toHaveCount(1);
+      const tiles = editor.getByRole('button', { name: new RegExp(`^${phase} animation: `) });
+      await expect(tiles).toHaveCount(count);
+      await expect(editor.locator('.motion-picker-advanced')).toHaveCount(0);
+      for (const tile of await tiles.all()) {
+        await expect(tile).toBeInViewport({ ratio: 0.99 });
+        const box = (await tile.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(60);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+        await expect(tile.locator('canvas')).toHaveAttribute('width', '96');
+      }
+      await expectClipContext();
+    }
+    await selectTimelineMotionPhase(editor, 'Caption', 'Enter');
+    await page.screenshot({ path: testInfo.outputPath(`compact-motion-${viewport.width}.png`) });
+    await revealTimelineMotionAdjustments(editor);
+    await expect(
+      editor.getByRole('combobox', { name: 'Animation easing for Caption', exact: true }),
+    ).toBeVisible();
+    await selectTimelineMotionPhase(editor, 'Caption', 'Loop');
+    await expect(editor.locator('.motion-picker-advanced')).toHaveCount(0);
     await editor
       .getByRole('button', { name: 'Close motion editor for Caption', exact: true })
       .click();
     await expect(editor).toHaveCount(0);
   }
   expect(await saveProject(page)).toEqual(original);
+});
+
+test('motion panel restores canvas space on close and respects a manually resized timeline', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 980 });
+  const separator = page.getByRole('separator', { name: 'Timeline height', exact: true });
+  const initial = Number(await separator.getAttribute('aria-valuenow'));
+  const toggle = page.getByRole('button', { name: 'Edit motion for Caption', exact: true });
+  const editor = page.getByRole('group', { name: 'Motion editor for Caption', exact: true });
+  const height = async () => Number(await separator.getAttribute('aria-valuenow'));
+  await toggle.click();
+  const compact = await height();
+  expect(compact).toBeGreaterThan(initial);
+  await editor.getByRole('tab', { name: 'Keyframes', exact: true }).click();
+  await expect.poll(height).toBeGreaterThan(compact);
+  await editor.getByRole('tab', { name: 'Presets', exact: true }).click();
+  await expect.poll(height).toBe(compact);
+  await editor
+    .getByRole('button', { name: 'Close motion editor for Caption', exact: true })
+    .click();
+  await expect.poll(height).toBe(initial);
+  await toggle.click();
+  await separator.press('ArrowUp');
+  const manual = compact + 20;
+  await expect.poll(height).toBe(manual);
+  await editor
+    .getByRole('button', { name: 'Close motion editor for Caption', exact: true })
+    .click();
+  await expect.poll(height).toBe(manual);
+  await toggle.click();
+  await editor.getByRole('tab', { name: 'Keyframes', exact: true }).click();
+  await expect.poll(height).toBeGreaterThan(manual);
+  await toggle.click();
+  await expect(editor).toHaveCount(0);
+  await expect.poll(height).toBe(manual);
+});
+
+test('visual motion previews are non-destructive and duration sliders undo as one gesture', async ({
+  page,
+}) => {
+  const fixture: Project = {
+    ...createProject(),
+    name: 'Visual motion study',
+    duration: 6,
+    layers: [
+      createLayer('shape', {
+        name: 'Motion card',
+        animation: 'pop',
+        animationDuration: 0.6,
+        duration: 6,
+      }),
+    ],
+  };
+  await openProjectFixture(page, fixture);
+  await page.getByRole('button', { name: 'Edit motion for Motion card', exact: true }).click();
+  const editor = page.getByRole('group', { name: 'Motion editor for Motion card', exact: true });
+  const original = await saveProject(page, fixture.name);
+  const fade = editor.getByRole('button', {
+    name: 'Enter animation: Fade in for Motion card',
+    exact: true,
+  });
+  const canvas = fade.locator('canvas');
+  const pixels = () => canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL());
+  await fade.hover();
+  const firstFrame = await pixels();
+  await expect.poll(pixels).not.toBe(firstFrame);
+  await page.getByRole('button', { name: 'Current timeline time', exact: true }).hover();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await fade.focus();
+  const stillFrame = await pixels();
+  await page.waitForTimeout(180);
+  expect(await pixels()).toBe(stillFrame);
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  const slider = editor.getByRole('slider', {
+    name: 'Animation duration for Motion card slider',
+    exact: true,
+  });
+  const sliderBox = (await slider.boundingBox())!;
+  await page.mouse.move(sliderBox.x + sliderBox.width * 0.15, sliderBox.y + sliderBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(sliderBox.x + sliderBox.width * 0.6, sliderBox.y + sliderBox.height / 2, {
+    steps: 10,
+  });
+  await page.mouse.up();
+  const changed = await saveProject(page, fixture.name);
+  expect(changed.layers[0].animationDuration).toBeGreaterThan(2);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(original);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  expect(await saveProject(page, fixture.name)).toEqual(changed);
+  await selectTimelineMotionPhase(editor, 'Motion card', 'Exit');
+  await editor
+    .getByRole('button', { name: 'Exit animation: Fade out for Motion card', exact: true })
+    .click();
+  await expect(
+    editor.getByRole('spinbutton', { name: 'Exit fade for Motion card', exact: true }),
+  ).toHaveValue('0.5');
+  await editor
+    .getByRole('button', { name: 'Exit animation: None for Motion card', exact: true })
+    .click();
+  const cleared = await saveProject(page, fixture.name);
+  expect(cleared.layers[0]).toMatchObject({ exitAnimation: 'none', exitDuration: 0 });
+  await expect(
+    editor.getByRole('spinbutton', { name: 'Exit fade for Motion card', exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole('toolbar', { name: 'Timeline controls', exact: true })
+    .getByRole('button', { name: 'Lock selected layers', exact: true })
+    .click();
+  const locked = await saveProject(page, fixture.name);
+  for (const tile of await editor.locator('.motion-picker-tile').all())
+    await expect(tile).toBeDisabled();
+  await editor
+    .getByRole('button', { name: 'Exit animation: Fade out for Motion card', exact: true })
+    .dispatchEvent('click');
+  expect(await saveProject(page, fixture.name)).toEqual(locked);
 });
 
 test('advanced motion persists and resets in one undo while preserving element pose and other layers', async ({
@@ -3097,8 +3295,9 @@ test('advanced motion persists and resets in one undo while preserving element p
     exact: true,
   });
   await editor
-    .getByRole('combobox', { name: 'Motion preset for Perspective card', exact: true })
-    .selectOption('fall');
+    .getByRole('button', { name: 'Enter animation: Fall for Perspective card', exact: true })
+    .click();
+  await revealTimelineMotionAdjustments(editor);
   for (const [name, value] of [
     ['Animation delay', '0.2'],
     ['Animation duration', '0.7'],
@@ -3110,18 +3309,22 @@ test('advanced motion persists and resets in one undo while preserving element p
   await editor
     .getByRole('combobox', { name: 'Animation easing for Perspective card', exact: true })
     .selectOption('linear');
+  await selectTimelineMotionPhase(editor, 'Perspective card', 'Loop');
   await editor
-    .getByRole('combobox', { name: 'Loop motion for Perspective card', exact: true })
-    .selectOption('float');
+    .getByRole('button', { name: 'Loop animation: Float for Perspective card', exact: true })
+    .click();
+  await revealTimelineMotionAdjustments(editor);
   await editor
     .getByRole('spinbutton', { name: 'Loop period for Perspective card', exact: true })
     .fill('1.6');
   await editor
     .getByRole('spinbutton', { name: 'Loop amount for Perspective card', exact: true })
     .fill('18');
+  await selectTimelineMotionPhase(editor, 'Perspective card', 'Exit');
   await editor
-    .getByRole('combobox', { name: 'Exit motion for Perspective card', exact: true })
-    .selectOption('slide-right');
+    .getByRole('button', { name: 'Exit animation: Move right for Perspective card', exact: true })
+    .click();
+  await revealTimelineMotionAdjustments(editor);
   await editor
     .getByRole('spinbutton', { name: 'Exit duration for Perspective card', exact: true })
     .fill('0.6');
@@ -3494,11 +3697,11 @@ test('keyframe curves edit the outgoing segment with pointer and keyboard undo w
   });
   await curve.selectOption('ease-in');
   await jumpToTime(page, '2');
-  const easedRotation = Number(
-    await keys
-      .getByRole('spinbutton', { name: 'Rotation value for Keyframe card', exact: true })
-      .inputValue(),
-  );
+  // A selected diamond keeps its authored value editable; the inspector shows the evaluated pose.
+  const evaluatedRotation = page
+    .getByRole('complementary', { name: 'Properties', exact: true })
+    .getByRole('spinbutton', { name: 'Rotation', exact: true });
+  const easedRotation = Number(await evaluatedRotation.inputValue());
   expect(easedRotation).toBeGreaterThan(0);
   expect(easedRotation).toBeLessThan(45);
   await keys
@@ -3509,9 +3712,7 @@ test('keyframe curves edit the outgoing segment with pointer and keyboard undo w
     .click();
   await curve.selectOption('hold');
   await jumpToTime(page, '2');
-  await expect(
-    keys.getByRole('spinbutton', { name: 'Rotation value for Keyframe card', exact: true }),
-  ).toHaveValue('0');
+  await expect(evaluatedRotation).toHaveValue('0');
   await keys
     .getByRole('button', {
       name: 'Rotation keyframe at 0.00 seconds for Keyframe card',

@@ -88,7 +88,6 @@ export default function TimelineTransport({
         </button>
       </div>
       <div className="timeline-clock">
-        <span className="timeline-clock-label">Playhead</span>
         <div className="timeline-clock-values">
           {editing ? (
             <div className="timeline-time-entry">

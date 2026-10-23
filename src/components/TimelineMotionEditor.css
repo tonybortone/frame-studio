@@ -148,25 +148,22 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 42px;
-  padding: 6px 14px;
+  min-height: 36px;
+  padding: 3px 12px;
   border-bottom: 1px solid #ffffff0b;
   gap: 12px;
 }
 .timeline-motion-mode {
-  position: sticky;
-  left: 0;
-  width: var(--timeline-viewport-width);
-  z-index: 9;
-  order: 1;
   display: flex;
-  gap: 4px;
-  padding: 5px 14px;
-  background: #1c1c1c;
-  border-bottom: 1px solid #ffffff10;
+  gap: 3px;
+  margin-right: auto;
+  padding: 2px;
+  border-radius: 6px;
+  background: #121212;
+  flex-shrink: 0;
 }
 .timeline-motion-mode button {
-  padding: 4px 12px;
+  padding: 3px 12px;
   height: 27px;
   border-radius: 5px;
   color: #a9a9a9;
@@ -183,8 +180,9 @@
 .timeline-motion-heading > div:first-child {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
+  max-width: 220px;
 }
 .timeline-motion-heading strong {
   font-size: 12px;
@@ -232,46 +230,11 @@
 }
 .timeline-inline-controls {
   order: 1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  padding: 12px 14px;
+  padding: 0;
   border-bottom: 1px solid #ffffff0c;
 }
-.timeline-motion-phase {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.timeline-motion-phase + .timeline-motion-phase {
-  border-left: 1px solid #ffffff12;
-  padding-left: 14px;
-}
-.timeline-motion-phase h4 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 2px;
-  font-size: 12px;
-  font-weight: 550;
-  color: #ededed;
-}
-.timeline-motion-phase h4 > span {
-  color: #9a9a9a;
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.timeline-motion-phase h4 small {
-  margin-left: auto;
-  color: #969696;
-  font-size: 10px;
-  font-weight: 400;
-}
-.timeline-phase-fields {
-  display: flex;
-  gap: 8px;
-  min-width: 0;
+.timeline-inline-controls.is-audio {
+  padding: 10px 12px;
 }
 .timeline-number-control {
   display: flex;
@@ -280,9 +243,7 @@
   flex: 1;
   min-width: 0;
 }
-.timeline-number-control > span,
-.timeline-select-control > span,
-.timeline-easing-control > span {
+.timeline-number-control > span {
   font-size: 11px;
   color: #bdbdbd;
 }
@@ -308,52 +269,6 @@
   color: #929292;
   font-size: 10px;
   pointer-events: none;
-}
-.timeline-select-control {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.timeline-select-control > span {
-  min-width: 32px;
-}
-.timeline-select-control select,
-.timeline-easing-control select {
-  flex: 1;
-  min-width: 0;
-  width: 100%;
-  height: 30px;
-  padding: 4px 7px;
-  border: 1px solid #ffffff1a;
-  border-radius: 6px;
-  background: #262626;
-  color: #ededed;
-  font-size: 12px;
-}
-.timeline-easing-control {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.timeline-easing-control > svg {
-  flex-shrink: 0;
-  width: 44px;
-  height: 28px;
-}
-.timeline-easing-control path {
-  stroke: #dedede;
-  stroke-width: 1.5;
-  fill: none;
-}
-.timeline-easing-control .easing-guide {
-  stroke: #ffffff23;
-  stroke-width: 1;
-}
-.timeline-3d-choice {
-  margin-top: auto;
-}
-.timeline-3d-choice > span {
-  min-width: 68px;
 }
 .timeline-inline-controls input:disabled,
 .timeline-inline-controls select:disabled {
@@ -400,31 +315,18 @@
   white-space: nowrap;
   overflow: hidden;
 }
-@media (max-width: 1050px) {
-  .timeline-motion-phase h4 small {
-    display: none;
-  }
-  .timeline-inline-controls {
-    gap: 10px;
-    padding-inline: 10px;
-  }
-  .timeline-motion-phase + .timeline-motion-phase {
-    padding-left: 10px;
-  }
-  .timeline-phase-fields {
-    gap: 6px;
-  }
-}
 @media (max-width: 760px) {
-  .timeline-inline-controls {
-    grid-template-columns: 1fr;
+  .timeline-motion-heading {
+    gap: 6px;
+    padding-inline: 8px;
   }
-  .timeline-motion-phase + .timeline-motion-phase {
-    border-left: 0;
-    border-top: 1px solid #ffffff12;
-    padding: 10px 0 0;
+  .timeline-motion-heading > div:first-child {
+    max-width: 120px;
   }
-  .timeline-motion-heading > div:first-child span {
-    max-width: 150px;
+  .timeline-motion-actions button {
+    padding-inline: 6px;
+  }
+  .timeline-motion-actions button > span {
+    display: none;
   }
 }

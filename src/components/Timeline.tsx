@@ -56,6 +56,7 @@ interface Props {
   change: (id: string, patch: Partial<Layer>, record?: boolean) => void;
   checkpoint: () => void;
   onExpand?: (keyframes?: boolean) => void;
+  onCollapse?: () => void;
   resetScrollKey?: number;
   motionRequest?: { id: number; keyframes: boolean };
   onPreviewLayer: (layer: Layer) => void;
@@ -70,6 +71,7 @@ export default function Timeline({
   change,
   checkpoint,
   onExpand,
+  onCollapse,
   resetScrollKey = 0,
   motionRequest = { id: 0, keyframes: false },
   onPreviewLayer,
@@ -318,6 +320,7 @@ export default function Timeline({
                 select([layer.id]);
                 if (!expanded)
                   onExpand?.(Object.values(layer.keyframes ?? {}).some((track) => track?.length));
+                if (expanded) onCollapse?.();
                 setExpandedId(expanded ? null : layer.id);
               }}
             >
@@ -429,9 +432,13 @@ export default function Timeline({
               motionRequest.keyframes && selected.includes(layer.id) ? motionRequest.id : 0
             }
             onKeyframesOpen={() => onExpand?.(true)}
+            onPresetsOpen={() => onExpand?.(false)}
             change={change}
             checkpoint={checkpoint}
-            onClose={() => setExpandedId(null)}
+            onClose={() => {
+              setExpandedId(null);
+              onCollapse?.();
+            }}
             onPreview={onPreviewLayer}
           />
         )}

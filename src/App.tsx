@@ -114,6 +114,20 @@ export default function App() {
   const [timelineHeight, setTimelineHeight] = useState(() =>
     Math.min(window.innerHeight <= 800 ? 246 : 308, maxTimelineHeight()),
   );
+  const timelineAutoSize = useRef<{ rest: number; expanded: number } | null>(null);
+  const expandTimeline = (keyframes = false) => {
+    setTimelineHeight((height) => {
+      const rest = timelineAutoSize.current?.rest ?? height;
+      const expanded = Math.min(Math.max(rest, keyframes ? 620 : 400), maxTimelineHeight());
+      timelineAutoSize.current = { rest, expanded };
+      return expanded;
+    });
+  };
+  const collapseTimeline = () => {
+    const automatic = timelineAutoSize.current;
+    timelineAutoSize.current = null;
+    if (automatic) setTimelineHeight(Math.min(automatic.rest, maxTimelineHeight()));
+  };
   const [exportOpen, setExportOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [projectMenu, setProjectMenu] = useState(false);
@@ -966,7 +980,13 @@ export default function App() {
         )}
       </main>
       <section className="timeline-section" ref={timelineSection} aria-label="Timeline">
-        <TimelineResizeHandle height={timelineHeight} onChange={setTimelineHeight} />
+        <TimelineResizeHandle
+          height={timelineHeight}
+          onChange={(height) => {
+            timelineAutoSize.current = null;
+            setTimelineHeight(height);
+          }}
+        />
         <div className="timeline-toolbar" role="toolbar" aria-label="Timeline controls">
           <TimelineTransport
             time={time}
@@ -1087,11 +1107,8 @@ export default function App() {
           select={selectLayers}
           change={change}
           checkpoint={checkpoint}
-          onExpand={(keyframes) =>
-            setTimelineHeight((height) =>
-              Math.min(Math.max(height, keyframes ? 620 : 460), maxTimelineHeight()),
-            )
-          }
+          onExpand={expandTimeline}
+          onCollapse={collapseTimeline}
         />
       </section>
       {toast && (

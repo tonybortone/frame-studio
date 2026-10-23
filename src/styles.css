@@ -486,12 +486,12 @@ kbd {
 }
 .timeline-toolbar {
   position: relative;
-  min-height: 58px;
+  min-height: 46px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 5px 12px;
   background: #222222;
   border-bottom: 1px solid #ffffff15;
 }
@@ -517,8 +517,8 @@ kbd {
   opacity: 0.35;
 }
 .timeline-toolbar .timeline-transport-buttons .timeline-play {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   margin: 0 3px;
   background: #f4f4f4;
   color: #252525;
@@ -536,12 +536,6 @@ kbd {
   white-space: nowrap;
   color: #f4f4f4;
   font-variant-numeric: tabular-nums;
-}
-.timeline-clock-label {
-  color: #b8b8b8;
-  font-size: 11px;
-  padding-left: 5px;
-  line-height: 14px;
 }
 .timeline-clock-values {
   display: flex;
