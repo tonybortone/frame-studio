@@ -7,9 +7,10 @@ interface Props {
   open: boolean;
   audioSelection: boolean;
   onSelect: (tab: InspectorTab) => void;
+  onClose: () => void;
 }
 
-export default function InspectorRail({ tab, open, audioSelection, onSelect }: Props) {
+export default function InspectorRail({ tab, open, audioSelection, onSelect, onClose }: Props) {
   const menus = [
     {
       id: 'design',
@@ -32,7 +33,16 @@ export default function InspectorRail({ tab, open, audioSelection, onSelect }: P
   ] as const;
 
   return (
-    <nav className="inspector-rail" aria-label="Editing menus">
+    <nav
+      className="inspector-rail"
+      aria-label="Editing menus"
+      onKeyDown={(event) => {
+        if (!open || event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}
+    >
       {menus.map(({ id, label, icon: Icon, description }) => (
         <button
           key={id}

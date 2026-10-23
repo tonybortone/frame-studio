@@ -2073,6 +2073,12 @@ test('right-side editing menus open dedicated categories and retain selection an
   await page.getByRole('button', { name: 'Timeline clip Caption', exact: true }).click();
   await expect(motion).toHaveAttribute('aria-pressed', 'true');
   await expect(properties.getByRole('button', { name: 'Float', exact: true })).toBeVisible();
+  await motion.focus();
+  await page.keyboard.press('Escape');
+  await expect(properties).toHaveCount(0);
+  await expect(motion).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Timeline clip Caption', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await motion.click();
   await properties.getByRole('button', { name: 'Close properties', exact: true }).click();
   await expect(properties).toHaveCount(0);
   await expect(motion).toBeFocused();
@@ -2132,8 +2138,26 @@ test('right-side editing menus leave canvas placement and redo history unchanged
   await page.getByRole('button', { name: '3D layers', exact: true }).click();
   await expect(rail).toBeHidden();
   await expect(properties).toHaveCount(0);
-  await page.getByRole('button', { name: '2D canvas', exact: true }).click();
+  await page
+    .getByRole('banner')
+    .getByRole('button', { name: 'A little idea', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Project settings', exact: true }).click();
   await expect(rail).toBeVisible();
+  await expect(editingMenu(page, 'Design')).toHaveAttribute('aria-pressed', 'true');
+  await expect(properties.getByLabel('Project name', { exact: true })).toHaveValue('A little idea');
+  await expect(canvas).toBeVisible();
+
+  await editingMenu(page, 'Motion').click();
+  await page.getByRole('button', { name: 'Hide panels', exact: true }).click();
+  await page
+    .getByRole('banner')
+    .getByRole('button', { name: 'A little idea', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Project settings', exact: true }).click();
+  await expect(rail).toBeVisible();
+  await expect(editingMenu(page, 'Design')).toHaveAttribute('aria-pressed', 'true');
+  await expect(properties.getByLabel('Project name', { exact: true })).toHaveValue('A little idea');
   expect(await saveProject(page)).toEqual(original);
   await expect(redo).toBeEnabled();
 });

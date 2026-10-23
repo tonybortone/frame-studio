@@ -540,6 +540,9 @@ export default function App() {
               <button
                 onClick={() => {
                   setSelected([]);
+                  setInspectorTab('design');
+                  setViewMode('canvas');
+                  setPanelsHidden(false);
                   setInspectorOpen(true);
                   setProjectMenu(false);
                 }}
@@ -817,6 +820,7 @@ export default function App() {
             tab={activeInspectorTab}
             open={inspectorOpen}
             audioSelection={audioSelection}
+            onClose={closeInspector}
             onSelect={(tab) => {
               setInspectorTab(tab);
               setInspectorOpen(!inspectorOpen || activeInspectorTab !== tab);
