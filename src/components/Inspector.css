@@ -13,7 +13,7 @@
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   background: var(--panel);
-  box-shadow: 0 12px 32px #10121b40;
+  box-shadow: 0 12px 32px #00000040;
   color: var(--text);
 }
 .inspector .inspector-header {
@@ -42,7 +42,7 @@
   overflow: auto;
   padding: 0 12px 5px;
   scrollbar-width: thin;
-  scrollbar-color: #8d99ae45 transparent;
+  scrollbar-color: color-mix(in srgb, var(--muted) 27%, transparent) transparent;
 }
 .inspector .inspector-title {
   display: flex;
@@ -58,7 +58,7 @@
   flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--input);
+  background: var(--panel-soft);
 }
 .inspector .inspector-title > div:nth-child(2) {
   min-width: 0;
@@ -89,7 +89,7 @@
 }
 .inspector .inspector-header > button:hover {
   color: var(--text);
-  background: var(--raised);
+  background: var(--panel-raised);
 }
 .inspector .inspector-fields {
   min-width: 0;
@@ -149,7 +149,7 @@
   height: 32px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
 }
 .inspector .number-field > span {
   flex-shrink: 0;
@@ -201,12 +201,12 @@
   padding: 5px 3px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 11px;
 }
 .inspector .align-actions button:hover {
-  background: var(--raised);
+  background: var(--panel-raised);
   color: var(--text);
 }
 .inspector .field-label {
@@ -224,7 +224,7 @@
   padding: 8px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--text);
   font-size: 12px;
 }
@@ -236,7 +236,7 @@
   padding: 8px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--text);
   font-size: 12px;
   line-height: 1.5;
@@ -250,7 +250,7 @@
   padding: 5px 7px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
 }
 .inspector .color-field input[type='color'] {
   width: 22px;
@@ -285,7 +285,7 @@
 .inspector .range-label > span {
   padding: 0 5px;
   border-radius: 4px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
@@ -298,7 +298,7 @@
   padding: 0;
   border: 0;
   border-radius: 4px;
-  background: var(--input);
+  background: var(--panel-soft);
   cursor: pointer;
 }
 .inspector .range-label input::-webkit-slider-runnable-track {
@@ -314,7 +314,7 @@
   border: 1px solid var(--text);
   border-radius: 50%;
   background: var(--text);
-  box-shadow: 0 1px 3px #10121b66;
+  box-shadow: 0 1px 3px #00000066;
 }
 .inspector .range-label input::-moz-range-thumb {
   width: 9px;
@@ -335,19 +335,19 @@
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 11px;
 }
 .inspector .secondary.wide:hover,
 .inspector .sound-mute:hover {
-  background: var(--raised);
+  background: var(--panel-raised);
   color: var(--text);
 }
 .inspector .sound-mute.is-muted {
   color: var(--text);
-  background: #ef233c20;
-  border-color: #ef233c50;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 31%, transparent);
 }
 .inspector .object-actions {
   display: flex;
@@ -359,17 +359,17 @@
   min-height: 30px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
 }
 .inspector .object-actions button:hover {
   color: var(--text);
-  background: var(--raised);
+  background: var(--panel-raised);
 }
 .inspector .object-actions button:last-child:hover {
   color: var(--text);
-  background: #ef233c25;
-  border-color: #ef233c60;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
 }
 .inspector .save-component {
   display: flex;
@@ -382,12 +382,12 @@
   padding: 7px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--text);
   font-size: 11px;
 }
 .inspector .save-component:hover {
-  background: var(--raised);
+  background: var(--panel-raised);
 }
 .inspector .save-component span {
   margin-left: auto;
@@ -415,7 +415,7 @@
   margin-bottom: 14px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
 }
 .inspector .inspector-empty h3 {
@@ -445,17 +445,17 @@
   padding: 7px 5px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 11px;
 }
 .inspector .motion-grid button:hover {
-  background: var(--raised);
+  background: var(--panel-raised);
   border-color: var(--border-strong);
 }
 .inspector .motion-grid button.active {
   color: var(--text);
-  background: #ef233c12;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
   border-color: var(--accent);
 }
 .inspector .motion-preview {
@@ -467,7 +467,7 @@
 .inspector .motion-preview > div {
   width: 17px;
   height: 17px;
-  border: 1px solid #edf2f42b;
+  border: 1px solid color-mix(in srgb, var(--text) 17%, transparent);
   border-radius: 4px;
   background: var(--muted);
 }
@@ -479,15 +479,15 @@
 }
 .inspector .motion-preview.rise > div {
   transform: translateY(-3px);
-  box-shadow: 0 5px 0 #8d99ae25;
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--muted) 15%, transparent);
 }
 .inspector .motion-preview.pop > div {
   transform: scale(1.1);
-  box-shadow: 0 0 0 3px #8d99ae20;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 13%, transparent);
 }
 .inspector .motion-preview.slide > div {
   transform: translateX(3px);
-  box-shadow: -5px 0 0 #8d99ae25;
+  box-shadow: -5px 0 0 color-mix(in srgb, var(--muted) 15%, transparent);
 }
 .inspector .motion-timing {
   margin-bottom: 7px;
@@ -508,12 +508,12 @@
   padding: 5px 7px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--text);
   font-size: 11px;
 }
 .inspector :is(input, select, textarea, button):focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .inspector .group-transform-fields {
@@ -548,7 +548,7 @@
   padding: 4px 4px 7px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 10px;
 }
@@ -559,7 +559,7 @@
 .inspector .look-grid button.active {
   color: var(--text);
   border-color: var(--accent);
-  background: #ef233c12;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 .inspector .look-swatch {
   position: relative;
@@ -617,7 +617,7 @@
   color: var(--text);
 }
 .inspector .recipe-details summary:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 3px;
 }

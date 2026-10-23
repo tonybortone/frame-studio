@@ -644,7 +644,8 @@ export default function App() {
                   setLibraryOpen((v) => !v);
                 }}
               >
-                <FolderOpen size={14} /> Files
+                <FolderOpen size={14} />
+                {!libraryOpen && 'Library'}
               </button>
               <div className="board-view-switch" role="group" aria-label="Canvas view">
                 <button
@@ -738,7 +739,6 @@ export default function App() {
                 }),
               ])
             }
-            onImport={() => fileInput.current?.click()}
             onTemplates={() => {
               setPanelsHidden(false);
               setLibraryOpen(true);

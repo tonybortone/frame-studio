@@ -1,7 +1,11 @@
 .layer-depth-stage {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 48% 50%, #2b2d424d, transparent 65%);
+  background: radial-gradient(
+    ellipse at 48% 50%,
+    color-mix(in srgb, var(--panel-raised) 30%, transparent),
+    transparent 65%
+  );
 }
 .depth-topline {
   position: absolute;
@@ -63,10 +67,10 @@
   pointer-events: none;
 }
 .depth-plane {
-  border: 1px solid #8d99ae22;
+  border: 1px solid color-mix(in srgb, var(--muted) 13%, transparent);
 }
 .depth-plane.is-selected {
-  border-color: #ef233c78;
+  border-color: color-mix(in srgb, var(--accent) 47%, transparent);
 }
 .depth-plane canvas {
   display: block;
@@ -76,19 +80,19 @@
   backface-visibility: visible;
 }
 .depth-background-plane {
-  border: 1px solid #8d99ae70;
+  border: 1px solid color-mix(in srgb, var(--muted) 44%, transparent);
 }
 .depth-background-plane > div {
   position: absolute;
   inset: 0;
   backface-visibility: hidden;
-  box-shadow: 0 10px 30px #0e10194d;
+  box-shadow: 0 10px 30px #0000004d;
 }
 .depth-background-plane > span {
   position: absolute;
   left: 0;
   bottom: -22px;
-  color: #8d99ae;
+  color: var(--muted);
   font:
     9px ui-monospace,
     monospace;
@@ -98,7 +102,7 @@
   position: absolute;
   display: block;
   padding: 0;
-  border: 1px solid #8d99ae50;
+  border: 1px solid color-mix(in srgb, var(--muted) 31%, transparent);
   border-radius: 2px;
   background: transparent;
   pointer-events: auto;
@@ -114,15 +118,15 @@
   cursor: grabbing;
 }
 .depth-layer-hit:hover {
-  background: #8d99ae0a;
-  border-color: #edf2f4aa;
+  background: color-mix(in srgb, var(--muted) 4%, transparent);
+  border-color: color-mix(in srgb, var(--text) 67%, transparent);
 }
 .depth-layer-hit:active {
   transform: none;
 }
 .depth-plane.is-selected .depth-layer-hit {
   border: 1px solid var(--accent);
-  box-shadow: 0 0 0 1px #ef233c25;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 .depth-plane-label {
   position: absolute;
@@ -134,10 +138,10 @@
   max-width: 145px;
   overflow: hidden;
   padding: 3px 5px;
-  border: 1px solid #8d99ae40;
+  border: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
   border-radius: 4px;
-  background: #222535;
-  color: #edf2f4;
+  background: var(--panel-raised);
+  color: var(--text);
   font-size: 9px;
   font-weight: 450;
   white-space: nowrap;
@@ -151,11 +155,11 @@
     monospace;
 }
 .depth-plane.is-selected .depth-plane-label {
-  border-color: #ef233c88;
-  background: #382737;
+  border-color: color-mix(in srgb, var(--accent) 53%, transparent);
+  background: var(--panel-raised);
 }
 .depth-plane.is-selected .depth-plane-label b {
-  color: #edf2f4;
+  color: var(--text);
 }
 .depth-orientation {
   position: absolute;
@@ -196,7 +200,7 @@
 }
 .depth-gesture-hint span {
   margin: 0 6px;
-  color: #8d99ae55;
+  color: color-mix(in srgb, var(--muted) 33%, transparent);
 }
 .depth-empty {
   position: absolute;
@@ -224,7 +228,7 @@
   flex-direction: column;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #1b1e2be8;
+  background: color-mix(in srgb, var(--panel-soft) 91%, transparent);
   overflow-y: auto;
 }
 .depth-stack-heading {
@@ -263,8 +267,8 @@
   border-radius: 5px;
 }
 .depth-layer-list > button.is-selected {
-  background: #ef233c14;
-  border-color: #ef233c45;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 27%, transparent);
 }
 .depth-layer-list .depth-rank {
   width: 14px;
@@ -323,7 +327,7 @@
   padding: 5px 6px;
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: var(--raised);
+  background: var(--panel-raised);
   color: var(--muted);
   font-size: 9px;
 }
@@ -384,7 +388,7 @@
   font-size: 9px;
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: var(--raised);
+  background: var(--panel-raised);
   padding: 6px 4px;
 }
 .depth-bottom-controls {
@@ -415,7 +419,7 @@
 }
 .depth-presets > button[aria-pressed='true'] {
   color: var(--text);
-  background: var(--raised);
+  background: var(--panel-raised);
 }
 .depth-bottom-controls > label {
   display: flex;

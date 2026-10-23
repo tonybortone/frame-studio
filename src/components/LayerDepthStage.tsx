@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import type { Layer, Project } from '../core/types';
-import { LAYER_COLORS } from '../core/types';
 import { reorderVisualLayers } from '../core/layerOrder';
 import {
   canMoveOnDepthPlane,
@@ -543,7 +542,7 @@ export default function LayerDepthStage({
               onClick={(event) => choose(layer, event.metaKey || event.ctrlKey || event.shiftKey)}
             >
               <span className="depth-rank">{rank.get(layer.id)}</span>
-              <i style={{ background: LAYER_COLORS[layer.kind] }} />
+              <i style={{ background: 'var(--muted)' }} />
               <span>{layer.name}</span>
               {layer.locked && <small>Locked</small>}
             </button>

@@ -19,7 +19,6 @@ interface Props {
   onDrawingStyleChange: (style: DrawingStyle) => void;
   onAddShape: (shape: ShapePresetId) => void;
   onAddText: () => void;
-  onImport: () => void;
   onTemplates: () => void;
   onComponents: () => void;
   onSaveComponent: () => void;
@@ -102,7 +101,6 @@ export default function CanvasToolbar({
   onDrawingStyleChange,
   onAddShape,
   onAddText,
-  onImport,
   onTemplates,
   onComponents,
   onSaveComponent,
@@ -285,15 +283,6 @@ export default function CanvasToolbar({
             <ChevronDown className="creation-menu-caret" size={8} aria-hidden="true" />
           </button>
         )}
-        <button
-          type="button"
-          title="Add media"
-          aria-label="Add media"
-          disabled={busy}
-          onClick={() => run(onImport)}
-        >
-          <ToolGlyph kind="media" />
-        </button>
         <button
           type="button"
           title="Masks, flips & color"

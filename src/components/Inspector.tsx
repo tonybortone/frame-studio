@@ -14,7 +14,7 @@ import {
   Volume2,
 } from '../icons';
 import type { Layer, Project, AnimationEasing } from '../core/types';
-import { LAYER_COLORS, LAYER_LABELS } from '../core/types';
+import { LAYER_LABELS } from '../core/types';
 import { getAudioTiming, getMotionTiming } from '../core/motion';
 import {
   LOOK_PRESETS,
@@ -283,7 +283,7 @@ export default function Inspector({
       </header>
       <div className="inspector-body">
         <div className="inspector-title">
-          <div style={{ color: layer ? LAYER_COLORS[layer.kind] : 'var(--muted)' }}>
+          <div style={{ color: 'var(--muted)' }}>
             <Icon size={17} />
           </div>
           <div>

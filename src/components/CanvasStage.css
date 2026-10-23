@@ -5,8 +5,12 @@
   min-width: 0;
   min-height: 100px;
   overflow: hidden;
-  background-color: #1b1d27;
-  background-image: radial-gradient(circle, #8d99ae50 0.9px, transparent 1px);
+  background-color: var(--panel-soft);
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--muted) 31%, transparent) 0.9px,
+    transparent 1px
+  );
   background-size: 20px 20px;
   touch-action: none;
   overscroll-behavior: contain;
@@ -16,7 +20,7 @@
   position: absolute;
   transform: translate(-50%, -50%);
   box-shadow:
-    0 0 0 1px #edf2f419,
+    0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent),
     0 8px 28px #00000026;
   touch-action: none;
 }
@@ -36,7 +40,7 @@
   max-width: 100%;
   height: 16px;
   gap: 10px;
-  color: #b0b0b8;
+  color: #b0b0b0;
   font-size: 10px;
   font-weight: 500;
   white-space: nowrap;
@@ -44,7 +48,7 @@
 }
 
 .board-surface .artboard-name span {
-  color: #686a73;
+  color: #6a6a6a;
   font-size: 9px;
   font-weight: 400;
 }
@@ -67,7 +71,8 @@
 
 .board-surface .selection-box {
   position: absolute;
-  border: 1px solid #ef233c;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px #00000080;
   pointer-events: none;
   transform-origin: center;
 }
@@ -81,9 +86,9 @@
   width: 10px;
   height: 10px;
   padding: 0;
-  border: 1px solid #ef233c;
+  border: 1px solid var(--accent-contrast);
   border-radius: 2px;
-  background: #edf2f4;
+  background: var(--text);
   pointer-events: auto;
   touch-action: none;
 }
@@ -118,8 +123,8 @@
   bottom: -22px;
   transform: translateX(-50%);
   white-space: nowrap;
-  background: #d90429;
-  color: #edf2f4;
+  background: var(--accent);
+  color: var(--accent-contrast);
   font-size: 9px;
   border-radius: 4px;
   padding: 2px 5px;
@@ -149,16 +154,16 @@
   max-width: calc(100% - 160px);
   padding: 5px 6px 5px 10px;
   transform: translateX(-50%);
-  border: 1px solid #8d99ae26;
+  border: 1px solid color-mix(in srgb, var(--muted) 15%, transparent);
   border-radius: 9px;
-  background: #202332f2;
+  background: #222222f2;
   box-shadow: 0 3px 12px #00000024;
   white-space: nowrap;
 }
 
 .board-surface .vector-tool-hint > span {
   padding-right: 6px;
-  color: #aeb9ca;
+  color: #b9b9b9;
   font-size: 10px;
 }
 
@@ -167,13 +172,13 @@
   padding: 0 7px;
   border: 0;
   border-radius: 5px;
-  background: #8d99ae18;
-  color: #edf2f4;
+  background: color-mix(in srgb, var(--muted) 9%, transparent);
+  color: var(--text);
   font-size: 10px;
 }
 
 .board-surface .vector-tool-hint button:hover:not(:disabled) {
-  background: #8d99ae30;
+  background: color-mix(in srgb, var(--muted) 19%, transparent);
 }
 
 .board-surface .vector-tool-hint button:disabled {

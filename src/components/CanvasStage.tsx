@@ -863,7 +863,7 @@ export default function CanvasStage({
                       y1={anchor.y - anchor.handle.y}
                       x2={anchor.x + anchor.handle.x}
                       y2={anchor.y + anchor.handle.y}
-                      stroke="#8d99ae"
+                      stroke="#999999"
                       strokeWidth={1 / scale}
                     />
                     {[-1, 1].map((direction) => (
@@ -872,8 +872,8 @@ export default function CanvasStage({
                         cx={anchor.x + anchor.handle!.x * direction}
                         cy={anchor.y + anchor.handle!.y * direction}
                         r={2.5 / scale}
-                        fill="#edf2f4"
-                        stroke="#2b2d42"
+                        fill="#f4f4f4"
+                        stroke="#252525"
                         strokeWidth={1 / scale}
                       />
                     ))}
@@ -885,8 +885,8 @@ export default function CanvasStage({
                   width={7 / scale}
                   height={7 / scale}
                   rx={index === 0 ? 3.5 / scale : 1 / scale}
-                  fill={index === penAnchors.length - 1 ? ink.color : '#edf2f4'}
-                  stroke={ink.color}
+                  fill={index === penAnchors.length - 1 ? '#252525' : '#f4f4f4'}
+                  stroke={index === penAnchors.length - 1 ? '#f4f4f4' : '#252525'}
                   strokeWidth={1.5 / scale}
                 />
               </g>

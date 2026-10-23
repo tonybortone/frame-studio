@@ -1,7 +1,7 @@
 .timeline-simple {
-  --timeline-base: #191b28;
-  --timeline-label: #202332;
-  --timeline-line: #8d99ae19;
+  --timeline-base: var(--panel);
+  --timeline-label: #222222;
+  --timeline-line: color-mix(in srgb, var(--muted) 10%, transparent);
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -9,7 +9,7 @@
   position: relative;
   overflow: hidden;
   background: var(--timeline-base);
-  color: #edf2f4;
+  color: var(--text);
 }
 .timeline-simple .timeline-ruler-viewport {
   flex: 0 0 28px;
@@ -20,7 +20,7 @@
 .timeline-simple .timeline-audio-scroll {
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-color: #8d99ae55 transparent;
+  scrollbar-color: color-mix(in srgb, var(--muted) 33%, transparent) transparent;
   scrollbar-width: thin;
   position: relative;
   overscroll-behavior: contain;
@@ -32,8 +32,8 @@
 .timeline-simple .timeline-audio-scroll {
   flex: 0 0 min(var(--audio-band-height), 38%);
   min-height: 28px;
-  border-top: 1px solid #8d99ae35;
-  background: #161825;
+  border-top: 1px solid color-mix(in srgb, var(--muted) 21%, transparent);
+  background: #161616;
 }
 .timeline-simple .timeline-audio-scroll.is-empty {
   flex-basis: 28px;
@@ -52,7 +52,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  scrollbar-color: #8d99ae65 #202332;
+  scrollbar-color: color-mix(in srgb, var(--muted) 40%, transparent) #222222;
   border-top: 1px solid var(--timeline-line);
 }
 .timeline-simple .timeline-horizontal-scroll > div {
@@ -66,7 +66,7 @@
 .timeline-simple .timeline-ruler {
   height: 28px;
   display: flex;
-  background: #202332;
+  background: #222222;
 }
 .timeline-simple .track-heading {
   width: var(--label-width);
@@ -78,9 +78,9 @@
   left: 0;
   z-index: 14;
   padding: 0 14px;
-  background: #202332;
+  background: #222222;
   border-right: 1px solid var(--timeline-line);
-  color: #8d99ae;
+  color: var(--muted);
   font-size: 10px;
 }
 .timeline-simple .track-heading small {
@@ -90,8 +90,8 @@
   place-items: center;
   padding: 0 4px;
   border-radius: 4px;
-  background: #8d99ae12;
-  color: #b3bdcc;
+  background: color-mix(in srgb, var(--muted) 7%, transparent);
+  color: #bdbdbd;
   font-size: 9px;
   font-variant-numeric: tabular-nums;
 }
@@ -101,7 +101,7 @@
   flex-shrink: 0;
   cursor: crosshair;
   touch-action: none;
-  background: #1c1f2c;
+  background: var(--panel-soft);
 }
 .timeline-simple .ruler-scale:focus-visible {
   outline-offset: -2px;
@@ -112,7 +112,7 @@
   pointer-events: none;
   background-image: repeating-linear-gradient(
     to right,
-    #8d99ae42 0 1px,
+    color-mix(in srgb, var(--muted) 26%, transparent) 0 1px,
     transparent 1px var(--minor-step)
   );
   background-size: 100% 4px;
@@ -131,7 +131,7 @@
   padding: 3px 0 0 6px;
   line-height: 12px;
   font-family: ui-monospace, 'SFMono-Regular', monospace;
-  color: #b3bdcc;
+  color: #bdbdbd;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
@@ -142,7 +142,7 @@
   width: 1px;
   height: 7px;
   bottom: 0;
-  background: #8d99ae80;
+  background: color-mix(in srgb, var(--muted) 50%, transparent);
 }
 .timeline-simple .ruler-playhead {
   position: absolute;
@@ -150,7 +150,7 @@
   width: 1px;
   height: 10px;
   z-index: 2;
-  background: #ef233c;
+  background: var(--accent);
   pointer-events: none;
 }
 .timeline-simple .ruler-playhead::before {
@@ -161,8 +161,8 @@
   width: 9px;
   height: 8px;
   border-radius: 2px 2px 4px 4px;
-  background: #edf2f4;
-  box-shadow: inset 0 -2px #ef233c;
+  background: var(--text);
+  box-shadow: inset 0 -2px var(--accent);
 }
 .timeline-simple .timeline-section-heading {
   display: flex;
@@ -177,13 +177,13 @@
   top: 0;
   z-index: 10;
   border-bottom: 1px solid var(--timeline-line);
-  background: #1e2130;
-  color: #b4bdcb;
+  background: var(--panel-soft);
+  color: #bdbdbd;
   font-size: 10px;
   font-weight: 600;
 }
 .timeline-simple .timeline-section-heading small {
-  color: #8d99ae;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 400;
 }
@@ -191,7 +191,7 @@
 .timeline-simple .timeline-empty-audio-hint {
   font-size: 9px;
   font-weight: 400;
-  color: #8d99ae;
+  color: var(--muted);
   margin-left: 7px;
 }
 .timeline-simple .timeline-stack-hint {
@@ -199,16 +199,16 @@
   margin-right: 10px;
 }
 .timeline-simple .timeline-audio-section .timeline-section-heading {
-  background: #25283b;
+  background: var(--panel-raised);
 }
 .timeline-simple .timeline-track {
   height: 26px;
   display: flex;
-  border-bottom: 1px solid #8d99ae0a;
+  border-bottom: 1px solid color-mix(in srgb, var(--muted) 4%, transparent);
 }
 .timeline-simple .timeline-track.active,
 .timeline-simple .is-expanded > .timeline-track {
-  background: #8d99ae0a;
+  background: color-mix(in srgb, var(--muted) 4%, transparent);
 }
 .timeline-simple .track-label {
   width: var(--label-width);
@@ -226,18 +226,18 @@
   font-size: 10px;
 }
 .timeline-simple .track-kind {
-  color: var(--track-color);
+  color: var(--muted);
   flex-shrink: 0;
 }
 .timeline-simple .track-label > span {
-  color: #c0c8d3;
+  color: #c8c8c8;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
 }
 .timeline-simple .track-label > button {
-  color: #8d99ae;
+  color: var(--muted);
   flex-shrink: 0;
   width: 20px;
   height: 22px;
@@ -249,7 +249,7 @@
 }
 .timeline-simple .track-expand[aria-expanded='true'] svg {
   transform: none;
-  color: #edf2f4;
+  color: var(--text);
 }
 .timeline-simple .track-visibility {
   opacity: 0;
@@ -261,18 +261,18 @@
   opacity: 1;
 }
 .timeline-simple .track-visibility.is-muted {
-  color: #ef233c;
+  color: var(--accent);
 }
 .timeline-simple .track-label > .track-lock {
-  color: #8d99ae;
+  color: var(--muted);
 }
 .timeline-simple .track-label > .track-lock.is-locked {
-  color: #edf2f4;
-  background: #8d99ae1c;
+  color: var(--text);
+  background: color-mix(in srgb, var(--muted) 11%, transparent);
 }
 .timeline-simple .track-label > button:hover:not(:disabled) {
-  color: #edf2f4;
-  background: #8d99ae24;
+  color: var(--text);
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
 }
 .timeline-simple .track-label > button:disabled {
   opacity: 0.4;
@@ -289,7 +289,11 @@
   top: 0;
   bottom: 0;
   width: var(--grid-width);
-  background-image: linear-gradient(to right, #8d99ae0b 1px, transparent 1px);
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--muted) 4%, transparent) 1px,
+    transparent 1px
+  );
   background-size: var(--grid-step) 100%;
   pointer-events: none;
 }
@@ -297,10 +301,10 @@
   position: absolute;
   top: 3px;
   height: 20px;
-  border: 1px solid color-mix(in srgb, var(--clip-color) 75%, #191b28);
+  border: 1px solid color-mix(in srgb, var(--clip-color) 75%, var(--panel));
   border-radius: 4px;
   background-color: var(--clip-color);
-  color: #202332;
+  color: #222222;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -318,16 +322,16 @@
   color: currentColor;
 }
 .timeline-simple .timeline-clip:hover {
-  border-color: #edf2f4b3;
+  border-color: color-mix(in srgb, var(--text) 70%, transparent);
 }
 .timeline-simple .timeline-clip.selected {
-  border-color: #edf2f4;
-  outline: 1px solid #edf2f4;
+  border-color: var(--text);
+  outline: 1px solid var(--focus);
   outline-offset: 0;
 }
 .timeline-simple .timeline-clip:focus-visible {
-  border-color: #edf2f4;
-  outline: 2px solid #edf2f4;
+  border-color: var(--text);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 .timeline-simple .timeline-clip:active {
@@ -335,7 +339,7 @@
 }
 .timeline-simple .timeline-clip.is-locked {
   cursor: default;
-  background-image: repeating-linear-gradient(135deg, transparent 0 4px, #20233213 4px 5px);
+  background-image: repeating-linear-gradient(135deg, transparent 0 4px, #22222213 4px 5px);
 }
 .timeline-simple .timeline-clip.is-hidden,
 .timeline-simple .timeline-clip.is-muted {
@@ -381,7 +385,7 @@
   bottom: 4px;
   left: 2px;
   width: 2px;
-  background: #202332a6;
+  background: #222222a6;
   border-radius: 2px;
 }
 .timeline-simple .timeline-clip:hover .trim-handle,
@@ -390,7 +394,7 @@
   opacity: 1;
 }
 .timeline-simple .trim-handle:hover {
-  background: #20233218;
+  background: #22222218;
 }
 .timeline-simple .timeline-clip.is-locked .trim-handle {
   display: none;
@@ -402,11 +406,11 @@
   width: 1px;
   pointer-events: none;
   z-index: 7;
-  background: #ef233c;
-  box-shadow: 0 0 3px #d9042933;
+  background: var(--accent);
+  box-shadow: 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .timeline-simple .timeline-section-empty {
-  color: #8d99ae;
+  color: var(--muted);
   font-size: 10px;
   padding: 9px 14px 12px;
   position: sticky;

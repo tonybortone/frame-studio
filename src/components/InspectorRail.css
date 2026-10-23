@@ -39,8 +39,8 @@
 .inspector-rail button[aria-pressed='true'] {
   background: var(--panel);
   border-color: var(--border-strong);
-  color: var(--paper);
-  box-shadow: 0 2px 6px #10121b30;
+  color: var(--text);
+  box-shadow: 0 2px 6px #00000030;
 }
 
 .inspector-rail button[aria-pressed='true']::before {

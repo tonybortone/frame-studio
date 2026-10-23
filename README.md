@@ -8,6 +8,8 @@ The workspace separates media from creation tools and keeps visuals above a dedi
 
 **Alpha 12 simplifies the timeline.** Compact clips use seven distinct colors for video, audio, images, text, shapes, vectors, and drawings. Lock individual rows or the selected layers; locked clips remain selectable while move, trim, split, and delete are protected. Visuals and sound keep separate sections, with inline motion and audio controls available when expanded.
 
+**Alpha 13 refines the workspace.** Black, charcoal, and white interface controls keep attention on the artwork and colored clips. The library uses compact rows, and the header keeps one global Import action alongside contextual media imports.
+
 **Alpha 6 adds 12 editable components**: browser and terminal windows, a phone, notifications, chat, social cards, titles, and callouts. Open **Components → Ready-made**, search or choose a category, then click to insert at the playhead. Edit the group's text under **Design → Content**, or resize its pieces together with the corner handles or W/H. Your saved compositions stay under **Yours**.
 
 The inspector now offers **six color looks with adjustable strength** and **five motion choices**, with detailed controls tucked under Adjust and Fine-tune. Looks and motion apply to selected unlocked visual elements; Pop is available for a single element so it does not pull a component apart. The [Resolve workflow analysis](docs/resolve-workflow-analysis.md) documents the public references, exact implemented behavior, and future functions.

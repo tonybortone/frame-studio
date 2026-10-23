@@ -1,6 +1,6 @@
 # Design language
 
-Frame Studio keeps the board at the center of a compact editing workspace. The library explains what can be added, the board shows the composition, and the timeline separates visual layers from sound. A restrained navy, slate, paper, and red palette gives those areas a consistent hierarchy.
+Frame Studio keeps the board at the center of a compact editing workspace. The library explains what can be added, the board shows the composition, and the timeline separates visual layers from sound. Black, charcoal, and white keep the interface quiet; timeline clips retain distinct category colors.
 
 ## Interface principles
 
@@ -12,17 +12,19 @@ Frame Studio keeps the board at the center of a compact editing workspace. The l
 
 ## Palette
 
-The base palette is:
+The interface palette is:
 
-| Token   | Color     | Use                                      |
-| ------- | --------- | ---------------------------------------- |
-| Navy    | `#2B2D42` | Raised surfaces and composition text     |
-| Slate   | `#8D99AE` | Secondary labels and subtle borders      |
-| Paper   | `#EDF2F4` | Primary text, light compositions, focus  |
-| Red     | `#EF233C` | Active controls and visual accents       |
-| Crimson | `#D90429` | Strong actions and secondary red accents |
+| Token      | Color     | Use                                            |
+| ---------- | --------- | ---------------------------------------------- |
+| Background | `#101010` | Workspace and board surround                   |
+| Panel      | `#191919` | Library and editing surfaces                   |
+| Raised     | `#222222` | Menus and raised controls                      |
+| Border     | `#303030` | Quiet divisions and outlines                   |
+| Muted      | `#989898` | Secondary text and icons                       |
+| Text       | `#F3F3F3` | Primary labels                                 |
+| Accent     | `#F1F1F1` | Primary actions and selections, with dark text |
 
-Darker navy surfaces and transparent variants provide depth. The interface stays restrained while clips use distinct category colors for quick scanning. A fine outline, quiet hover surface, and clear active state are more useful than decorative chrome. Every interactive icon keeps a descriptive accessible name.
+Neutral surfaces and transparent variants provide depth. A fine outline, quiet hover surface, and clear active state are more useful than decorative chrome. Selection outlines combine light and dark edges so they remain visible over different artwork. Every interactive icon keeps a descriptive accessible name. Artwork colors, palette swatches, and look previews represent project content and remain independent of this interface palette.
 
 `LAYER_COLORS` and `LAYER_LABELS` in `src/core/types.ts` define category colors. These identify layers independently of their rendered fill:
 
@@ -36,7 +38,7 @@ Darker navy surfaces and transparent variants provide depth. The interface stays
 | `svg`     | Vector  | `#B2A2EF` |
 | `drawing` | Drawing | `#75CDD7` |
 
-Each category has a stable color, with icons and labels alongside it. Clip text uses dark navy on the light category color. These colors identify the layer type; they do not change the artwork or imported media.
+Each category has a stable color, with icons and labels alongside it. Clip text uses charcoal on the light category color. These colors identify the layer type; they do not change the artwork or imported media.
 
 ## Library and templates
 
@@ -45,9 +47,9 @@ The library has three tabs: Files, Layers, and Templates. Files opens two concis
 - **Media:** Videos, Audio, and Images. Each row shows the current project count and opens its files and import action.
 - **Create:** Text, Shapes & SVG, and Components. Text offers heading, subheading, and body presets; Shapes & SVG adds editable graphics; Components saves and reuses selections.
 
-Small original vector icons identify categories. Large decorative folder thumbnails are no longer part of navigation. The previously supplied PNG artwork remains in the repository. Empty states describe what belongs in each category. The Layers tab separates Visuals and Audio while preserving the relative visual stacking order.
+Small monochrome vector icons, concise labels, and counts identify categories. The default library omits repeated descriptions and generic import buttons. The header provides the global Import action; an opened media category offers its specific import action. The canvas tools focus on creating and editing objects, while the library toggle is icon-only when the library is already open. Empty states describe what belongs in each category. The Layers tab separates Visuals and Audio while preserving the relative visual stacking order.
 
-Seven editable templates are provided: Blank canvas, Portrait title, Screen + camera, Speaker lower third, Tutorial chapter, Product spotlight, and Square announcement. Each uses the five-color palette and ordinary project layers. The template card renders its actual composition, identifies its ratio and duration, and provides a clearly labeled Use template action. Footage and product-image spaces are labeled placeholders, not bundled stock media. Templates replace the current scene; Undo restores it.
+Seven editable templates are provided: Blank canvas, Portrait title, Screen + camera, Speaker lower third, Tutorial chapter, Product spotlight, and Square announcement. Each uses ordinary project layers and its own artwork colors. The template card renders its actual composition, identifies its ratio and duration, and provides a clearly labeled Use template action. Footage and product-image spaces are labeled placeholders, not bundled stock media. Templates replace the current scene; Undo restores it.
 
 ## Board and frame size
 
@@ -91,4 +93,4 @@ Interface motion respects reduced-motion preferences. That preference governs th
 
 ## Inspiration and originality
 
-The brief draws on CapCut's approachable editing, Figma's direct object manipulation, and iOS clarity. Reference screenshots inform the spacious board and differentiated tracks. The earlier [Flask](https://flask.do/) study informed compact control surfaces, while the current palette and library organization simplify them for editing. All controls, template compositions, and application code are developed for Frame Studio.
+The brief draws on CapCut's approachable editing, Figma's direct object manipulation, and iOS clarity. Reference screenshots inform the spacious board and differentiated tracks. The earlier [Flask](https://flask.do/) study informed compact control surfaces; the monochrome workspace keeps emphasis on the composition and colored timeline. All controls, template compositions, and application code are developed for Frame Studio.

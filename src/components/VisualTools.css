@@ -14,7 +14,7 @@
   padding: 5px 1px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 8px;
 }
@@ -24,7 +24,7 @@
 }
 .inspector .mask-choices button[aria-pressed='true'] {
   color: var(--text);
-  background: #ef233c12;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
   border-color: var(--accent);
 }
 .inspector .visual-flips {
@@ -42,7 +42,7 @@
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 10px;
 }
@@ -69,7 +69,7 @@
   height: 23px;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
 }
 .inspector .visual-percent-number input {
@@ -93,7 +93,7 @@
   height: 4px;
   margin: 10px 0 5px;
   padding: 0;
-  accent-color: var(--paper);
+  accent-color: var(--text);
   cursor: pointer;
 }
 .inspector .element-palette {
@@ -106,11 +106,11 @@
   height: 22px;
   min-width: 0;
   padding: 0;
-  border: 1px solid #edf2f425;
+  border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
   border-radius: 5px;
 }
 .inspector .element-palette button[aria-pressed='true'] {
-  outline: 1px solid var(--text);
+  outline: 1px solid var(--focus);
   outline-offset: 2px;
 }
 .inspector .visual-primary-action {
@@ -123,12 +123,12 @@
   padding: 7px 4px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: var(--raised);
+  background: var(--panel-raised);
   color: var(--text);
   font-size: 10px;
 }
 .inspector .visual-primary-action:hover {
-  background: #8d99ae26;
+  background: color-mix(in srgb, var(--muted) 15%, transparent);
 }
 .inspector .background-color-presets {
   display: flex;
@@ -147,7 +147,7 @@
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: var(--input);
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 9px;
 }
@@ -158,7 +158,7 @@
 .inspector .background-color-presets i {
   width: 9px;
   height: 9px;
-  border: 1px solid #8d99ae66;
+  border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
   border-radius: 2px;
 }
 .inspector .background-custom-color input {
@@ -190,7 +190,7 @@
   padding: 3px 5px;
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: var(--input);
+  background: var(--panel-soft);
 }
 .inspector .visual-color-inputs input[type='color'] {
   width: 20px;
