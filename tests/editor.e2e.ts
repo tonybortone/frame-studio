@@ -2359,5 +2359,27 @@ test('timeline controls stay in one toolbar above readable seconds in a small wi
   await expect
     .poll(async () => Number(await ruler.getAttribute('aria-valuenow')))
     .toBeGreaterThan(0.1);
-  await transport.getByRole('button', { name: 'Pause', exact: true }).click();
+  const pause = transport.getByRole('button', { name: 'Pause', exact: true });
+  await pause.hover();
+  const contrast = await pause.evaluate((button) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d')!;
+    const luminance = (color: string) => {
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      const channels = Array.from(context.getImageData(0, 0, 1, 1).data)
+        .slice(0, 3)
+        .map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const foreground = luminance(getComputedStyle(button.querySelector('svg')!).color);
+    const background = luminance(getComputedStyle(button).backgroundColor);
+    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+  });
+  expect(contrast, 'Hovered Pause icon contrast').toBeGreaterThanOrEqual(3);
+  await pause.click();
 });
